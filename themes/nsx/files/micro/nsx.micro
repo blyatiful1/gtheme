@@ -1,0 +1,57 @@
+# NSX — micro colorscheme
+# 1990 Honda NSX (NA1): Berlina black cabin, Formula Red body,
+# Championship White lettering, gauge-amber needles.
+# Precision Crafted Performance.
+
+color-link default "#E8E9DF,#0D0D0F"
+color-link comment "italic #50535A"
+color-link ignore "#50535A"
+
+color-link identifier "#E8E9DF"
+color-link identifier.class "#8FB7DE"
+color-link identifier.var "#E8E9DF"
+
+color-link constant "#E89C3F"
+color-link constant.number "#FFB454"
+color-link constant.string "#E89C3F"
+
+color-link symbol "#D2241E"
+color-link symbol.operator "#D2241E"
+color-link symbol.brackets "#C9CBC0"
+color-link symbol.tag "#F04A3E"
+
+color-link type "#8FB7DE"
+color-link type.keyword "#F04A3E"
+color-link type.extended "default"
+
+color-link special "#D49AB4"
+color-link statement "#F04A3E"
+color-link preproc "#B27E93"
+
+color-link underlined "underline #8CCFC9"
+color-link error "bold #F04A3E"
+color-link todo "bold #FFB454"
+
+color-link diff-added "#7DA862"
+color-link diff-modified "#E89C3F"
+color-link diff-deleted "#D2241E"
+
+color-link gutter-error "#F04A3E"
+color-link gutter-warning "#FFB454"
+
+color-link statusline "#E8E9DF,#222327"
+color-link tabbar "#E8E9DF,#222327"
+color-link indent-char "#222327"
+color-link line-number "#50535A,#0D0D0F"
+color-link current-line-number "#D2241E,#0D0D0F"
+
+color-link cursor-line "#17181B"
+color-link color-column "#17181B"
+color-link match-brace "#0D0D0F,#E89C3F"
+color-link selection "#E8E9DF,#3E2422"
+color-link hlsearch "#0D0D0F,#E89C3F"
+
+color-link divider "#222327"
+color-link scrollbar "#50535A"
+color-link message "#E8E9DF,#0D0D0F"
+color-link error-message "bold #F04A3E,#0D0D0F"

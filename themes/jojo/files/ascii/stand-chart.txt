@@ -1,0 +1,9 @@
+「STAND NAME」    『S T O N E   F R E E』
+「STAND MASTER」  『J O L Y N E   C U J O H』
+─────────────────────────────────────────────
+ DESTRUCTIVE POWER  █████  A
+ SPEED              ████░  B
+ RANGE              ███░░  C
+ STAYING POWER      █████  A
+ PRECISION          ███░░  C
+ DEVELOPMENT        █████  A

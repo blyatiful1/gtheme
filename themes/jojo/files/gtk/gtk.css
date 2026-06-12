@@ -1,0 +1,10 @@
+/* jojo-theme (Stone Ocean) — Jolyne Green accent for libadwaita / GTK4 and GTK3 apps */
+/* Same file installed as ~/.config/gtk-4.0/gtk.css AND ~/.config/gtk-3.0/gtk.css     */
+:root {
+  --accent-bg-color: #7DC75B;
+  --accent-fg-color: #0B0E18;
+  --accent-color: #9BE87A;
+}
+@define-color accent_bg_color #7DC75B;
+@define-color accent_fg_color #0B0E18;
+@define-color accent_color #9BE87A;

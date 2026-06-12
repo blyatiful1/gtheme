@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gtheme"
+version = "0.1.0"
+description = "A GNOME desktop theme system: download, apply, switch, and author full-desktop themes from a palette"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "crocco" }]
+keywords = ["gnome", "theme", "ricing", "dotfiles", "desktop", "cli"]
+dependencies = [
+    "jinja2>=3.1",
+    "pydantic>=2.0",
+]
+
+[project.scripts]
+gtheme = "gtheme.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/crocco/gtheme"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gtheme"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"themes" = "gtheme/_bundled_themes"

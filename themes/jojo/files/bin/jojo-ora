@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""jojo-ora — Stone Free rapid-fire ORA ORA ORA barrage.
+
+~2.5 seconds of accelerating ORA bursts with growing intensity, ending on a
+big ORA!! block. Plain ANSI, no curses. Ctrl-C safe.
+"""
+import shutil
+import sys
+import time
+
+# Stone Ocean palette (truecolor)
+JOLYNE_GREEN = (125, 199, 91)
+JOLYNE_BRIGHT = (155, 232, 122)
+SPIN_GOLD = (232, 179, 63)
+SPIN_BRIGHT = (255, 210, 74)
+JOHNNY_PINK = (232, 85, 154)
+JOHNNY_BRIGHT = (255, 122, 184)
+MOONLIGHT = (232, 234, 242)
+
+RESET = "\x1b[0m"
+BOLD = "\x1b[1m"
+
+FINALE = r"""
+ ██████╗ ██████╗  █████╗ ██╗██╗
+██╔═══██╗██╔══██╗██╔══██╗██║██║
+██║   ██║██████╔╝███████║██║██║
+██║   ██║██╔══██╗██╔══██║╚═╝╚═╝
+╚██████╔╝██║  ██║██║  ██║██╗██╗
+ ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝
+"""
+
+
+def fg(rgb):
+    return "\x1b[38;2;%d;%d;%dm" % rgb
+
+
+def main():
+    cols = shutil.get_terminal_size().columns
+    colors = (JOLYNE_GREEN, SPIN_GOLD, JOHNNY_PINK,
+              JOLYNE_BRIGHT, SPIN_BRIGHT, JOHNNY_BRIGHT)
+    out = sys.stdout
+    out.write(fg(JOLYNE_GREEN) + BOLD + "『STONE FREE』" + RESET + "\n")
+    out.flush()
+    t0 = time.monotonic()
+    i = 0
+    while True:
+        elapsed = time.monotonic() - t0
+        if elapsed >= 2.0:
+            break
+        intensity = elapsed / 2.0                       # 0 -> 1
+        n = 1 + int(intensity * (cols // 5))            # ORAs per line grow
+        indent = (i * 7) % max(cols // 4, 1)            # jittery, deterministic
+        color = colors[i % 3 if intensity < 0.5 else 3 + i % 3]
+        weight = BOLD if intensity > 0.35 else ""
+        burst = ("ORA! " * n).rstrip()
+        line = (" " * indent + burst)[: cols - 1]
+        out.write(weight + fg(color) + line + RESET + "\n")
+        out.flush()
+        time.sleep(max(0.018, 0.085 - intensity * 0.067))  # accelerates
+        i += 1
+    # the finishing blow
+    for ln in FINALE.splitlines():
+        out.write(BOLD + fg(SPIN_BRIGHT) + ln + RESET + "\n")
+    out.write(BOLD + fg(JOHNNY_BRIGHT) + "        ─── オラオラオラ!! ───" + RESET + "\n")
+    out.flush()
+    time.sleep(0.3)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        sys.stdout.write(RESET + "\n")
+    finally:
+        sys.stdout.write(RESET)
+        sys.stdout.flush()

@@ -1,0 +1,71 @@
+# NSX — 1990 Honda NSX (NA1) "Formula" theme for Alacritty (v0.15)
+# Berlina black cabin, Formula Red body, Championship White lettering,
+# orange gauge needles. Precision Crafted Performance.
+
+[colors.primary]
+background        = "#0D0D0F"
+foreground        = "#E8E9DF"
+dim_foreground    = "#C9CBC0"
+bright_foreground = "#F2F3EA"
+
+[colors.cursor]
+text   = "#0D0D0F"
+cursor = "#D2241E"
+
+[colors.vi_mode_cursor]
+text   = "#0D0D0F"
+cursor = "#E89C3F"
+
+[colors.search.matches]
+foreground = "#0D0D0F"
+background = "#E89C3F"
+
+[colors.search.focused_match]
+foreground = "#F2F3EA"
+background = "#D2241E"
+
+[colors.footer_bar]
+foreground = "#E8E9DF"
+background = "#222327"
+
+[colors.hints.start]
+foreground = "#0D0D0F"
+background = "#FFB454"
+
+[colors.hints.end]
+foreground = "#F2F3EA"
+background = "#D2241E"
+
+[colors.selection]
+text       = "CellForeground"
+background = "#3E2422"
+
+[colors.normal]
+black   = "#1A1B1E"
+red     = "#D2241E"
+green   = "#7DA862"
+yellow  = "#E89C3F"
+blue    = "#6D8FB3"
+magenta = "#B27E93"
+cyan    = "#6FA8A3"
+white   = "#C9CBC0"
+
+[colors.bright]
+black   = "#50535A"
+red     = "#F04A3E"
+green   = "#9BC97E"
+yellow  = "#FFB454"
+blue    = "#8FB7DE"
+magenta = "#D49AB4"
+cyan    = "#8CCFC9"
+white   = "#F2F3EA"
+
+[colors.dim]
+black   = "#141517"
+red     = "#A31C17"
+green   = "#62834C"
+yellow  = "#B57A31"
+blue    = "#55708C"
+magenta = "#8B6273"
+cyan    = "#57837F"
+white   = "#9D9E96"

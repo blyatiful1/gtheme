@@ -1,0 +1,199 @@
+# ──────────────────────────────────────────────────────────────────────
+#  NSX FORMULA — starship prompt livery
+#  1990 Honda NSX (NA1): Berlina black cabin, Formula Red body,
+#  Championship White lettering, gauge-amber needles.
+#  "Precision Crafted Performance."
+#
+#  Powerline chain (sharp wedges, like the NA1 nose):
+#    red NSX badge > white roundel directory > git on surface >
+#    toolchain in titanium > odometer clock > battery warning lamp
+#  Font: MesloLGS Nerd Font (all glyphs verified against its cmap).
+# ──────────────────────────────────────────────────────────────────────
+
+"$schema" = 'https://starship.rs/config-schema.json'
+
+# Keep it fast: short module timeout, no network-dependent modules.
+command_timeout = 500
+scan_timeout = 30
+add_newline = true
+
+palette = 'nsx'
+
+format = """
+[](fg:formula_red)\
+[  NSX ](bold bg:formula_red fg:champ_bright)\
+$username\
+[](fg:formula_red bg:champ_white)\
+$directory\
+[](fg:champ_white bg:surface2)\
+$git_branch\
+$git_status\
+[](fg:surface2 bg:surface1)\
+$nodejs\
+$rust\
+$python\
+$golang\
+$c\
+$docker_context\
+[](fg:surface1 bg:black)\
+$time\
+[](fg:black)\
+$battery\
+$cmd_duration\
+$line_break\
+$character"""
+
+[palettes.nsx]
+# Body & cabin
+berlina        = '#0D0D0F'   # Berlina black (background)
+surface1       = '#17181B'
+surface2       = '#222327'
+champ_white    = '#E8E9DF'   # Championship White
+champ_bright   = '#F2F3EA'
+champ_dim      = '#C9CBC0'
+formula_red    = '#D2241E'   # Formula Red
+formula_bright = '#F04A3E'
+gauge_amber    = '#E89C3F'   # gauge-needle amber (warning)
+gauge_bright   = '#FFB454'
+titanium       = '#AEB2B5'   # titanium silver
+selection      = '#3E2422'
+# ANSI set (named overrides: 'red', 'white' etc. resolve to these)
+black          = '#1A1B1E'
+black_bright   = '#50535A'
+red            = '#D2241E'
+red_bright     = '#F04A3E'
+green          = '#7DA862'
+green_bright   = '#9BC97E'
+yellow         = '#E89C3F'
+yellow_bright  = '#FFB454'
+blue           = '#6D8FB3'
+blue_bright    = '#8FB7DE'
+magenta        = '#B27E93'
+magenta_bright = '#D49AB4'
+cyan           = '#6FA8A3'
+cyan_bright    = '#8CCFC9'
+white          = '#C9CBC0'
+white_bright   = '#F2F3EA'
+
+# Red badge extras: only appears for root / SSH / user switch.
+[username]
+show_always = false
+style_user = 'bg:formula_red fg:champ_bright'
+style_root = 'bold bg:formula_red fg:gauge_bright'
+format = '[$user ]($style)'
+
+# White roundel: directory (race number plate).
+[directory]
+style = 'fg:berlina bg:champ_white'
+read_only_style = 'fg:formula_red bg:champ_white'
+read_only = ' '
+format = '[ $path ]($style)[$read_only]($read_only_style)'
+truncation_length = 3
+truncation_symbol = '…/'
+
+[directory.substitutions]
+'Documents' = '󰈙 '
+'Downloads' = ' '
+'Music' = '󰝚 '
+'Pictures' = ' '
+'Developer' = '󰲋 '
+
+# Git on Surface 2, Formula Red branch glyph, amber status needle.
+[git_branch]
+symbol = ''
+style = 'bg:surface2'
+format = '[ ](bg:surface2)[$symbol](bold fg:formula_bright bg:surface2)[ $branch ](fg:champ_white bg:surface2)'
+
+[git_status]
+style = 'bg:surface2'
+format = '[($all_status$ahead_behind )](fg:gauge_amber bg:surface2)'
+
+# Toolchain in titanium on Surface 1.
+[nodejs]
+symbol = ''
+style = 'bg:surface1'
+format = '[ $symbol( $version) ](fg:titanium bg:surface1)'
+
+[rust]
+symbol = ''
+style = 'bg:surface1'
+format = '[ $symbol( $version) ](fg:titanium bg:surface1)'
+
+[python]
+symbol = ''
+style = 'bg:surface1'
+format = '[ $symbol( $version) ](fg:titanium bg:surface1)'
+
+[golang]
+symbol = ''
+style = 'bg:surface1'
+format = '[ $symbol( $version) ](fg:titanium bg:surface1)'
+
+[c]
+symbol = ''
+style = 'bg:surface1'
+format = '[ $symbol( $version) ](fg:titanium bg:surface1)'
+
+# Quiet unless a docker context is actually configured.
+[docker_context]
+symbol = ''
+style = 'bg:surface1'
+only_with_files = true
+format = '[ $symbol( $context) ](fg:titanium bg:surface1)'
+
+# Odometer: time, dim white on gauge black.
+[time]
+disabled = false
+time_format = '%R'
+style = 'bg:black'
+format = '[ 󰓅 $time ](fg:champ_dim bg:black)'
+
+# Dash warning lamp: battery (laptop).
+# Hidden above 25%; amber 16-25%, Formula Red at 15% and below.
+[battery]
+full_symbol = ' '
+charging_symbol = ' '
+discharging_symbol = ' '
+unknown_symbol = ' '
+empty_symbol = ' '
+format = '[ $symbol$percentage]($style)'
+
+[[battery.display]]
+threshold = 15
+style = 'bold fg:formula_bright'
+
+[[battery.display]]
+threshold = 25
+style = 'fg:gauge_amber'
+
+# Lap time: only when slow, gauge amber.
+[cmd_duration]
+min_time = 2000
+style = 'bold fg:gauge_amber'
+format = '[ 󰔟 $duration]($style)'
+
+# Throttle: prompt character (vim-aware).
+[character]
+disabled = false
+success_symbol = '[❯](bold fg:formula_red)'
+error_symbol = '[❯](bold fg:gauge_amber)'
+vimcmd_symbol = '[❮](bold fg:titanium)'
+vimcmd_replace_one_symbol = '[❮](bold fg:gauge_amber)'
+vimcmd_replace_symbol = '[❮](bold fg:gauge_amber)'
+vimcmd_visual_symbol = '[❮](bold fg:blue)'
+
+[line_break]
+disabled = false
+
+# Explicitly parked (cloud/cluster noise, keeps the prompt fast).
+[kubernetes]
+disabled = true
+
+[aws]
+disabled = true
+
+[gcloud]
+disabled = true
+
+[azure]
+disabled = true

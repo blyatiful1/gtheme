@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+"""jojo-stand — Stand-stat radar card.
+
+Usage: jojo-stand [NAME]   (default: hostname)
+
+Derives six stat grades A-E deterministically from the SHA-256 of the name
+(no random module) and renders the classic JoJo hexagonal parameter chart
+as aligned text, with a 「NAME」 title card.
+"""
+import hashlib
+import socket
+import sys
+
+RESET = "\x1b[0m"
+BOLD = "\x1b[1m"
+DIM = "\x1b[2m"
+ITALIC = "\x1b[3m"
+
+MOONLIGHT = "\x1b[38;2;232;234;242m"
+STONE_FREE = "\x1b[38;2;79;168;232m"
+SPIN_GOLD = "\x1b[38;2;232;179;63m"
+SPIN_BRIGHT = "\x1b[38;2;255;210;74m"
+SURFACE_GRAY = "\x1b[38;2;74;83;112m"
+LABEL = "\x1b[38;2;201;206;221m"
+
+GRADE_COLOR = {
+    "A": "\x1b[38;2;155;232;122m",   # jolyne_green bright
+    "B": "\x1b[38;2;69;212;196m",    # ocean_teal
+    "C": "\x1b[38;2;232;179;63m",    # spin_gold
+    "D": "\x1b[38;2;154;107;212m",   # pucci_purple
+    "E": "\x1b[38;2;232;67;90m",     # menace_red
+}
+GRADE_BLOCKS = {"A": 5, "B": 4, "C": 3, "D": 2, "E": 1}
+
+STATS = (
+    ("pwr", "DESTRUCTIVE POWER"),
+    ("spd", "SPEED"),
+    ("rng", "RANGE"),
+    ("dur", "STAYING POWER"),
+    ("prc", "PRECISION"),
+    ("dev", "DEVELOPMENT"),
+)
+
+
+def grades_for(name):
+    h = hashlib.sha256(name.upper().encode("utf-8")).digest()
+    return {key: "ABCDE"[h[i] % 5] for i, (key, _) in enumerate(STATS)}
+
+
+def g(grade):
+    """A colored, bold grade letter (zero extra printable width)."""
+    return GRADE_COLOR[grade] + BOLD + grade + RESET
+
+
+def render(name):
+    gr = grades_for(name)
+    O = STONE_FREE          # hexagon outline
+    L = LABEL               # vertex labels
+    lines = []
+    card = "「 " + " ".join(name.upper()) + " 」"
+    lines.append("")
+    lines.append("  " + SPIN_BRIGHT + BOLD + card + RESET)
+    lines.append("  " + SURFACE_GRAY + "──── STAND PARAMETERS ────" + RESET)
+    lines.append("")
+    lines.append(" " * 18 + L + "POWER" + RESET)
+    lines.append(" " * 20 + g(gr["pwr"]))
+    lines.append(" " * 16 + O + "╭───────╮" + RESET)
+    lines.append(" " * 15 + O + "╱" + " " * 9 + "╲" + RESET)
+    lines.append(" " + L + "DEVELOPMENT" + RESET + "  " + O + "╱" + " " * 11 + "╲" + RESET + "  " + L + "SPEED" + RESET)
+    lines.append(" " * 6 + g(gr["dev"]) + " " * 6 + O + "▏" + RESET + " " * 6
+                 + SPIN_GOLD + "◆" + RESET + " " * 6 + O + "▕" + RESET + " " * 6 + g(gr["spd"]))
+    lines.append(" " + L + "PRECISION" + RESET + " " * 4 + O + "╲" + " " * 11 + "╱" + RESET + "  " + L + "RANGE" + RESET)
+    lines.append(" " * 6 + g(gr["prc"]) + " " * 8 + O + "╲" + " " * 9 + "╱" + RESET + " " * 8 + g(gr["rng"]))
+    lines.append(" " * 16 + O + "╰───────╯" + RESET)
+    lines.append(" " * 20 + g(gr["dur"]))
+    lines.append(" " * 15 + L + "DURABILITY" + RESET)
+    lines.append("")
+    for key, label in STATS:
+        grade = gr[key]
+        n = GRADE_BLOCKS[grade]
+        bar = (GRADE_COLOR[grade] + "█" * n + SURFACE_GRAY + "░" * (5 - n) + RESET)
+        lines.append("  " + LABEL + label.ljust(18) + RESET + bar + "  " + g(grade))
+    lines.append("")
+    lines.append("  " + SURFACE_GRAY + ITALIC + "ゴゴゴ… a Stand grows with its user." + RESET)
+    return "\n".join(lines) + "\n"
+
+
+def main():
+    name = sys.argv[1] if len(sys.argv) > 1 else socket.gethostname()
+    name = name.strip() or "stone free"
+    sys.stdout.write(render(name))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        sys.stdout.write(RESET + "\n")
+        sys.exit(130)

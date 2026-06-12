@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/crocco/gtheme/schema/theme.schema.json",
+  "title": "gtheme theme.toml",
+  "description": "Declarative manifest for a gtheme desktop theme.",
+  "type": "object",
+  "required": ["meta"],
+  "additionalProperties": false,
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "pattern": "^[A-Za-z0-9_-]+$" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "author": { "type": "string" },
+        "version": { "type": "string" },
+        "based_on": { "type": "string" }
+      }
+    },
+    "requires": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "packages": { "type": "array", "items": { "type": "string" } },
+        "extensions": { "type": "array", "items": { "type": "string" } },
+        "fonts": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "palette": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "pattern": "^#?[0-9a-fA-F]{3,8}$" }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["component", "src", "dest"],
+        "additionalProperties": false,
+        "properties": {
+          "component": { "type": "string" },
+          "src": { "type": "string" },
+          "dest": { "type": "string" },
+          "mode": { "type": "string", "pattern": "^[0-7]{3,4}$" }
+        }
+      }
+    },
+    "settings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["component", "backend", "key", "value"],
+        "additionalProperties": false,
+        "properties": {
+          "component": { "type": "string" },
+          "backend": { "enum": ["gsettings", "dconf"] },
+          "key": { "type": "string" },
+          "value": { "type": "string" }
+        }
+      }
+    },
+    "hooks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["script"],
+        "additionalProperties": false,
+        "properties": {
+          "event": { "enum": ["pre", "post"] },
+          "component": { "type": "string" },
+          "sudo": { "type": "boolean" },
+          "optional": { "type": "boolean" },
+          "script": { "type": "string" },
+          "restore": { "type": "string" }
+        }
+      }
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "managed": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

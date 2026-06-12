@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "themes": [
+    {
+      "name": "jojo",
+      "title": "STONE OCEAN",
+      "description": "JoJo Part 6+: Stone Ocean / Steel Ball Run / JoJolion. No Part 1-5.",
+      "author": "crocco",
+      "version": "1.0.0",
+      "components": [
+        "wallpaper",
+        "terminal",
+        "prompt",
+        "monitor",
+        "editor",
+        "fastfetch",
+        "gtk",
+        "shell",
+        "shell-cfg",
+        "commands",
+        "ascii",
+        "desktop",
+        "dock",
+        "boot"
+      ]
+    },
+    {
+      "name": "nsx",
+      "title": "NSX \u2014 Formula Red",
+      "description": "Honda NSX NA1: Berlina-black cabin, Formula Red, Championship White.",
+      "author": "crocco",
+      "version": "1.0.0",
+      "components": [
+        "terminal",
+        "prompt",
+        "shell-cfg",
+        "monitor",
+        "editor",
+        "fastfetch",
+        "gtk",
+        "shell",
+        "wallpaper",
+        "desktop",
+        "dock",
+        "boot"
+      ]
+    }
+  ]
+}

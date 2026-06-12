@@ -1,0 +1,9 @@
+/* NSX theme — Formula Red accent for libadwaita / GTK4 apps */
+:root {
+  --accent-bg-color: #d2241e;
+  --accent-fg-color: #ffffff;
+  --accent-color: #f04a3e;
+}
+@define-color accent_bg_color #d2241e;
+@define-color accent_fg_color #ffffff;
+@define-color accent_color #f04a3e;

@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0D0D0F"/>
+      <stop offset="1" stop-color="#101013"/>
+    </linearGradient>
+  </defs>
+
+  <!-- background -->
+  <rect x="0" y="0" width="1920" height="1080" fill="url(#bg)"/>
+
+  <!-- ground / shadow line -->
+  <rect x="378" y="744" width="1172" height="3" rx="1.5" fill="#17181B"/>
+
+  <!-- ============ CAR BODY (Formula Red) ============ -->
+  <path fill="#D2241E" d="
+    M 415,597
+    C 540,577 685,546 790,520
+    C 1040,512 1190,494 1285,484
+    C 1360,481 1440,479.5 1500,478
+    L 1544,466.5
+    L 1553,468
+    L 1550,560
+    C 1548,610 1544,645 1534,664
+    C 1518,684 1500,690 1482,693
+    L 1412.8,694
+    A 102 102 0 1 0 1225.2,694
+    L 722.8,694
+    A 96 96 0 1 0 543.2,694
+    L 394,693
+    C 378,691 369,685 366,676
+    L 358,650
+    C 364,630 380,610 394,604
+    C 401,601 407,599 415,597
+    Z"/>
+
+  <!-- ============ CANOPY (Berlina black roof + buttress) ============ -->
+  <path fill="#17181B" d="
+    M 788,522
+    C 848,478 915,444 975,432
+    C 1000,428.5 1022,427 1045,427
+    C 1078,427 1098,429.5 1112,433
+    C 1180,452 1255,470 1330,482.5
+    C 1230,494 1060,514 788,522
+    Z"/>
+
+  <!-- glass -->
+  <path fill="#222327" d="
+    M 804,514
+    C 858,472 918,446 972,438
+    C 1005,434 1060,434.5 1098,440
+    C 1160,455 1228,468 1295,478
+    C 1182,489 1015,507 804,514
+    Z"/>
+  <!-- B-pillar -->
+  <path d="M 1170,448 L 1184,484" stroke="#17181B" stroke-width="6" fill="none"/>
+
+  <!-- side intake (black inset ahead of rear wheel) -->
+  <path fill="#0D0D0F" d="
+    M 1132,584
+    L 1245,572
+    C 1227,597 1212,620 1206,638
+    L 1162,641
+    C 1146,622 1136,602 1132,584
+    Z"/>
+
+  <!-- black lower trim (authentic NA1: chin lip, sills, rear valance) -->
+  <path fill="#1A1B1E" d="M 362,672 L 543,672 L 543,695 L 391,693.5 C 376,691.5 366,687 361,678 Z"/>
+  <rect x="722" y="678" width="504" height="16" fill="#1A1B1E"/>
+  <path fill="#1A1B1E" d="M 1413,676 L 1536,676 C 1528,684 1505,691 1482,693 L 1413,694 Z"/>
+
+  <!-- pop-up headlight lid seam (L-shaped) -->
+  <path d="M 431,615 C 431,608 433,602 437,600 C 475,593 508,589 534,587 L 538,594" stroke="#0D0D0F" stroke-width="2" fill="none" opacity="0.4"/>
+
+  <!-- front door shut line -->
+  <path d="M 830,522 C 826,580 822,640 818,690" stroke="#0D0D0F" stroke-width="2" fill="none" opacity="0.22"/>
+
+  <!-- amber front side marker -->
+  <rect x="372" y="655" width="11" height="5.5" rx="2.75" fill="#E89C3F"/>
+
+  <!-- ============ WHEELS ============ -->
+  <!-- front wheel (15") -->
+  <g>
+    <circle cx="633" cy="660" r="80" fill="#1A1B1E"/>
+    <circle cx="633" cy="660" r="52" fill="#0D0D0F"/>
+    <circle cx="633" cy="660" r="48.5" fill="none" stroke="#AEB2B5" stroke-width="5"/>
+    <g transform="translate(633,660)" fill="#AEB2B5">
+      <rect x="-4" y="-48" width="8" height="42" rx="2"/>
+      <rect x="-4" y="-48" width="8" height="42" rx="2" transform="rotate(72)"/>
+      <rect x="-4" y="-48" width="8" height="42" rx="2" transform="rotate(144)"/>
+      <rect x="-4" y="-48" width="8" height="42" rx="2" transform="rotate(216)"/>
+      <rect x="-4" y="-48" width="8" height="42" rx="2" transform="rotate(288)"/>
+      <circle r="10" fill="#AEB2B5"/>
+      <circle r="3.5" fill="#D2241E"/>
+    </g>
+  </g>
+  <!-- rear wheel (16") -->
+  <g>
+    <circle cx="1319" cy="654" r="86" fill="#1A1B1E"/>
+    <circle cx="1319" cy="654" r="56" fill="#0D0D0F"/>
+    <circle cx="1319" cy="654" r="52.5" fill="none" stroke="#AEB2B5" stroke-width="5"/>
+    <g transform="translate(1319,654)" fill="#AEB2B5">
+      <rect x="-4" y="-52" width="8" height="46" rx="2"/>
+      <rect x="-4" y="-52" width="8" height="46" rx="2" transform="rotate(72)"/>
+      <rect x="-4" y="-52" width="8" height="46" rx="2" transform="rotate(144)"/>
+      <rect x="-4" y="-52" width="8" height="46" rx="2" transform="rotate(216)"/>
+      <rect x="-4" y="-52" width="8" height="46" rx="2" transform="rotate(288)"/>
+      <circle r="10.5" fill="#AEB2B5"/>
+      <circle r="3.5" fill="#D2241E"/>
+    </g>
+  </g>
+
+  <!-- ============ WORDMARK: NSX (vector, italic) ============ -->
+  <g transform="translate(886.5,809) skewX(-15)" fill="#E8E9DF">
+    <!-- N -->
+    <rect x="0" y="0" width="10" height="56"/>
+    <rect x="34" y="0" width="10" height="56"/>
+    <path d="M10,0 L10,14 L34,56 L34,42 Z"/>
+    <!-- S (curved, stroke-built) -->
+    <g transform="translate(60,0)">
+      <path d="M 36.5,8
+               C 29,4.5 21,4 15.5,5.5
+               C 8.5,7.5 5,12 5,17
+               C 5,23.5 11,26.5 20,28.5
+               C 29,30.5 35,33 35,39.5
+               C 35,45.5 31,50 23.5,51.5
+               C 16,53 8,51.5 3.5,48"
+            fill="none" stroke="#E8E9DF" stroke-width="10.5"/>
+    </g>
+    <!-- X -->
+    <g transform="translate(116,0)">
+      <path d="M0,0 L13,0 L46,56 L33,56 Z"/>
+      <path d="M33,0 L46,0 L13,56 L0,56 Z"/>
+    </g>
+  </g>
+
+  <!-- tagline -->
+  <text x="960" y="906" font-family="Cantarell" font-size="16" letter-spacing="7" fill="#C9CBC0" text-anchor="middle">PRECISION CRAFTED PERFORMANCE</text>
+</svg>

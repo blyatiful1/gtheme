@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""jojo-tbc — the "To Be Continued" freeze-frame.
+
+Switches to the alternate screen, paints a dim sepia freeze-frame, draws the
+left-pointing arrow bottom-left in spin_gold, and holds until a keypress
+(or Enter when not a tty). Restores the terminal on exit, Ctrl-C included.
+"""
+import shutil
+import sys
+
+RESET = "\x1b[0m"
+BOLD = "\x1b[1m"
+ALT_ON = "\x1b[?1049h"
+ALT_OFF = "\x1b[?1049l"
+CURSOR_OFF = "\x1b[?25l"
+CURSOR_ON = "\x1b[?25h"
+
+SEPIA_DIM = "\x1b[38;2;74;67;48m"        # dim sepia for the frozen frame
+SPIN_GOLD = "\x1b[38;2;232;179;63m"
+SPIN_BRIGHT = "\x1b[38;2;255;210;74m"
+
+ARROW = [
+    "   ◢█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀",
+    " ◀██    To Be Continued",
+    "   ◥█▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄",
+]
+
+
+def goto(row, col):
+    return "\x1b[%d;%dH" % (row, col)
+
+
+def wait_for_key():
+    if not sys.stdin.isatty():
+        return                                # piped: don't block forever
+    import termios
+    import tty
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        sys.stdin.buffer.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+
+def main():
+    size = shutil.get_terminal_size()
+    cols, rows = size.columns, size.lines
+    out = sys.stdout
+    out.write(ALT_ON + CURSOR_OFF + "\x1b[2J")
+    # the frozen, sepia-dimmed "scene"
+    out.write(SEPIA_DIM)
+    pattern = ("░" * 3 + " ") * (cols // 4 + 1)
+    for r in range(1, rows + 1):
+        offset = (r % 4)
+        out.write(goto(r, 1) + pattern[offset:offset + cols])
+    # arrow, bottom-left, in spin_gold
+    base = max(rows - len(ARROW) - 1, 1)
+    for i, line in enumerate(ARROW):
+        color = SPIN_BRIGHT + BOLD if i == 1 else SPIN_GOLD + BOLD
+        out.write(goto(base + i, 2) + color + line[: cols - 2] + RESET)
+    out.write(goto(rows, 1))
+    out.flush()
+    wait_for_key()
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        sys.stdout.write(RESET + CURSOR_ON + ALT_OFF)
+        sys.stdout.flush()
