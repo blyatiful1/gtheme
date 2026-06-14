@@ -3,16 +3,38 @@
 from __future__ import annotations
 
 import argparse
+import os
+import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from . import ansi
-from .backup import read_current
+from .backup import clear_current, read_current
 from .engine import apply as engine
+from .errors import (
+    GthemeError,
+    ThemeNotFoundError,
+    ThemeSecurityError,
+    ThemeValidationError,
+)
 from .manifest import Theme, load_theme
 from .registry import discover, find, load_all
 from .validate import validate_dir
+
+_VERBOSE = False
+
+
+def _version() -> str:
+    try:
+        from importlib.metadata import version
+
+        return version("gtheme")
+    except Exception:  # noqa: BLE001 — fall back when metadata is unavailable
+        return "0.1.0"
 
 
 def _die(msg: str) -> None:
@@ -20,17 +42,79 @@ def _die(msg: str) -> None:
     raise SystemExit(1)
 
 
+def _vprint(msg: str) -> None:
+    if _VERBOSE:
+        print(ansi.style(msg, "grey"), file=sys.stderr)
+
+
 def _load_named(name: str) -> Theme:
     path = find(name)
     if path is None:
         _die(f"theme not found: {name}\n  available: {', '.join(discover()) or '(none)'}")
-    return load_theme(path)
+    try:
+        return load_theme(path)
+    except (tomllib.TOMLDecodeError, ValidationError, FileNotFoundError, GthemeError) as exc:
+        _vprint(f"load failed for {name} at {path}")
+        _die(f"failed to load theme {name!r}: {exc}")
 
 
 def _parse_only(value: str | None) -> set[str] | None:
     if not value:
         return None
     return {c.strip() for c in value.split(",") if c.strip()}
+
+
+def _validate_only(theme: Theme, only: set[str] | None) -> None:
+    """Reject --only components the theme does not define (instead of no-op)."""
+    if only is None:
+        return
+    valid = set(theme.components())
+    unknown = sorted(only - valid)
+    if unknown:
+        _die(
+            f"unknown component(s): {', '.join(unknown)}\n"
+            f"  valid components: {', '.join(theme.components()) or '(none)'}"
+        )
+
+
+# ---------------------------------------------------------------- hook consent ---
+def _make_hook_gate(assume_yes: bool) -> "engine.HookGate":
+    """Return a HookGate closure that prompts on stdin before running a hook.
+
+    On a non-interactive run without --yes the gate denies (returns False) and
+    explains that --yes is required.
+    """
+
+    def gate(info: dict) -> bool:
+        if assume_yes:
+            return True
+        trust = "untrusted" if info.get("untrusted") else "trusted"
+        sudo = "yes" if info.get("sudo") else "no"
+        print(ansi.header(f"\nhook[{info.get('event')}] wants to run a script"))
+        print(f"  script:  {info.get('script')}")
+        print(f"  sudo:    {sudo}")
+        print(f"  source:  {trust} ({info.get('theme') or '?'})")
+        preview = info.get("preview") or ""
+        if preview:
+            print(ansi.style("  --- preview ---", "grey"))
+            for line in preview.splitlines():
+                print(ansi.style(f"  | {line}", "grey"))
+            print(ansi.style("  ---------------", "grey"))
+        if not sys.stdin.isatty():
+            print(
+                ansi.warn(
+                    "stdin is not a TTY; denying hook. Re-run interactively or pass --yes."
+                ),
+                file=sys.stderr,
+            )
+            return False
+        try:
+            answer = input("  run this hook? [y/N] ").strip().lower()
+        except EOFError:
+            return False
+        return answer in ("y", "yes")
+
+    return gate
 
 
 # ------------------------------------------------------------------ commands ---
@@ -94,7 +178,9 @@ def _print_diffs(diffs, show_detail: bool) -> None:
 
 def cmd_diff(args: argparse.Namespace) -> int:
     theme = _load_named(args.name)
-    diffs = engine.compute_diffs(theme, _parse_only(args.only))
+    only = _parse_only(args.only)
+    _validate_only(theme, only)
+    diffs = engine.compute_diffs(theme, only)
     _print_diffs(diffs, show_detail=not args.summary)
     return 0
 
@@ -102,6 +188,7 @@ def cmd_diff(args: argparse.Namespace) -> int:
 def cmd_apply(args: argparse.Namespace) -> int:
     theme = _load_named(args.name)
     only = _parse_only(args.only)
+    _validate_only(theme, only)
 
     if args.dry_run:
         print(ansi.header(f"dry-run: {theme.meta.name}"))
@@ -109,34 +196,54 @@ def cmd_apply(args: argparse.Namespace) -> int:
         res = engine.apply(theme, only, dry_run=True)
         for w in res.warnings:
             print(f"   {ansi.warn(w)}")
+        for n in res.notes:
+            print(f"   {ansi.style(n, 'grey')}")
         print(ansi.style("\n(no changes written — dry run)", "grey"))
         return 0
 
+    assume_yes = getattr(args, "yes", False)
     print(ansi.header(f"applying: {theme.meta.title or theme.meta.name}"))
     res = engine.apply(
         theme, only,
         dry_run=False,
         do_hooks=not args.no_hooks,
         allow_sudo=not args.no_sudo,
+        hook_gate=_make_hook_gate(assume_yes),
+        assume_yes=assume_yes,
     )
-    print(ansi.ok(f"{res.applied_files} file(s), {res.applied_settings} setting(s) applied"))
     if res.hooks_run:
         print(ansi.ok(f"hooks: {', '.join(res.hooks_run)}"))
     for w in res.warnings:
         print(f"   {ansi.warn(w)}")
+    for n in res.notes:
+        print(f"   {ansi.style(n, 'grey')}")
+    if res.failed:
+        print(ansi.err("apply did not complete cleanly (see warnings above)"), file=sys.stderr)
+        return 1
+    print(ansi.ok(f"{res.applied_files} file(s), {res.applied_settings} setting(s) applied"))
     print(ansi.style("\nopen a new terminal for shell/prompt changes; restart GTK apps for css.", "grey"))
     return 0
 
 
 def cmd_restore(args: argparse.Namespace) -> int:
+    only = _parse_only(getattr(args, "only", None))
+    assume_yes = getattr(args, "yes", False)
     print(ansi.header("restoring pristine baseline"))
-    log, warnings = engine.restore(wipe=args.wipe, allow_sudo=not args.no_sudo)
+    log, warnings = engine.restore(
+        only=only,
+        wipe=args.wipe,
+        allow_sudo=not args.no_sudo,
+        hook_gate=_make_hook_gate(assume_yes),
+        assume_yes=assume_yes,
+    )
     for line in log:
         print(ansi.bullet(line))
     for w in warnings:
         print(f"   {ansi.warn(w)}")
-    if not warnings:
-        print(ansi.ok(f"reverted {len(log)} item(s) to pre-gtheme state"))
+    if warnings:
+        print(ansi.err("restore did not complete cleanly (see warnings above)"), file=sys.stderr)
+        return 1
+    print(ansi.ok(f"reverted {len(log)} item(s) to pre-gtheme state"))
     return 0
 
 
@@ -173,8 +280,9 @@ def cmd_install(args: argparse.Namespace) -> int:
     from .engine import remote
 
     try:
-        names = remote.install(args.source, name=args.name)
+        names = remote.install(args.source, name=args.name, insecure=args.insecure)
     except (FileNotFoundError, subprocess.CalledProcessError) as exc:
+        _vprint(f"install source: {args.source}")
         _die(f"install failed: {exc}")
     for nm in names:
         print(ansi.ok(f"installed {nm}"))
@@ -185,12 +293,51 @@ def cmd_install(args: argparse.Namespace) -> int:
 def cmd_update(args: argparse.Namespace) -> int:
     from .engine import remote
 
-    names = remote.update(args.name)
+    names = remote.update(args.name, insecure=args.insecure)
     if not names:
         print("no installed themes have a recorded origin to update.")
         return 0
     for nm in names:
         print(ansi.ok(f"updated {nm}"))
+    return 0
+
+
+def cmd_remove(args: argparse.Namespace) -> int:
+    from .paths import BUNDLED_THEMES_DIR, INSTALLED_THEMES_DIR
+
+    name = args.name
+    installed = INSTALLED_THEMES_DIR / name
+    if not (installed / "theme.toml").is_file():
+        # Distinguish "bundled-only" from "not found at all" for a clean message.
+        if (BUNDLED_THEMES_DIR / name / "theme.toml").is_file():
+            _die(
+                f"refusing to remove bundled theme {name!r}: it ships with gtheme "
+                f"and is not under the installed themes dir"
+            )
+        _die(f"theme not found among installed themes: {name}")
+
+    # Never rmtree outside INSTALLED_THEMES_DIR — confirm containment.
+    target = installed.resolve()
+    root = INSTALLED_THEMES_DIR.resolve()
+    if not target.is_relative_to(root) or target == root:
+        _die(f"refusing to remove path outside the installed themes dir: {target}")
+
+    if not getattr(args, "yes", False):
+        if not sys.stdin.isatty():
+            _die("removal needs confirmation; re-run interactively or pass --yes")
+        try:
+            answer = input(f"remove installed theme {name!r} from {target}? [y/N] ").strip().lower()
+        except EOFError:
+            answer = ""
+        if answer not in ("y", "yes"):
+            print("aborted.")
+            return 0
+
+    shutil.rmtree(target)
+    print(ansi.ok(f"removed {name}"))
+    if read_current() == name:
+        clear_current()
+        print(ansi.style("  it was the current theme; cleared current.", "grey"))
     return 0
 
 
@@ -213,10 +360,25 @@ def cmd_search(args: argparse.Namespace) -> int:
     return 0
 
 
+def _require_source_checkout(action: str) -> None:
+    """Refuse packaged-mode writes into the bundled (read-only) collection."""
+    from .paths import BUNDLED_THEMES_DIR, REPO_ROOT
+
+    is_checkout = (REPO_ROOT / ".git").exists() or (REPO_ROOT / "pyproject.toml").is_file()
+    writable = BUNDLED_THEMES_DIR.is_dir() and os.access(BUNDLED_THEMES_DIR, os.W_OK)
+    if not (is_checkout and writable):
+        _vprint(f"REPO_ROOT={REPO_ROOT} BUNDLED_THEMES_DIR={BUNDLED_THEMES_DIR}")
+        _die(
+            f"{action} require a writable source checkout, not an installed package "
+            f"(bundled collection at {BUNDLED_THEMES_DIR} is not writable)"
+        )
+
+
 def cmd_index(args: argparse.Namespace) -> int:
     from .paths import BUNDLED_THEMES_DIR
     from .registry import write_index
 
+    _require_source_checkout("index")
     out = write_index(BUNDLED_THEMES_DIR)
     print(ansi.ok(f"wrote {out}"))
     return 0
@@ -237,10 +399,10 @@ def cmd_capture(args: argparse.Namespace) -> int:
 
 
 def cmd_publish(args: argparse.Namespace) -> int:
-    import shutil
-
     from .paths import BUNDLED_THEMES_DIR, REPO_ROOT
     from .registry import find, write_index
+
+    _require_source_checkout("publish")
 
     src = find(args.name)
     if src is None:
@@ -290,6 +452,8 @@ def cmd_current(args: argparse.Namespace) -> int:
 # -------------------------------------------------------------------- parser ---
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="gtheme", description="GNOME desktop theme system")
+    p.add_argument("--version", action="version", version=f"gtheme {_version()}")
+    p.add_argument("-v", "--verbose", action="store_true", help="print extra context on errors")
     sub = p.add_subparsers(dest="command", required=True)
 
     sp = sub.add_parser("list", help="list available themes")
@@ -311,6 +475,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--dry-run", action="store_true")
     sp.add_argument("--no-sudo", action="store_true", help="skip sudo hooks")
     sp.add_argument("--no-hooks", action="store_true", help="skip all hooks")
+    sp.add_argument("-y", "--yes", action="store_true", help="approve hooks without prompting")
     sp.set_defaults(func=cmd_apply)
 
     sp = sub.add_parser("switch", help="switch to a theme (alias for apply)")
@@ -319,11 +484,14 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--dry-run", action="store_true")
     sp.add_argument("--no-sudo", action="store_true")
     sp.add_argument("--no-hooks", action="store_true")
+    sp.add_argument("-y", "--yes", action="store_true", help="approve hooks without prompting")
     sp.set_defaults(func=cmd_apply)
 
     sp = sub.add_parser("restore", help="revert to the pristine pre-gtheme state")
+    sp.add_argument("--only", help="comma-separated component filter")
     sp.add_argument("--wipe", action="store_true", help="also discard the baseline snapshot")
     sp.add_argument("--no-sudo", action="store_true", help="skip sudo restore hooks")
+    sp.add_argument("-y", "--yes", action="store_true", help="approve restore hooks without prompting")
     sp.set_defaults(func=cmd_restore)
 
     sp = sub.add_parser("current", help="show the active theme")
@@ -332,11 +500,18 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("install", help="install a theme (name, path, or git URL)")
     sp.add_argument("source")
     sp.add_argument("--name", help="pick a single theme from a collection/repo")
+    sp.add_argument("--insecure", action="store_true", help="allow insecure transports (e.g. http://)")
     sp.set_defaults(func=cmd_install)
 
     sp = sub.add_parser("update", help="refetch installed themes from their origin")
     sp.add_argument("name", nargs="?")
+    sp.add_argument("--insecure", action="store_true", help="allow insecure transports (e.g. http://)")
     sp.set_defaults(func=cmd_update)
+
+    sp = sub.add_parser("remove", aliases=["uninstall"], help="remove an installed theme")
+    sp.add_argument("name")
+    sp.add_argument("-y", "--yes", action="store_true", help="remove without confirmation")
+    sp.set_defaults(func=cmd_remove)
 
     sp = sub.add_parser("search", help="search themes by name/title/description")
     sp.add_argument("query")
@@ -369,9 +544,25 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    global _VERBOSE
     parser = build_parser()
     args = parser.parse_args(argv)
-    return args.func(args)
+    _VERBOSE = getattr(args, "verbose", False)
+    try:
+        return args.func(args)
+    except KeyboardInterrupt:
+        print("\naborted", file=sys.stderr)
+        return 130
+    except (
+        GthemeError,
+        ThemeSecurityError,
+        ThemeValidationError,
+        ThemeNotFoundError,
+        ValidationError,
+        tomllib.TOMLDecodeError,
+    ) as exc:
+        print(ansi.err(str(exc)), file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

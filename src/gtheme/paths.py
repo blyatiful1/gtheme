@@ -12,8 +12,11 @@ live desktop.
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
+
+from .errors import ThemeSecurityError
 
 
 def _env_path(var: str, default: Path) -> Path:
@@ -58,6 +61,9 @@ SKELETON_DIR = _first_existing(REPO_ROOT / "template", _PKG_DIR / "_skeleton")
 # Root that manifest "~" destinations expand against.
 DEST_ROOT = _env_path("GTHEME_DEST_ROOT", HOME)
 
+# Marker dropped into installed themes recording where they came from.
+ORIGIN_FILE = ".gtheme-origin.json"
+
 
 def theme_search_paths() -> list[Path]:
     """Directories that may contain themes, in priority order (installed first)."""
@@ -85,3 +91,52 @@ def expand_dest(dest: str) -> Path:
 def ensure_state_dirs() -> None:
     for d in (DATA_DIR, STATE_DIR, INSTALLED_THEMES_DIR, BACKUP_DIR):
         d.mkdir(parents=True, exist_ok=True)
+
+
+def confine_dest(dest: str, *, allow_outside: bool = False) -> Path:
+    """Expand ``dest`` and confine it to ``DEST_ROOT``.
+
+    Raises ``ThemeSecurityError`` if the resolved path escapes ``DEST_ROOT``
+    (e.g. ``~/../../etc/foo`` or an absolute ``/etc/...``) unless
+    ``allow_outside`` is set.
+    """
+    expanded = expand_dest(dest)
+    if not allow_outside and not expanded.resolve().is_relative_to(DEST_ROOT.resolve()):
+        raise ThemeSecurityError(
+            f"dest escapes {DEST_ROOT}: {dest}"
+        )
+    return expanded
+
+
+def confine_src(src: str, theme_path: Path) -> Path:
+    """Resolve ``src`` relative to ``theme_path`` and confine it there.
+
+    Raises ``ThemeSecurityError`` if ``src`` (via ``../`` etc.) resolves
+    outside the theme directory.
+    """
+    resolved = (theme_path / src).resolve()
+    if not resolved.is_relative_to(theme_path.resolve()):
+        raise ThemeSecurityError(
+            f"src escapes theme dir {theme_path}: {src}"
+        )
+    return resolved
+
+
+def read_origin(theme_path: Path) -> dict | None:
+    """Parse ``theme_path/.gtheme-origin.json``, or None if absent/unreadable."""
+    origin = theme_path / ORIGIN_FILE
+    try:
+        text = origin.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    try:
+        data = json.loads(text)
+    except (ValueError, TypeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def theme_is_untrusted(theme_path: Path) -> bool:
+    """True iff an origin marker exists and records a remote ``git`` source."""
+    origin = read_origin(theme_path)
+    return origin is not None and origin.get("type") == "git"

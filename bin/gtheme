@@ -9,7 +9,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from gtheme.cli import main  # noqa: E402
+try:
+    from gtheme.cli import main  # noqa: E402
+except ImportError as exc:
+    sys.stderr.write(
+        f"gtheme could not start: {exc}\n"
+        "gtheme needs jinja2 and pydantic — install them, e.g.:\n"
+        "    pip install jinja2 pydantic\n"
+    )
+    raise SystemExit(1)
 
 if __name__ == "__main__":
     raise SystemExit(main())

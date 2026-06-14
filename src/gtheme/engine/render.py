@@ -69,7 +69,7 @@ class TemplateSpec:
 
 def load_template_specs() -> list[TemplateSpec]:
     reg = TEMPLATES_DIR / "_templates.toml"
-    data = tomllib.loads(reg.read_text())
+    data = tomllib.loads(reg.read_text(encoding="utf-8"))
     return [TemplateSpec(**t) for t in data.get("template", [])]
 
 
@@ -112,10 +112,16 @@ def build(theme: Theme, force: bool = False) -> RenderResult:
         if managed and spec.component not in managed:
             skipped.append(f"{spec.src} (component '{spec.component}' not managed)")
             continue
-        out_rel = spec.out.format(name=theme.meta.name, Name=theme.meta.name.capitalize())
-        out_path = theme.path / out_rel
-        rendered = env.get_template(spec.src).render(**ctx)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(rendered)
-        written.append(out_rel)
+        # Isolate each template: a StrictUndefined/render/write failure on one
+        # template must not abort the whole build. Record it in skipped with an
+        # "ERROR " prefix so the CLI surfaces it without a new field.
+        try:
+            out_rel = spec.out.format(name=theme.meta.name, Name=theme.meta.name.capitalize())
+            out_path = theme.path / out_rel
+            rendered = env.get_template(spec.src).render(**ctx)
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(rendered, encoding="utf-8")
+            written.append(out_rel)
+        except Exception as exc:  # noqa: BLE001 - one bad template shouldn't kill the build
+            skipped.append(f"ERROR {spec.src}: {exc}")
     return RenderResult(written, skipped)

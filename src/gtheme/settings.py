@@ -24,7 +24,7 @@ _PLACEHOLDER = re.compile(r"\{\{\s*(\w+)\s*\}\}")
 
 def _run(args: list[str]) -> tuple[int, str]:
     try:
-        proc = subprocess.run(args, capture_output=True, text=True)
+        proc = subprocess.run(args, capture_output=True, text=True, encoding="utf-8")
     except FileNotFoundError:
         return 127, ""
     return proc.returncode, proc.stdout.strip()

@@ -19,15 +19,34 @@ fastfetch — plus an optional sudo step for boot (Plymouth/GDM/Limine).
 
 ## Install
 
-gtheme is pure Python (3.11+) and needs only **jinja2** and **pydantic**.
+gtheme is pure Python (3.11+) and needs only **jinja2** and **pydantic**. On
+GNOME it also uses `gsettings` (from **glib2**) and **dconf** to read/write
+settings.
+
+> **Note:** the `github.com/crocco/gtheme` URL and the `v0.1.0` tag below are
+> placeholders until the project is published. Until then, install from a local
+> checkout.
 
 ```sh
 git clone https://github.com/crocco/gtheme ~/gtheme
 ~/gtheme/install.sh          # symlinks `gtheme` into ~/.local/bin, checks deps
+~/gtheme/install.sh --pip    # ...and pip-install jinja2/pydantic if missing
+~/gtheme/install.sh --uninstall   # remove the ~/.local/bin/gtheme symlink
 ```
 
-On Arch: `sudo pacman -S python-jinja2 python-pydantic` if the deps are missing.
+The installer refuses to continue on Python < 3.11 or with the deps missing
+(use `--pip` to install them automatically). On Arch:
+
+```sh
+sudo pacman -S python-jinja2 python-pydantic glib2 dconf
+```
+
 Or run straight from the checkout: `~/gtheme/bin/gtheme list`.
+
+### Arch package
+
+A `PKGBUILD` is included. Once a release is tagged, pin the tarball checksum
+with `updpkgsums`, then `makepkg -si`.
 
 ## How a theme works
 
@@ -115,17 +134,42 @@ gtheme capture mydesk            # snapshots current dotfiles + GNOME settings
 | command | what it does |
 |---|---|
 | `list` / `search <q>` | browse the collection |
-| `install <name\|path\|git-url>` | install a theme (bundled, local, or remote) |
-| `update [name]` | refetch installed themes from their origin |
+| `install <name\|path\|git-url> [--insecure]` | install a theme (bundled, local, or remote) |
+| `remove <name>` | uninstall a previously installed theme |
+| `update [name] [--insecure]` | refetch installed themes from their origin |
 | `diff <name>` / `apply <name> --dry-run` | preview changes |
-| `apply <name> [--only c1,c2] [--no-sudo] [--no-hooks]` | apply |
+| `apply <name> [--only c1,c2] [--no-sudo] [--no-hooks] [-y]` | apply |
 | `switch <name>` | apply, keeping the pristine baseline |
-| `restore [--no-sudo] [--wipe]` | revert to pre-gtheme state |
+| `restore [--only c1,c2] [--no-sudo] [--wipe] [-y]` | revert to pre-gtheme state |
 | `current` | show the active theme |
 | `validate [name]` | check manifest, sources, requires |
 | `new <name> [--from base]` / `build <name>` | author from a palette |
 | `capture <name>` | freeze the live config into a theme |
 | `publish <name>` | add to the collection + print contribute steps |
+
+Global flags: `--version` (print the version and exit), `--verbose` (extra
+diagnostics), `-y`/`--yes` (assume yes — for non-interactive/CI use).
+
+## Security & consent
+
+Themes can ship `[[hooks]]` (arbitrary shell scripts) and write files outside
+their own directory, so gtheme treats anything you downloaded as untrusted:
+
+- **Downloaded-theme hooks require interactive confirmation.** When you `apply`
+  a theme installed from a git URL, gtheme prints each hook script and asks
+  before running it.
+- **`sudo` and untrusted hooks are denied by default.** A hook marked
+  `sudo = true`, or any hook from an untrusted theme in a non-interactive run,
+  is skipped unless you explicitly consent.
+- **File destinations are confined.** Manifest `dest` paths must stay inside
+  your home directory; `src` paths must stay inside the theme directory. Path
+  escapes (`/etc/...`, `~/../...`, `../`) are refused.
+- **`-y`/`--yes`** answers every prompt with "yes" for non-interactive/CI use —
+  only point it at themes you trust.
+- **`--insecure`** allows non-`https` git origins (e.g. plain `http://`) when
+  installing/updating. Off by default.
+
+Locally authored and bundled themes are trusted and run without prompts.
 
 ## The collection
 
@@ -137,4 +181,4 @@ Contribute one with `gtheme publish <name>` (copies it into `themes/`, regenerat
 
 ## License
 
-MIT.
+MIT — see [LICENSE](LICENSE). Copyright (c) 2026 crocco.

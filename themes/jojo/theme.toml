@@ -10,7 +10,7 @@ version = "1.0.0"
 based_on = "nsx"
 
 [requires]
-packages = ["alacritty", "starship", "btop", "micro", "fastfetch"]
+packages = ["alacritty", "starship", "btop", "micro", "fastfetch", "papirus-icon-theme", "papirus-folders"]
 extensions = ["dash-to-dock@micxgx.gmail.com", "blur-my-shell@aunetx", "just-perfection-desktop@just-perfection", "logomenu@aryan_k", "tilingshell@ferrarodomenico.com"]
 fonts = ["MesloLGS Nerd Font"]
 
@@ -36,6 +36,9 @@ dest = "~/.local/share/backgrounds/jojo/soft-and-wet.png"
 component = "wallpaper"
 src = "files/wallpaper/jojo-slideshow.xml"
 dest = "~/.local/share/backgrounds/jojo/jojo-slideshow.xml"
+# Rendered through {{ home }} substitution at apply time so the slideshow
+# resolves to the running user's backgrounds dir, not the author's.
+template = true
 
 [[files]]
 component = "terminal"
@@ -123,6 +126,14 @@ component = "desktop"
 backend = "gsettings"
 key = "org.gnome.desktop.interface accent-color"
 value = "'green'"
+
+[[settings]]
+component = "desktop"
+backend = "gsettings"
+key = "org.gnome.desktop.interface icon-theme"
+# Papirus-Dark with folders recoloured green (papirus-folders -C green -t Papirus-Dark).
+# Package install + recolour are a one-time sudo step; see [requires].packages.
+value = "'Papirus-Dark'"
 
 [[settings]]
 component = "terminal"

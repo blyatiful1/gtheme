@@ -12,29 +12,29 @@
   </starttime>
   <static>
     <duration>480.0</duration>
-    <file>/home/crocco/.local/share/backgrounds/jojo/stone-ocean.png</file>
+    <file>{{ home }}/.local/share/backgrounds/jojo/stone-ocean.png</file>
   </static>
   <transition type="overlay">
     <duration>8.0</duration>
-    <from>/home/crocco/.local/share/backgrounds/jojo/stone-ocean.png</from>
-    <to>/home/crocco/.local/share/backgrounds/jojo/golden-spin.png</to>
+    <from>{{ home }}/.local/share/backgrounds/jojo/stone-ocean.png</from>
+    <to>{{ home }}/.local/share/backgrounds/jojo/golden-spin.png</to>
   </transition>
   <static>
     <duration>480.0</duration>
-    <file>/home/crocco/.local/share/backgrounds/jojo/golden-spin.png</file>
+    <file>{{ home }}/.local/share/backgrounds/jojo/golden-spin.png</file>
   </static>
   <transition type="overlay">
     <duration>8.0</duration>
-    <from>/home/crocco/.local/share/backgrounds/jojo/golden-spin.png</from>
-    <to>/home/crocco/.local/share/backgrounds/jojo/soft-and-wet.png</to>
+    <from>{{ home }}/.local/share/backgrounds/jojo/golden-spin.png</from>
+    <to>{{ home }}/.local/share/backgrounds/jojo/soft-and-wet.png</to>
   </transition>
   <static>
     <duration>480.0</duration>
-    <file>/home/crocco/.local/share/backgrounds/jojo/soft-and-wet.png</file>
+    <file>{{ home }}/.local/share/backgrounds/jojo/soft-and-wet.png</file>
   </static>
   <transition type="overlay">
     <duration>8.0</duration>
-    <from>/home/crocco/.local/share/backgrounds/jojo/soft-and-wet.png</from>
-    <to>/home/crocco/.local/share/backgrounds/jojo/stone-ocean.png</to>
+    <from>{{ home }}/.local/share/backgrounds/jojo/soft-and-wet.png</from>
+    <to>{{ home }}/.local/share/backgrounds/jojo/stone-ocean.png</to>
   </transition>
 </background>

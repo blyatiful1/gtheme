@@ -8,19 +8,31 @@ version = "0.1.0"
 description = "A GNOME desktop theme system: download, apply, switch, and author full-desktop themes from a palette"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = { file = "LICENSE" }
 authors = [{ name = "crocco" }]
 keywords = ["gnome", "theme", "ricing", "dotfiles", "desktop", "cli"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Environment :: Console",
+    "Operating System :: POSIX :: Linux",
+]
 dependencies = [
     "jinja2>=3.1",
     "pydantic>=2.0",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
 
 [project.scripts]
 gtheme = "gtheme.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/crocco/gtheme"
+Issues = "https://github.com/crocco/gtheme/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/gtheme"]

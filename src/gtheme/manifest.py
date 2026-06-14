@@ -16,6 +16,7 @@ round-trips through both ``gsettings`` and ``dconf`` (e.g. a string is
 
 from __future__ import annotations
 
+import re
 import tomllib
 from pathlib import Path
 from typing import Literal, Optional
@@ -49,11 +50,22 @@ class Requires(_Model):
     fonts: list[str] = Field(default_factory=list)
 
 
+_MODE_RE = re.compile(r"^[0-7]{3,4}$")
+
+
 class FileInstall(_Model):
     component: str
     src: str
     dest: str
     mode: Optional[str] = None  # octal string, e.g. "755" for bin scripts
+    template: bool = False  # render src through {{ }} substitution before install
+
+    @field_validator("mode")
+    @classmethod
+    def _mode(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and not _MODE_RE.match(v):
+            raise ValueError(f"mode must be octal like 755 (got {v!r})")
+        return v
 
 
 class Setting(_Model):
