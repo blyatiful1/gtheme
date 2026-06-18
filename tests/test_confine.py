@@ -6,17 +6,23 @@ point it at a throwaway directory *before* importing the module.
 
 from __future__ import annotations
 
+import importlib
 import os
 import tempfile
 from pathlib import Path
 
 import pytest
 
-# Stable, real dest root for the whole module (resolved at paths import time).
+# Stable, real dest root for the whole module. paths may already be imported by
+# another test module (which fixes DEST_ROOT from the env at import time), so set
+# the env and reload paths to guarantee DEST_ROOT points at our throwaway dir
+# regardless of test collection order.
 _DEST_ROOT = Path(tempfile.mkdtemp(prefix="gtheme-dest-")).resolve()
 os.environ["GTHEME_DEST_ROOT"] = str(_DEST_ROOT)
 
 from gtheme import paths  # noqa: E402
+
+importlib.reload(paths)
 from gtheme.errors import ThemeSecurityError  # noqa: E402
 
 

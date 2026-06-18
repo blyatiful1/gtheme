@@ -23,6 +23,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from .errors import ThemeValidationError
+
 
 class _Model(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -111,8 +113,13 @@ class Theme(_Model):
 
 
 def _read_toml(path: Path) -> dict:
-    with path.open("rb") as fh:
-        return tomllib.load(fh)
+    try:
+        with path.open("rb") as fh:
+            return tomllib.load(fh)
+    except UnicodeDecodeError as exc:
+        # tomllib raises UnicodeDecodeError (a ValueError, NOT TOMLDecodeError)
+        # for non-UTF8 input — wrap it so callers/main() report it cleanly.
+        raise ThemeValidationError(f"{path.name} is not valid UTF-8: {exc}") from exc
 
 
 def load_theme(theme_dir: Path) -> Theme:
@@ -127,7 +134,11 @@ def load_theme(theme_dir: Path) -> Theme:
     # palette.toml, if present, is the palette source of truth.
     palette_path = theme_dir / "palette.toml"
     if palette_path.is_file():
-        data["palette"] = _read_toml(palette_path)
+        try:
+            data["palette"] = _read_toml(palette_path)
+        except (tomllib.TOMLDecodeError, ThemeValidationError) as exc:
+            # Name the actual file so the author isn't misdirected to theme.toml.
+            raise ThemeValidationError(f"palette.toml: {exc}") from exc
 
     data["path"] = theme_dir
     return Theme.model_validate(data)

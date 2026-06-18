@@ -9,11 +9,37 @@ from __future__ import annotations
 
 import re
 import shutil
+import subprocess
 from pathlib import Path
 
 from .errors import ThemeSecurityError
 from .manifest import Theme, load_theme
 from .paths import confine_dest, confine_src
+
+
+def package_installed(pkg: str) -> bool:
+    """Best-effort: is ``pkg`` available as a binary OR a known system package?
+
+    Many themed deps (e.g. ``papirus-icon-theme``) ship no PATH binary, so a
+    bare ``shutil.which`` falsely reports them missing. Fall back to the host
+    package manager before deciding.
+    """
+    if shutil.which(pkg):
+        return True
+    queries = (
+        ["pacman", "-Qq", pkg],
+        ["dpkg", "-s", pkg],
+        ["rpm", "-q", pkg],
+    )
+    for q in queries:
+        if shutil.which(q[0]) is None:
+            continue
+        try:
+            if subprocess.run(q, capture_output=True).returncode == 0:
+                return True
+        except OSError:
+            continue
+    return False
 
 # Special / dangerous permission bits on an installed file.
 _SETUID = 0o4000
@@ -93,6 +119,11 @@ def validate_dir(theme_dir: Path) -> tuple[Theme | None, list[str], list[str]]:
                     warnings.append(
                         f"[files] {fi.src}: world-writable mode {fi.mode}"
                     )
+                if not (bits & 0o400):
+                    # Owner-unreadable dest breaks a later diff/dry-run/re-apply.
+                    warnings.append(
+                        f"[files] {fi.src}: mode {fi.mode} is not owner-readable"
+                    )
 
         # Portability: hard-coded home paths in installed text sources.
         if src is not None and src.exists():
@@ -146,7 +177,7 @@ def validate_dir(theme_dir: Path) -> tuple[Theme | None, list[str], list[str]]:
 
     # Soft checks: required tools / fonts.
     for pkg in theme.requires.packages:
-        if shutil.which(pkg) is None:
-            warnings.append(f"required package/binary not found: {pkg}")
+        if not package_installed(pkg):
+            warnings.append(f"required package may be missing: {pkg}")
 
     return theme, errors, warnings

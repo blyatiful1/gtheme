@@ -229,7 +229,7 @@ def cmd_restore(args: argparse.Namespace) -> int:
     only = _parse_only(getattr(args, "only", None))
     assume_yes = getattr(args, "yes", False)
     print(ansi.header("restoring pristine baseline"))
-    log, warnings = engine.restore(
+    log, warnings, hard_failed = engine.restore(
         only=only,
         wipe=args.wipe,
         allow_sudo=not args.no_sudo,
@@ -240,10 +240,14 @@ def cmd_restore(args: argparse.Namespace) -> int:
         print(ansi.bullet(line))
     for w in warnings:
         print(f"   {ansi.warn(w)}")
-    if warnings:
+    # Exit 1 only when a file/setting actually failed to revert — not for soft
+    # hook notices (missing/declined/--no-sudo restore hooks).
+    if hard_failed:
         print(ansi.err("restore did not complete cleanly (see warnings above)"), file=sys.stderr)
         return 1
     print(ansi.ok(f"reverted {len(log)} item(s) to pre-gtheme state"))
+    if warnings:
+        print(ansi.style("  (some restore hooks were skipped — see warnings)", "grey"))
     return 0
 
 
@@ -265,7 +269,11 @@ def cmd_build(args: argparse.Namespace) -> int:
     from .engine import render
 
     theme = _load_named(args.name)
-    res = render.build(theme, force=args.force)
+    try:
+        res = render.build(theme, force=args.force)
+    except (ValueError, GthemeError) as exc:
+        # e.g. a malformed palette hex (parse_hex) must not dump a raw traceback.
+        _die(f"build failed: {exc}")
     print(ansi.header(f"build: {theme.meta.name}"))
     for w in res.written:
         print(ansi.ok(f"rendered {w}"))
@@ -280,8 +288,12 @@ def cmd_install(args: argparse.Namespace) -> int:
     from .engine import remote
 
     try:
-        names = remote.install(args.source, name=args.name, insecure=args.insecure)
-    except (FileNotFoundError, subprocess.CalledProcessError) as exc:
+        names = remote.install(
+            args.source, name=args.name, insecure=args.insecure,
+            force=getattr(args, "force", False),
+            allow_unsafe=getattr(args, "allow_unsafe", False),
+        )
+    except (GthemeError, FileNotFoundError, FileExistsError, OSError, shutil.Error) as exc:
         _vprint(f"install source: {args.source}")
         _die(f"install failed: {exc}")
     for nm in names:
@@ -293,7 +305,7 @@ def cmd_install(args: argparse.Namespace) -> int:
 def cmd_update(args: argparse.Namespace) -> int:
     from .engine import remote
 
-    names = remote.update(args.name, insecure=args.insecure)
+    names = remote.update(args.name, insecure=args.insecure, force=getattr(args, "force", False))
     if not names:
         print("no installed themes have a recorded origin to update.")
         return 0
@@ -332,6 +344,33 @@ def cmd_remove(args: argparse.Namespace) -> int:
         if answer not in ("y", "yes"):
             print("aborted.")
             return 0
+
+    # R2: run (and forget) this theme's recorded restore hooks BEFORE deleting it,
+    # so privileged boot changes aren't orphaned with the only copy of their undo.
+    from .backup import Baseline
+
+    baseline = Baseline().load()
+    theme_hooks = baseline.hooks_for_theme(name, str(target))
+    if theme_hooks:
+        print(ansi.warn(f"{name} has {len(theme_hooks)} recorded restore hook(s); running them before removal"))
+        hlog, hwarn, ran = engine._run_recorded_hooks(
+            theme_hooks,
+            allow_sudo=not getattr(args, "no_sudo", False),
+            hook_gate=_make_hook_gate(getattr(args, "yes", False)),
+            assume_yes=getattr(args, "yes", False),
+        )
+        for line in hlog:
+            print(ansi.bullet(line))
+        for w in hwarn:
+            print(f"   {ansi.warn(w)}")
+        if ran:
+            baseline.forget_hooks(ran)
+        orphaned = [r for r in theme_hooks if r not in ran]
+        if orphaned:
+            print(ansi.warn(
+                f"{len(orphaned)} restore hook(s) did not run; their (possibly "
+                f"privileged) changes will be orphaned after removal"
+            ))
 
     shutil.rmtree(target)
     print(ansi.ok(f"removed {name}"))
@@ -501,16 +540,20 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("source")
     sp.add_argument("--name", help="pick a single theme from a collection/repo")
     sp.add_argument("--insecure", action="store_true", help="allow insecure transports (e.g. http://)")
+    sp.add_argument("--force", action="store_true", help="overwrite an already-installed theme (local edits lost)")
+    sp.add_argument("--allow-unsafe", action="store_true", help="install even if the theme fails validation")
     sp.set_defaults(func=cmd_install)
 
     sp = sub.add_parser("update", help="refetch installed themes from their origin")
     sp.add_argument("name", nargs="?")
     sp.add_argument("--insecure", action="store_true", help="allow insecure transports (e.g. http://)")
+    sp.add_argument("--force", action="store_true", help="re-fetch even if already up to date")
     sp.set_defaults(func=cmd_update)
 
     sp = sub.add_parser("remove", aliases=["uninstall"], help="remove an installed theme")
     sp.add_argument("name")
     sp.add_argument("-y", "--yes", action="store_true", help="remove without confirmation")
+    sp.add_argument("--no-sudo", action="store_true", help="skip sudo restore hooks during removal")
     sp.set_defaults(func=cmd_remove)
 
     sp = sub.add_parser("search", help="search themes by name/title/description")
@@ -560,6 +603,8 @@ def main(argv: list[str] | None = None) -> int:
         ThemeNotFoundError,
         ValidationError,
         tomllib.TOMLDecodeError,
+        subprocess.CalledProcessError,
+        OSError,
     ) as exc:
         print(ansi.err(str(exc)), file=sys.stderr)
         return 1

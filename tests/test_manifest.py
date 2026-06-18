@@ -73,3 +73,15 @@ def test_octal_4digit_mode_ok(tmp_path):
     body = GOOD.replace('mode = "644"', 'mode = "0644"')
     theme = manifest.load_theme(_write_theme(tmp_path, body))
     assert theme.files[0].mode == "0644"
+
+
+def test_non_utf8_theme_toml_raises_clean_error(tmp_path):
+    # tomllib raises UnicodeDecodeError (a ValueError, not TOMLDecodeError) on
+    # non-UTF8 input; load_theme must wrap it as a clean ThemeValidationError.
+    from gtheme.errors import ThemeValidationError
+
+    theme_dir = tmp_path / "t"
+    theme_dir.mkdir()
+    (theme_dir / "theme.toml").write_bytes(b'[meta]\nname = "x"\ntitle = "caf\xe9"\n')  # latin-1
+    with pytest.raises(ThemeValidationError):
+        manifest.load_theme(theme_dir)

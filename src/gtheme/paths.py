@@ -100,8 +100,16 @@ def confine_dest(dest: str, *, allow_outside: bool = False) -> Path:
     (e.g. ``~/../../etc/foo`` or an absolute ``/etc/...``) unless
     ``allow_outside`` is set.
     """
+    # E1: a broken environment (empty/relative $HOME -> DEST_ROOT "/" or "") would
+    # make every path "inside" the root and defeat confinement. Refuse to write.
+    root = DEST_ROOT.resolve()
+    if not DEST_ROOT.is_absolute() or root == Path(root.anchor):
+        raise ThemeSecurityError(
+            f"unsafe DEST_ROOT {DEST_ROOT!r} (empty, relative, or filesystem root); "
+            f"refusing to write — check $HOME / $GTHEME_DEST_ROOT"
+        )
     expanded = expand_dest(dest)
-    if not allow_outside and not expanded.resolve().is_relative_to(DEST_ROOT.resolve()):
+    if not allow_outside and not expanded.resolve().is_relative_to(root):
         raise ThemeSecurityError(
             f"dest escapes {DEST_ROOT}: {dest}"
         )

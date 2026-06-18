@@ -145,7 +145,12 @@ def compute_diffs(theme: Theme, only: set[str] | None = None) -> list[Diff]:
         if not op.dest.exists():
             diffs.append(Diff("file", str(op.dest), op.install.component, "new"))
             continue
-        dst_b = op.dest.read_bytes()
+        try:
+            dst_b = op.dest.read_bytes()
+        except OSError as exc:
+            diffs.append(Diff("file", str(op.dest), op.install.component, "changed",
+                              f"destination unreadable: {exc}"))
+            continue
         if src_b == dst_b:
             diffs.append(Diff("file", str(op.dest), op.install.component, "unchanged"))
             continue
@@ -171,7 +176,10 @@ def compute_diffs(theme: Theme, only: set[str] | None = None) -> list[Diff]:
             )
             continue
         current = rs.get_current()
-        status = "unchanged" if current == rs.value else ("changed" if current is not None else "new")
+        if settings.values_equal(current, rs.value):
+            status = "unchanged"
+        else:
+            status = "changed" if current is not None else "new"
         detail = f"{current} -> {rs.value}" if status != "unchanged" else ""
         diffs.append(Diff("setting", rs.label, rs.component, status, detail))
     return diffs
@@ -246,7 +254,14 @@ def _run_hooks(
             continue
         cmd = (["sudo", "bash", str(script)] if hook.sudo else ["bash", str(script)])
         print(ansi.bullet(f"hook[{event}] {hook.script}" + (" (sudo)" if hook.sudo else "")))
-        proc = subprocess.run(cmd, cwd=theme.path)
+        try:
+            proc = subprocess.run(cmd, cwd=theme.path)
+        except (FileNotFoundError, PermissionError) as exc:
+            # Missing bash/sudo etc. must not crash apply with a raw traceback.
+            result.warnings.append(f"cannot run hook {hook.script}: {exc}")
+            if not hook.optional:
+                result.failed = True
+            continue
         if proc.returncode == 0:
             result.hooks_run.append(hook.script)
             # Remember it ran so its restore script can be invoked on `restore`.
@@ -265,10 +280,12 @@ def _run_hooks(
 # ---------------------------------------------------------------------- apply ---
 def check_requires(theme: Theme) -> list[str]:
     """Best-effort dependency check (warn only; never blocks an apply)."""
+    from ..validate import package_installed
+
     missing: list[str] = []
     for pkg in theme.requires.packages:
-        if shutil.which(pkg) is None:
-            missing.append(f"package/binary not found: {pkg}")
+        if not package_installed(pkg):
+            missing.append(f"package may be missing: {pkg}")
     if theme.requires.fonts and shutil.which("fc-list"):
         installed = subprocess.run(
             ["fc-list"], capture_output=True, text=True
@@ -284,6 +301,84 @@ def _is_wayland() -> bool:
         os.environ.get("XDG_SESSION_TYPE") == "wayland"
         or bool(os.environ.get("WAYLAND_DISPLAY"))
     )
+
+
+def _has_session_bus() -> bool:
+    """True if a D-Bus session bus looks reachable (gsettings/dconf need one)."""
+    if os.environ.get("DBUS_SESSION_BUS_ADDRESS"):
+        return True
+    runtime = os.environ.get("XDG_RUNTIME_DIR")
+    return bool(runtime and (Path(runtime) / "bus").exists())
+
+
+def _write_ledger_entry(name: str, files, settings) -> None:
+    """Set the ownership-ledger entry for ``name`` (sorted, de-duplicated)."""
+    ledger = read_ledger()
+    ledger[name] = {"files": sorted(set(files)), "settings": sorted(set(settings))}
+    write_ledger(ledger)
+
+
+def _drop_ledger_entry(name: str) -> None:
+    ledger = read_ledger()
+    if name in ledger:
+        ledger.pop(name)
+        write_ledger(ledger)
+
+
+def _run_recorded_hooks(
+    records: list[dict],
+    allow_sudo: bool,
+    hook_gate: "HookGate | None",
+    assume_yes: bool,
+) -> tuple[list[str], list[str], list[dict]]:
+    """Run recorded restore hooks (gated like apply). Returns (log, warnings, ran).
+
+    ``ran`` is the subset of records whose restore script exited 0, so the caller
+    can ``forget_hooks`` them. Shared by ``restore`` and ``remove``.
+    """
+    log: list[str] = []
+    warnings: list[str] = []
+    ran: list[dict] = []
+    gate_result = ApplyResult()
+    for rec in records:
+        theme_dir = Path(rec["dir"])
+        # Confine the restore script to the theme dir, exactly as apply confines
+        # hook.script — a recorded "../" path must not run code outside the theme.
+        try:
+            script = paths.confine_src(rec["restore"], theme_dir)
+        except ThemeSecurityError:
+            warnings.append(f"refusing restore hook outside theme dir: {rec['restore']}")
+            continue
+        if not script.is_file():
+            warnings.append(f"restore hook missing: {rec['restore']}")
+            continue
+        if rec["sudo"] and not allow_sudo:
+            warnings.append(f"skipped sudo restore hook {rec['restore']} (--no-sudo)")
+            continue
+        info = {
+            "event": "restore",
+            "script": str(script),
+            "sudo": rec["sudo"],
+            "untrusted": paths.theme_is_untrusted(theme_dir),
+            "preview": _preview(script),
+            "theme": rec.get("theme", ""),
+        }
+        if not _consent(hook_gate, info, assume_yes, gate_result):
+            continue
+        cmd = (["sudo", "bash", str(script)] if rec["sudo"] else ["bash", str(script)])
+        print(ansi.bullet(f"restore hook {rec['restore']}"))
+        try:
+            proc = subprocess.run(cmd, cwd=rec["dir"])
+        except (FileNotFoundError, PermissionError) as exc:
+            warnings.append(f"cannot run restore hook {rec['restore']}: {exc}")
+            continue
+        if proc.returncode == 0:
+            log.append(f"ran restore hook {rec['restore']}")
+            ran.append(rec)
+        else:
+            warnings.append(f"restore hook FAILED: {rec['restore']} (exit {proc.returncode})")
+    warnings.extend(gate_result.warnings)
+    return log, warnings, ran
 
 
 def _dryrun_notes(theme: Theme, only: set[str] | None, result: ApplyResult) -> None:
@@ -315,22 +410,61 @@ def _dryrun_notes(theme: Theme, only: set[str] | None, result: ApplyResult) -> N
             result.notes.append(f"unresolved placeholder; setting skipped: {rs.label}")
 
 
+def _atomic_write_bytes(dest: Path, data: bytes, mode: int | None) -> None:
+    """Write ``data`` to ``dest`` atomically (tmp + fsync + os.replace).
+
+    A SIGKILL or ENOSPC mid-write can never leave a half-written/truncated dest:
+    the prior file stays intact until the rename succeeds. Replaces a symlink at
+    ``dest`` rather than writing through it to the link target.
+    """
+    tmp = dest.with_name(dest.name + ".gtheme-tmp")
+    try:
+        with open(tmp, "wb") as fh:
+            fh.write(data)
+            fh.flush()
+            os.fsync(fh.fileno())
+        if mode is not None:
+            os.chmod(tmp, mode)
+        if dest.is_symlink():
+            dest.unlink()
+        os.replace(tmp, dest)
+    finally:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
 def _write_file(op: FileOp) -> None:
     """Write ``op.src`` to ``op.dest`` (templated if requested), never through a link."""
-    op.dest.parent.mkdir(parents=True, exist_ok=True)
-    # If the dest is a symlink, drop the link itself and write a real file in its
-    # place — never write through it to the link target.
-    if op.dest.is_symlink():
-        op.dest.unlink()
+    dest = op.dest
+    # Refuse an existing-directory dest: a plain copy would silently create
+    # dir/<basename> — the wrong inode for chmod and untracked by the baseline.
+    # (A symlink-to-dir is fine: it is replaced as a link below.)
+    if dest.is_dir() and not dest.is_symlink():
+        raise IsADirectoryError(f"destination is a directory, not a file: {dest}")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
     if getattr(op.install, "template", False):
         text = _read_text(op.src)
-        rendered = settings.resolve(text if text is not None else "")
-        op.dest.write_text(rendered, encoding="utf-8")
+        if text is None:
+            # template=true on a binary/non-UTF8 src must NOT silently truncate
+            # the live file to 0 bytes; fail loudly so apply records it.
+            raise ValueError(f"cannot template binary/non-UTF8 source: {op.install.src}")
+        data = settings.resolve(text).encode("utf-8")
     else:
-        shutil.copy2(op.src, op.dest)
+        data = op.src.read_bytes()
+
     if op.install.mode:
         # Mask off setuid/setgid/sticky; only honour the permission bits.
-        os.chmod(op.dest, int(op.install.mode, 8) & 0o777)
+        mode: int | None = int(op.install.mode, 8) & 0o777
+    else:
+        # Preserve the source's permission bits (as shutil.copy2 used to).
+        try:
+            mode = op.src.stat().st_mode & 0o777
+        except OSError:
+            mode = None
+    _atomic_write_bytes(dest, data, mode)
 
 
 def _switch_cleanup(
@@ -441,12 +575,45 @@ def apply(
     owned_files: list[str] = []
     owned_settings: list[str] = []
 
+    # Ownership recorded before this apply (so re-applying with --only accumulates).
+    _prior = read_ledger().get(theme.meta.name)
+    prior_files = set(_prior.get("files", [])) if isinstance(_prior, dict) else set()
+    prior_settings = set(_prior.get("settings", [])) if isinstance(_prior, dict) else set()
+
+    # What this apply intends to own (used for the crash-safe early ledger write).
+    planned_files = [str(op.dest) for op in ops]
+    setting_list = resolved_settings(theme, only)
+    planned_settings = [f"{rs.backend}:{rs.key}" for rs in setting_list if "{{" not in rs.key]
+
+    # AS5: if a settings-bearing theme is applied with no reachable session bus,
+    # skip the settings phase wholesale (one note) instead of flooding failures.
+    skip_settings_no_bus = bool(setting_list) and not _has_session_bus()
+    if skip_settings_no_bus:
+        result.notes.append(
+            "no GNOME session bus detected; desktop settings were skipped "
+            "(run from a graphical GNOME session for them to take effect)"
+        )
+    settings_selected = 0
+    settings_backend_skipped = 0
+
     # Wrap the mutation body so a mid-apply exception still leaves a consistent,
     # restorable baseline. Each record persists itself atomically immediately
     # (see backup.record_*), so re-raising here keeps the store consistent.
     try:
         if do_hooks:
             _run_hooks(theme, "pre", only, allow_sudo, result, baseline, hook_gate, assume_yes)
+            # H2: a failed/refused REQUIRED pre-hook is a precondition — if it did
+            # not run, do NOT apply files/settings (leave the theme un-applied).
+            if result.failed:
+                result.notes.append("a required pre-hook did not run; theme was NOT applied")
+                baseline.save()
+                return result
+
+        # R4: record planned ownership + current BEFORE mutating, so an interrupt
+        # mid-apply still leaves current/ledger consistent with what is on disk.
+        _write_ledger_entry(theme.meta.name, prior_files | set(planned_files),
+                            prior_settings | set(planned_settings))
+        write_current(theme.meta.name)
 
         for op in ops:
             if not op.src.is_file():
@@ -456,28 +623,43 @@ def apply(
             try:
                 baseline.record_file(op.dest, op.install.component, theme.meta.name)
                 _write_file(op)
-            except OSError as exc:
+            except (OSError, ValueError) as exc:
+                # OSError: dest dir/perm/disk. ValueError: e.g. template on binary.
                 result.warnings.append(f"failed to write {op.dest}: {exc}")
                 result.failed = True
                 continue
             owned_files.append(str(op.dest))
             result.applied_files += 1
 
-        for rs in resolved_settings(theme, only):
-            if "{{" in rs.key:
-                # Unresolved placeholder — skip and do NOT record a junk key.
-                result.warnings.append(f"skipped setting with unresolved placeholder: {rs.label}")
-                continue
-            if not backend_available(rs.backend):
-                result.warnings.append(f"{rs.backend} not available; skipped {rs.label}")
-                continue
-            baseline.record_setting(rs, rs.component, theme.meta.name)
-            owned_settings.append(f"{rs.backend}:{rs.key}")
-            if rs.apply():
-                result.applied_settings += 1
-            else:
-                result.warnings.append(f"failed to set {rs.label}")
-                result.failed = True
+        if not skip_settings_no_bus:
+            for rs in setting_list:
+                if "{{" in rs.key:
+                    # Unresolved placeholder — skip and do NOT record a junk key.
+                    result.warnings.append(f"skipped setting with unresolved placeholder: {rs.label}")
+                    result.notes.append(
+                        "an unresolved {{ }} token left a setting unset "
+                        "(e.g. Ptyxis not detected); other settings still applied"
+                    )
+                    continue
+                settings_selected += 1
+                if not backend_available(rs.backend):
+                    result.warnings.append(f"{rs.backend} not available; skipped {rs.label}")
+                    settings_backend_skipped += 1
+                    continue
+                # Snapshot pristine BEFORE apply; forget it if apply fails so we
+                # never keep an un-restorable record for a key we never changed.
+                key = f"{rs.backend}:{rs.key}"
+                newly = key not in baseline.settings
+                baseline.record_setting(rs, rs.component, theme.meta.name)
+                if rs.apply():
+                    owned_settings.append(key)
+                    result.applied_settings += 1
+                else:
+                    detail = f": {rs.error}" if rs.error else ""
+                    result.warnings.append(f"failed to set {rs.label}{detail}")
+                    result.failed = True
+                    if newly:
+                        baseline.forget_settings([key])
 
         if do_hooks:
             _run_hooks(theme, "post", only, allow_sudo, result, baseline, hook_gate, assume_yes)
@@ -488,15 +670,22 @@ def apply(
 
     baseline.save()
 
-    # Record this theme's active ownership for future switch-cleanup.
-    ledger = read_ledger()
-    existing = ledger.get(theme.meta.name) if isinstance(ledger.get(theme.meta.name), dict) else {}
-    merged_files = sorted(set(existing.get("files", []) if isinstance(existing, dict) else []) | set(owned_files))
-    merged_settings = sorted(set(existing.get("settings", []) if isinstance(existing, dict) else []) | set(owned_settings))
-    ledger[theme.meta.name] = {"files": merged_files, "settings": merged_settings}
-    write_ledger(ledger)
+    # AS4: a settings-only apply where every setting was skipped for a missing
+    # backend (or the whole settings phase was skipped for no bus) and nothing
+    # else applied is not a real apply — roll back current/ledger and fail.
+    nothing_applied = (
+        result.applied_files == 0 and result.applied_settings == 0 and not result.hooks_run
+    )
+    all_settings_unbacked = settings_selected > 0 and settings_backend_skipped == settings_selected
+    if nothing_applied and (all_settings_unbacked or skip_settings_no_bus):
+        result.failed = True
+        _drop_ledger_entry(theme.meta.name)
+        clear_current()
+        return result
 
-    write_current(theme.meta.name)
+    # Replace the planned ledger entry with what was actually applied.
+    _write_ledger_entry(theme.meta.name, prior_files | set(owned_files),
+                        prior_settings | set(owned_settings))
 
     # Shell-reload guidance (esp. Wayland, where Shell can't reload live).
     if _is_wayland():
@@ -520,64 +709,66 @@ def restore(
     allow_sudo: bool = True,
     hook_gate: "HookGate | None" = None,
     assume_yes: bool = False,
-) -> tuple[list[str], list[str]]:
-    """Revert to the pristine baseline. Returns (log lines, warnings)."""
+) -> tuple[list[str], list[str], bool]:
+    """Revert to the pristine baseline.
+
+    Returns ``(log, warnings, hard_failed)`` where ``hard_failed`` is True only
+    if a file/setting actually failed to revert (hook notices are soft).
+    """
     baseline = Baseline().load()
     warnings: list[str] = []
     warnings.extend(baseline.warnings)
     if baseline.is_empty and not baseline.hooks:
-        return [], warnings + ["nothing to restore — no baseline recorded"]
+        return [], warnings + ["nothing to restore — no baseline recorded"], False
 
-    # A throwaway result just to reuse the consent machinery for hook gating.
-    gate_result = ApplyResult()
-
-    # Undo only the install hooks that actually ran (recorded in the baseline),
-    # gated exactly like apply hooks.
-    for rec in baseline.hooks:
-        if only is not None and rec.get("component", "") not in only:
-            continue
-        theme_dir = Path(rec["dir"])
-        # Confine the restore script to the theme dir, exactly as apply confines
-        # hook.script — a recorded "../" path must not run code outside the theme.
-        try:
-            script = paths.confine_src(rec["restore"], theme_dir)
-        except ThemeSecurityError:
-            warnings.append(f"refusing restore hook outside theme dir: {rec['restore']}")
-            continue
-        if not script.is_file():
-            warnings.append(f"restore hook missing: {rec['restore']}")
-            continue
-        if rec["sudo"] and not allow_sudo:
-            warnings.append(f"skipped sudo restore hook {rec['restore']} (--no-sudo)")
-            continue
-        info = {
-            "event": "restore",
-            "script": str(script),
-            "sudo": rec["sudo"],
-            "untrusted": paths.theme_is_untrusted(theme_dir),
-            "preview": _preview(script),
-            "theme": rec.get("theme", ""),
-        }
-        if not _consent(hook_gate, info, assume_yes, gate_result):
-            continue
-        cmd = (["sudo", "bash", str(script)] if rec["sudo"] else ["bash", str(script)])
-        print(ansi.bullet(f"restore hook {rec['restore']}"))
-        proc = subprocess.run(cmd, cwd=rec["dir"])
-        if proc.returncode != 0:
-            warnings.append(f"restore hook FAILED: {rec['restore']} (exit {proc.returncode})")
-    warnings.extend(gate_result.warnings)
+    # Undo the install hooks that actually ran (recorded in the baseline),
+    # gated exactly like apply hooks; forget the ones that ran.
+    hook_records = [
+        r for r in baseline.hooks if only is None or r.get("component", "") in only
+    ]
+    hlog, hwarn, ran = _run_recorded_hooks(hook_records, allow_sudo, hook_gate, assume_yes)
+    warnings.extend(hwarn)
+    if ran:
+        baseline.forget_hooks(ran)
 
     flog, fwarn = baseline.restore_files(only)
     slog, swarn = baseline.restore_settings(only)
-    log = flog + slog
+    log = hlog + flog + slog
     warnings.extend(fwarn)
     warnings.extend(swarn)
+    # Hard failure = a real file/setting revert failure (not a hook notice).
+    hard_failed = bool(fwarn) or bool(swarn)
 
     if only is None:
-        clear_current()
-        # Full restore returns to pristine: drop the ownership ledger too.
-        write_ledger({})
-        if wipe:
-            baseline.wipe()
+        # R1: only discard recovery state when the revert actually succeeded.
+        if not hard_failed:
+            clear_current()
+            write_ledger({})
+            if wipe:
+                baseline.wipe()
+        elif wipe:
+            warnings.append(
+                "kept baseline (--wipe skipped): some items failed to revert; "
+                "fix the cause and re-run restore"
+            )
+    else:
+        # R3: forget the reverted components so current/ledger stay truthful.
+        if not hard_failed:
+            ffk = [k for k, r in baseline.files.items() if r.get("component", "") in only]
+            sfk = [k for k, r in baseline.settings.items() if r.get("component", "") in only]
+            baseline.forget_files(ffk)
+            baseline.forget_settings(sfk)
+            cur = read_current()
+            if cur:
+                ledger = read_ledger()
+                ent = ledger.get(cur)
+                if isinstance(ent, dict):
+                    drop_f, drop_s = set(ffk), set(sfk)
+                    ent["files"] = [f for f in ent.get("files", []) if f not in drop_f]
+                    ent["settings"] = [s for s in ent.get("settings", []) if s not in drop_s]
+                    ledger[cur] = ent
+                    write_ledger(ledger)
+            if baseline.is_empty:
+                clear_current()
 
-    return log, warnings
+    return log, warnings, hard_failed

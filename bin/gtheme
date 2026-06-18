@@ -7,16 +7,30 @@ cloned, as long as Python can import jinja2 and pydantic.
 import sys
 from pathlib import Path
 
+# Python version gate first: gtheme needs 3.11+ for tomllib. Without this, an
+# old interpreter fails importing tomllib and gets misreported as a jinja2/
+# pydantic problem below.
+if sys.version_info < (3, 11):
+    sys.stderr.write(
+        "gtheme needs Python 3.11+ (for the stdlib 'tomllib'); "
+        f"found {sys.version_info.major}.{sys.version_info.minor}\n"
+    )
+    raise SystemExit(1)
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 try:
     from gtheme.cli import main  # noqa: E402
-except ImportError as exc:
-    sys.stderr.write(
-        f"gtheme could not start: {exc}\n"
-        "gtheme needs jinja2 and pydantic — install them, e.g.:\n"
-        "    pip install jinja2 pydantic\n"
-    )
+except ModuleNotFoundError as exc:
+    missing = getattr(exc, "name", "") or str(exc)
+    if missing == "tomllib":
+        sys.stderr.write("gtheme needs Python 3.11+ (for the stdlib 'tomllib')\n")
+    else:
+        sys.stderr.write(
+            f"gtheme could not start: {exc}\n"
+            "gtheme needs jinja2 and pydantic — install them, e.g.:\n"
+            "    pip install jinja2 pydantic\n"
+        )
     raise SystemExit(1)
 
 if __name__ == "__main__":

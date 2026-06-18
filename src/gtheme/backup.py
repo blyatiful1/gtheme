@@ -195,6 +195,24 @@ class Baseline:
             self.hooks.append(ident)
             self._save_hooks()
 
+    def forget_hooks(self, records: list[dict]) -> None:
+        """Drop recorded hooks (after their restore ran, or on theme removal)."""
+        changed = False
+        for rec in records:
+            if rec in self.hooks:
+                self.hooks.remove(rec)
+                changed = True
+        if changed:
+            self._save_hooks()
+
+    def hooks_for_theme(self, theme: str, theme_dir: str | None = None) -> list[dict]:
+        """Recorded hooks belonging to ``theme`` (by name or recorded dir)."""
+        out = []
+        for rec in self.hooks:
+            if rec.get("theme") == theme or (theme_dir and rec.get("dir") == theme_dir):
+                out.append(rec)
+        return out
+
     @property
     def is_empty(self) -> bool:
         return not self.files and not self.settings
@@ -343,6 +361,10 @@ class Baseline:
             rs = ResolvedSetting(stub, ctx={})  # key already resolved
             if rs.restore(rec["saved"]):
                 log.append(f"restored {rec['backend']} {rec['key']}")
+            elif rec.get("saved") is None:
+                # Key had no prior value; a reset that can't run (e.g. the schema
+                # is gone) is benign — it is already effectively pristine.
+                log.append(f"{rec['backend']} {rec['key']} left unset")
             else:
                 warnings.append(f"failed to restore {rec['backend']} {rec['key']}")
         return log, warnings

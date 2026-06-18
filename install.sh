@@ -58,17 +58,32 @@ missing=""
 for mod in jinja2 pydantic; do
   python3 -c "import $mod" 2>/dev/null || missing="$missing $mod"
 done
+guidance() {
+  echo "   Arch:   sudo pacman -S python-jinja2 python-pydantic"
+  echo "   pip:    python3 -m pip install --user jinja2 pydantic"
+  echo "   (re-run: ./install.sh --pip, or use a venv)"
+}
+
 if [ -n "$missing" ]; then
   echo "!! missing Python modules:$missing"
   if [ "$DO_PIP" -eq 1 ]; then
+    # Bootstrap pip if absent; never let set -e kill us before the guidance below.
+    if ! python3 -c 'import pip' 2>/dev/null; then
+      echo "   pip not present; trying ensurepip ..."
+      python3 -m ensurepip --user >/dev/null 2>&1 || true
+    fi
     echo "   installing with pip --user ...$missing"
     # shellcheck disable=SC2086 -- $missing is a deliberate space-separated arg list
-    python3 -m pip install --user $missing
-    echo "   installed:$missing"
+    if python3 -m pip install --user $missing; then
+      echo "   installed:$missing"
+    else
+      echo "!! pip install failed (PEP 668 externally-managed env?)." >&2
+      guidance
+      echo "!! gtheme will not run until these are importable." >&2
+      exit 1
+    fi
   else
-    echo "   Arch:   sudo pacman -S python-jinja2 python-pydantic"
-    echo "   pip:    python3 -m pip install --user jinja2 pydantic"
-    echo "   or re-run: ./install.sh --pip"
+    guidance
     echo "!! gtheme will not run until these are importable." >&2
     exit 1
   fi
@@ -78,8 +93,16 @@ fi
 
 # 3) symlink the launcher
 mkdir -p "$BIN_DIR"
+# Refuse to clobber a real file/dir at the target: `ln -sfn` into an existing
+# directory would silently create TARGET/gtheme and "succeed".
+if [ -e "$TARGET" ] && [ ! -L "$TARGET" ]; then
+  echo "!! $TARGET exists and is not a symlink — remove it first" >&2
+  exit 1
+fi
+# chmod the real launcher BEFORE linking, and don't abort if it's already +x
+# (e.g. a read-only/foreign-owned checkout where the bit is already set).
+chmod +x "$REPO/bin/gtheme" 2>/dev/null || echo "   (note: bin/gtheme already executable)"
 ln -sfn "$REPO/bin/gtheme" "$TARGET"
-chmod +x "$REPO/bin/gtheme"
 echo "   linked $TARGET -> $REPO/bin/gtheme"
 
 case ":$PATH:" in
