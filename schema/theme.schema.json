@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://github.com/crocco/gtheme/schema/theme.schema.json",
+  "$id": "https://github.com/blyatiful1/gtheme/schema/theme.schema.json",
   "title": "gtheme theme.toml",
   "description": "Declarative manifest for a gtheme desktop theme. Kept in sync with src/gtheme/manifest.py (the Pydantic models are the source of truth); update both together.",
   "type": "object",

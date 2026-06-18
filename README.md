@@ -23,12 +23,12 @@ gtheme is pure Python (3.11+) and needs only **jinja2** and **pydantic**. On
 GNOME it also uses `gsettings` (from **glib2**) and **dconf** to read/write
 settings.
 
-> **Note:** the `github.com/crocco/gtheme` URL and the `v0.1.0` tag below are
-> placeholders until the project is published. Until then, install from a local
-> checkout.
+> **Note:** no release is tagged yet, so install from a local checkout for now.
+> The repo lives at `github.com/blyatiful1/gtheme` (cloning needs access while
+> it is private).
 
 ```sh
-git clone https://github.com/crocco/gtheme ~/gtheme
+git clone https://github.com/blyatiful1/gtheme ~/gtheme
 ~/gtheme/install.sh          # symlinks `gtheme` into ~/.local/bin, checks deps
 ~/gtheme/install.sh --pip    # ...and pip-install jinja2/pydantic if missing
 ~/gtheme/install.sh --uninstall   # remove the ~/.local/bin/gtheme symlink
@@ -181,4 +181,4 @@ Contribute one with `gtheme publish <name>` (copies it into `themes/`, regenerat
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Copyright (c) 2026 crocco.
+MIT — see [LICENSE](LICENSE). Copyright (c) 2026 blyatiful1.

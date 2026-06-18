@@ -29,7 +29,7 @@ from ..paths import (
     safe_theme_name,
 )
 
-DEFAULT_REMOTE = "https://github.com/crocco/gtheme"
+DEFAULT_REMOTE = "https://github.com/blyatiful1/gtheme"
 
 # scp-style git remote, e.g. git@github.com:user/repo.git
 _SCP_RE = re.compile(r"^[\w.-]+@[\w.-]+:.+$")

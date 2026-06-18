@@ -1,10 +1,10 @@
-# Maintainer: crocco
+# Maintainer: blyatiful1
 pkgname=gtheme
 pkgver=0.1.0
 pkgrel=1
 pkgdesc="A GNOME desktop theme system: download, apply, switch, and author full-desktop themes from a palette"
 arch=('any')
-url="https://github.com/crocco/gtheme"
+url="https://github.com/blyatiful1/gtheme"
 license=('MIT')
 # glib2 provides gsettings; dconf is core to applying/restoring settings.
 depends=('python>=3.11' 'python-jinja2' 'python-pydantic' 'glib2' 'dconf')
