@@ -12,7 +12,7 @@ import shutil
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from ..paths import INSTALLED_THEMES_DIR, expand_dest
+from ..paths import INSTALLED_THEMES_DIR, expand_dest, safe_theme_name
 from ..settings import ResolvedSetting, gsettings_get
 from ..manifest import Setting
 
@@ -62,6 +62,7 @@ def _local_file_from_uri(value: str) -> Path | None:
 
 
 def capture(name: str, title: str | None = None, dest_dir: Path | None = None) -> tuple[Path, list[str]]:
+    name = safe_theme_name(name)
     target = (dest_dir or INSTALLED_THEMES_DIR) / name
     if target.exists():
         raise FileExistsError(f"theme already exists: {target}")

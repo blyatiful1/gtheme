@@ -70,3 +70,20 @@ def test_confine_src_rejects_deep_traversal(tmp_path):
     theme.mkdir()
     with pytest.raises(ThemeSecurityError):
         paths.confine_src("files/../../x", theme)
+
+
+# --- safe_theme_name -------------------------------------------------------
+
+
+@pytest.mark.parametrize("name", ["nsx", "jojo", "stone-clean", "my_theme", "v2"])
+def test_safe_theme_name_accepts_slugs(name):
+    assert paths.safe_theme_name(name) == name
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["", "..", ".", "../x", "a/b", "/etc/x", "../../etc", "a b", "a.b", "x\x00y"],
+)
+def test_safe_theme_name_rejects_escapes(name):
+    with pytest.raises(ThemeSecurityError):
+        paths.safe_theme_name(name)

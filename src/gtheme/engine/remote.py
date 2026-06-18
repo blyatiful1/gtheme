@@ -22,7 +22,12 @@ from pathlib import Path
 
 from .. import ansi
 from ..errors import ThemeSecurityError
-from ..paths import BUNDLED_THEMES_DIR, INSTALLED_THEMES_DIR, ORIGIN_FILE
+from ..paths import (
+    BUNDLED_THEMES_DIR,
+    INSTALLED_THEMES_DIR,
+    ORIGIN_FILE,
+    safe_theme_name,
+)
 
 DEFAULT_REMOTE = "https://github.com/crocco/gtheme"
 
@@ -78,8 +83,9 @@ def _git_clone(url: str, into: Path) -> tuple[Path, str]:
     instead of blocking on an interactive credential prompt.
     """
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    # "--" terminates options so a URL like "-x.git" can't be read as a git flag.
     subprocess.run(
-        ["git", "clone", "--depth", "1", url, str(into)],
+        ["git", "clone", "--depth", "1", "--", url, str(into)],
         check=True, capture_output=True, text=True, env=env,
     )
     rev = subprocess.run(
@@ -90,6 +96,7 @@ def _git_clone(url: str, into: Path) -> tuple[Path, str]:
 
 
 def _copy_theme(src: Path, name: str, origin: dict) -> Path:
+    name = safe_theme_name(name)  # never let a name escape INSTALLED_THEMES_DIR
     dest = INSTALLED_THEMES_DIR / name
     INSTALLED_THEMES_DIR.mkdir(parents=True, exist_ok=True)
     # Updating a theme that is its own source (already installed) is a no-op copy.

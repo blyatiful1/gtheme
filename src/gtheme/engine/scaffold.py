@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..paths import INSTALLED_THEMES_DIR
+from ..paths import INSTALLED_THEMES_DIR, safe_theme_name
 from ..registry import find
 
 _DEFAULT_PALETTE = """# {name} palette — define your colours here, then run `gtheme build {name}`.
@@ -100,6 +100,7 @@ value = "'blue'"
 
 def new_theme(name: str, from_base: str | None = None, title: str | None = None,
               dest_dir: Path | None = None) -> Path:
+    name = safe_theme_name(name)
     target = (dest_dir or INSTALLED_THEMES_DIR) / name
     if target.exists():
         raise FileExistsError(f"theme already exists: {target}")

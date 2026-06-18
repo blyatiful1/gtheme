@@ -140,3 +140,19 @@ def theme_is_untrusted(theme_path: Path) -> bool:
     """True iff an origin marker exists and records a remote ``git`` source."""
     origin = read_origin(theme_path)
     return origin is not None and origin.get("type") == "git"
+
+
+def safe_theme_name(name: str) -> str:
+    """Validate a name that will be used as a single directory component.
+
+    Theme names must be slugs (letters, digits, ``-`` or ``_``) — the same rule
+    the manifest enforces on ``[meta].name``. This stops a name like ``../x`` or
+    ``..`` (e.g. from ``install --name`` or ``install /path/..``) from escaping
+    the installed-themes directory when it becomes ``INSTALLED_THEMES_DIR/<name>``.
+    Raises :class:`ThemeSecurityError` on anything else.
+    """
+    if not name or not all(c.isalnum() or c in "-_" for c in name):
+        raise ThemeSecurityError(
+            f"unsafe theme name {name!r}: use letters, digits, '-' or '_' only"
+        )
+    return name

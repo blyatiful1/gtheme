@@ -34,6 +34,7 @@ from ..backup import (
     write_current,
     write_ledger,
 )
+from ..errors import ThemeSecurityError
 from ..manifest import FileInstall, Theme
 from ..settings import ResolvedSetting, backend_available
 
@@ -536,7 +537,13 @@ def restore(
         if only is not None and rec.get("component", "") not in only:
             continue
         theme_dir = Path(rec["dir"])
-        script = (theme_dir / rec["restore"]).resolve()
+        # Confine the restore script to the theme dir, exactly as apply confines
+        # hook.script — a recorded "../" path must not run code outside the theme.
+        try:
+            script = paths.confine_src(rec["restore"], theme_dir)
+        except ThemeSecurityError:
+            warnings.append(f"refusing restore hook outside theme dir: {rec['restore']}")
+            continue
         if not script.is_file():
             warnings.append(f"restore hook missing: {rec['restore']}")
             continue
