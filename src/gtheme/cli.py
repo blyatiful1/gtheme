@@ -380,6 +380,20 @@ def cmd_remove(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_export(args: argparse.Namespace) -> int:
+    from .engine.export import export_theme
+
+    try:
+        out, count = export_theme(args.name, out=args.output)
+    except (GthemeError, OSError) as exc:
+        _die(f"export failed: {exc}")
+    size_kib = out.stat().st_size // 1024
+    print(ansi.ok(f"exported {args.name} → {out} ({count} files, {size_kib} KiB)"))
+    print(ansi.style("  share the .zip, or install it elsewhere: unzip then "
+                     "`gtheme install <unzipped-dir>`", "grey"))
+    return 0
+
+
 def cmd_search(args: argparse.Namespace) -> int:
     themes, _ = load_all()
     q = args.query.lower()
@@ -578,6 +592,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("name")
     sp.add_argument("--title", help="human-readable title")
     sp.set_defaults(func=cmd_capture)
+
+    sp = sub.add_parser("export", help="bundle a theme into a shareable .zip archive")
+    sp.add_argument("name")
+    sp.add_argument("-o", "--output", help="output path (default: <name>.zip in the current dir)")
+    sp.set_defaults(func=cmd_export)
 
     sp = sub.add_parser("publish", help="add a theme to the collection + print contribute steps")
     sp.add_argument("name")
