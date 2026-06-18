@@ -327,6 +327,14 @@ backend = "dconf"
 key = "/org/gnome/shell/extensions/blur-my-shell/applications/corner-radius"
 value = "12"
 
+# NOTE: rounded-window-corners@fxgn (Reborn) is deliberately NOT used by this
+# theme. It is in a hard ERROR state on GNOME 50 — its shader path throws
+# "Expected gfloat ... got undefined" during enable(), and the crash strands
+# per-window shadow actors on the Shell stage (a grey border + drop-shadow
+# floating on top of every window) that only a Shell restart can clear. The
+# theme relies on GNOME's native libadwaita rounding for window top-corners and
+# does not list the extension in [requires].extensions.
+
 [[hooks]]
 event = "post"
 component = "boot"
