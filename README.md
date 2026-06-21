@@ -5,6 +5,7 @@ themes from a single palette. One declarative manifest per theme; the CLI snapsh
 whatever it touches, so every theme is reversible without a hand-written undo script.
 
 ```sh
+gtheme                      # ← just run it: an interactive arrow-key menu
 gtheme list                 # what's available
 gtheme apply nsx            # back up current state, apply the NSX theme
 gtheme switch jojo          # swap themes (baseline preserved)
@@ -12,6 +13,17 @@ gtheme restore              # revert to the pristine pre-gtheme desktop
 gtheme new midnight --from nsx   # scaffold a theme from a palette...
 gtheme build midnight            # ...and render a whole desktop from ~16 colours
 ```
+
+### Interactive mode
+
+Run `gtheme` with no arguments (or `gtheme menu`) and you get a full-screen,
+arrow-key menu that reaches **every** command — apply/switch, dry-run preview,
+restore, browse, author (new/build/capture), and manage (install/update/remove/
+export/validate/search). Move with `↑`/`↓` (or `j`/`k`), `enter` to select,
+`q`/`esc` to go back. Theme pickers show live palette swatches and mark the
+active theme. It's pure stdlib — no `rich`/`curses` — and degrades to a plain
+numbered prompt when there's no TTY (pipes/CI). Honours `NO_COLOR`; set
+`GTHEME_NO_ANIM=1` to disable the spinner/reveal animations.
 
 It themes the lot: GTK/libadwaita accent, GNOME accent + extensions (dock, blur,
 logo-menu, tiling), wallpaper, Ptyxis & Alacritty, starship, fish, btop, micro,

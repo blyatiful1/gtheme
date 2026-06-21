@@ -503,11 +503,24 @@ def cmd_current(args: argparse.Namespace) -> int:
 
 
 # -------------------------------------------------------------------- parser ---
+def cmd_menu(args: argparse.Namespace) -> int:
+    from . import menu
+
+    return menu.run()
+
+
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="gtheme", description="GNOME desktop theme system")
+    p = argparse.ArgumentParser(
+        prog="gtheme",
+        description="GNOME desktop theme system — run with no command for an interactive menu",
+    )
     p.add_argument("--version", action="version", version=f"gtheme {_version()}")
     p.add_argument("-v", "--verbose", action="store_true", help="print extra context on errors")
-    sub = p.add_subparsers(dest="command", required=True)
+    # Not required: a bare `gtheme` on a TTY launches the interactive menu.
+    sub = p.add_subparsers(dest="command")
+
+    sp = sub.add_parser("menu", aliases=["ui", "i"], help="launch the interactive arrow-key menu")
+    sp.set_defaults(func=cmd_menu)
 
     sp = sub.add_parser("list", help="list available themes")
     sp.set_defaults(func=cmd_list)
@@ -610,6 +623,20 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     _VERBOSE = getattr(args, "verbose", False)
+    if getattr(args, "command", None) is None:
+        # No subcommand: launch the interactive menu on a TTY, else show usage.
+        from . import tui
+
+        if tui.is_interactive():
+            from . import menu
+
+            try:
+                return menu.run()
+            except KeyboardInterrupt:
+                print("\naborted", file=sys.stderr)
+                return 130
+        parser.print_help(sys.stderr)
+        return 2
     try:
         return args.func(args)
     except KeyboardInterrupt:
