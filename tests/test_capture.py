@@ -89,6 +89,53 @@ def test_bundle_alacritty_imports_notes_missing(tmp_path, monkeypatch):
     assert any("gone.toml" in n and "missing" in n for n in notes)
 
 
+def test_bundle_alacritty_import_traversal_is_confined(tmp_path, monkeypatch):
+    # A ~/.. traversal in an import list must never pull an out-of-home file
+    # (SSH keys, /etc/*) into a shareable theme.
+    _fake_home(tmp_path, monkeypatch)
+    theme = tmp_path / "theme"
+    (theme / "files/alacritty").mkdir(parents=True)
+    (theme / "files/alacritty/alacritty.toml").write_text(
+        '[general]\nimport = ["~/../../etc/hostname"]\n'
+    )
+    entries, notes = [], []
+    cap._bundle_alacritty_imports(theme, entries, notes)
+    assert entries == []
+    assert not (theme / "files/alacritty/hostname").exists()
+    assert any("outside home" in n for n in notes)
+
+
+def test_bundle_btop_theme_traversal_is_confined(tmp_path, monkeypatch):
+    _fake_home(tmp_path, monkeypatch)
+    theme = tmp_path / "theme"
+    (theme / "files/btop").mkdir(parents=True)
+    (theme / "files/btop/btop.conf").write_text(
+        'color_theme = "~/../../etc/passwd"\n'
+    )
+    entries, notes = [], []
+    cap._bundle_btop_theme(theme, entries, notes)
+    assert entries == []
+    assert not (theme / "files/btop/passwd").exists()
+    assert any("outside home" in n for n in notes)
+
+
+def test_bundle_companion_symlink_escape_is_confined(tmp_path, monkeypatch):
+    # An in-home path that is a symlink out of home must also be refused.
+    home = _fake_home(tmp_path, monkeypatch)
+    outside = tmp_path / "outside.txt"
+    outside.write_text("secret\n")
+    (home / ".config/alacritty").mkdir(parents=True)
+    (home / ".config/alacritty/link.toml").symlink_to(outside)
+    theme = tmp_path / "theme"
+    theme.mkdir()
+    entries, notes = [], []
+    cap._bundle_companion("~/.config/alacritty/link.toml", "terminal",
+                          "files/alacritty/link.toml", theme, entries, notes, "test")
+    assert entries == []
+    assert not (theme / "files/alacritty/link.toml").exists()
+    assert any("outside home" in n for n in notes)
+
+
 def test_bundle_btop_theme_by_name(tmp_path, monkeypatch):
     home = _fake_home(tmp_path, monkeypatch)
     (home / ".config/btop/themes").mkdir(parents=True)

@@ -68,6 +68,6 @@ def test_has_session_bus(monkeypatch):
     monkeypatch.setenv("DBUS_SESSION_BUS_ADDRESS", "unix:path=/run/user/1000/bus")
     assert _has_session_bus() is True
     monkeypatch.delenv("DBUS_SESSION_BUS_ADDRESS", raising=False)
-    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp := os.path.dirname(__file__)))
+    monkeypatch.setenv("XDG_RUNTIME_DIR", os.path.dirname(__file__))
     # no 'bus' socket under this dir -> False
     assert _has_session_bus() is False

@@ -385,7 +385,9 @@ def _install_from_community(args: argparse.Namespace) -> list[str] | None:
     from .engine import remote
 
     source = args.source
-    if not source or not all(c.isalnum() or c in "-_" for c in source):
+    # Same ASCII-only slug rule as paths.safe_theme_name (homograph names must
+    # not reach the index lookup / network path).
+    if not source or not all(c.isascii() and (c.isalnum() or c in "-_") for c in source):
         return None  # only bare theme names get the community lookup
     try:
         entries = remote.fetch_index()
@@ -893,17 +895,16 @@ def main(argv: list[str] | None = None) -> int:
     _VERBOSE = getattr(args, "verbose", False)
     if getattr(args, "plain", False):
         os.environ["GTHEME_PLAIN"] = "1"  # accessibility: numbered prompts in the tui
-    if getattr(args, "command", None) is None:
-        # No subcommand: the menu — its tui degrades to a plain numbered
-        # prompt when there's no TTY (pipes/CI), per the README contract.
-        from . import menu
-
-        try:
-            return menu.run()
-        except KeyboardInterrupt:
-            print("\naborted", file=sys.stderr)
-            return 130
     try:
+        if getattr(args, "command", None) is None:
+            # No subcommand: the menu — its tui degrades to a plain numbered
+            # prompt when there's no TTY (pipes/CI), per the README contract.
+            # Shares the subcommand except-tuple below: engine errors surfacing
+            # through the menu (e.g. the process lock) must print one clean
+            # line, not a raw traceback.
+            from . import menu
+
+            return menu.run()
         return args.func(args)
     except KeyboardInterrupt:
         print("\naborted", file=sys.stderr)

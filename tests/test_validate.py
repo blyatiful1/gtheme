@@ -53,18 +53,33 @@ def test_toml_syntax_error_names_the_file(tmp_path):
 _EXT_THEME = '[meta]\nname = "t"\n\n[requires]\nextensions = ["foo@bar"]\n'
 
 
+def _isolate_extension_dirs(tmp_path, monkeypatch):
+    """Point both probe locations (user XDG + system) at throwaway dirs."""
+    monkeypatch.setattr(val.paths, "XDG_DATA_HOME", tmp_path / "xdg")
+    monkeypatch.setattr(val, "_SYSTEM_EXTENSION_DIR", tmp_path / "sys-exts")
+
+
 def test_missing_extension_warns(tmp_path, monkeypatch):
-    monkeypatch.setattr(val, "_EXTENSION_DIRS", (tmp_path / "none",))
+    _isolate_extension_dirs(tmp_path, monkeypatch)
     d = _theme(tmp_path, _EXT_THEME)
     theme, errors, warnings = val.validate_dir(d)
     assert theme is not None and errors == []  # warn, never error
     assert any("foo@bar" in w and "extension" in w for w in warnings)
 
 
-def test_installed_extension_does_not_warn(tmp_path, monkeypatch):
-    exts = tmp_path / "exts"
-    (exts / "foo@bar").mkdir(parents=True)
-    monkeypatch.setattr(val, "_EXTENSION_DIRS", (exts,))
+def test_extension_under_xdg_data_home_does_not_warn(tmp_path, monkeypatch):
+    # GNOME resolves user extensions via $XDG_DATA_HOME — the probe must too
+    # (same semantics as apply's check_requires).
+    _isolate_extension_dirs(tmp_path, monkeypatch)
+    (tmp_path / "xdg/gnome-shell/extensions/foo@bar").mkdir(parents=True)
+    d = _theme(tmp_path, _EXT_THEME)
+    _t, _e, warnings = val.validate_dir(d)
+    assert not any("foo@bar" in w for w in warnings)
+
+
+def test_extension_in_system_dir_does_not_warn(tmp_path, monkeypatch):
+    _isolate_extension_dirs(tmp_path, monkeypatch)
+    (tmp_path / "sys-exts/foo@bar").mkdir(parents=True)
     d = _theme(tmp_path, _EXT_THEME)
     _t, _e, warnings = val.validate_dir(d)
     assert not any("foo@bar" in w for w in warnings)
@@ -95,6 +110,23 @@ def test_assets_dest_does_not_warn(tmp_path):
         'component = "commands"\n'
         'src = "files/bin"\n'
         'dest = "~/.local/share/gtheme/assets/t/bin"\n'
+    ))
+    (d / "files/bin").mkdir(parents=True)
+    (d / "files/bin/tool").write_text("#!/bin/sh\n")
+    _t, errors, warnings = val.validate_dir(d)
+    assert errors == []
+    assert not any("installed-themes" in w for w in warnings)
+
+
+def test_sibling_of_installed_themes_dir_does_not_warn(tmp_path):
+    # themes-backup is a *sibling* of the themes namespace, not inside it —
+    # a bare startswith prefix test would false-positive here.
+    d = _theme(tmp_path, (
+        '[meta]\nname = "t"\n\n'
+        "[[files]]\n"
+        'component = "commands"\n'
+        'src = "files/bin"\n'
+        'dest = "~/.local/share/gtheme/themes-backup/t/bin"\n'
     ))
     (d / "files/bin").mkdir(parents=True)
     (d / "files/bin/tool").write_text("#!/bin/sh\n")

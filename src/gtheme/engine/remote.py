@@ -24,6 +24,8 @@ import subprocess
 import sys
 import re
 import tempfile
+import tomllib
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -60,6 +62,12 @@ def fetch_index(timeout: float = INDEX_TIMEOUT) -> list[dict]:
     try:
         with urllib.request.urlopen(INDEX_URL, timeout=timeout) as resp:  # noqa: S310 - fixed https URL
             data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        # Server answered: a 404 etc. is a publishing/URL problem, not connectivity.
+        raise GthemeError(
+            f"community index not available (HTTP {exc.code} {exc.reason})\n"
+            f"  is the collection published at {INDEX_URL}?"
+        )
     except (OSError, ValueError) as exc:  # URLError/timeout are OSErrors
         raise GthemeError(
             f"could not fetch the community theme index — are you online?\n"
@@ -319,11 +327,27 @@ def _extract_zip(zip_path: Path, into: Path) -> Path:
     return into
 
 
+def _root_theme_name(root: Path) -> str:
+    """Name for a theme.toml-at-root dir: [meta].name beats the dir name.
+
+    For zips/clones ``root`` is a temp dir ('unzipped'/'repo') — without this,
+    every flat zip would install under the same leaked temp name. Falls back
+    to the dir name when the manifest is unparsable or the name unsafe.
+    """
+    try:
+        with (root / "theme.toml").open("rb") as fh:
+            meta = tomllib.load(fh).get("meta", {})
+        nm = meta.get("name") if isinstance(meta, dict) else None
+        return safe_theme_name(nm) if isinstance(nm, str) else root.name
+    except (OSError, tomllib.TOMLDecodeError, ThemeSecurityError):
+        return root.name
+
+
 def _themes_in_collection(root: Path) -> dict[str, Path]:
     """Map theme-name -> dir for a collection root or a single-theme dir."""
     # A repo/dir whose theme.toml sits at the root (no themes/ wrapper).
     if (root / "theme.toml").is_file():
-        return {root.name: root}
+        return {_root_theme_name(root): root}
     base = root / "themes" if (root / "themes").is_dir() else root
     out: dict[str, Path] = {}
     if not base.is_dir():
@@ -337,8 +361,13 @@ def _themes_in_collection(root: Path) -> dict[str, Path]:
 def _install_one(
     theme_dir: Path, name: str, origin: dict, *, force: bool, allow_unsafe: bool
 ) -> Path:
-    """Validate a theme dir then copy it in. Raises on validation errors."""
-    _theme, errors, warnings = validate_dir(theme_dir)
+    """Validate a theme dir then copy it in. Raises on validation errors.
+
+    Installs under [meta].name when it differs from ``name`` — registry
+    discovery goes by directory name while the menu/CLI act by manifest name,
+    so a mismatch would break every by-name action on the theme.
+    """
+    theme, errors, warnings = validate_dir(theme_dir)
     for w in warnings:
         print(ansi.warn(w))
     if errors and not allow_unsafe:
@@ -349,6 +378,15 @@ def _install_one(
         )
     if errors:
         print(ansi.warn(f"installing {name!r} despite {len(errors)} validation error(s) (--allow-unsafe)"))
+    meta_name = getattr(getattr(theme, "meta", None), "name", None)
+    if meta_name and meta_name != name:
+        try:
+            renamed = safe_theme_name(meta_name)
+        except ThemeSecurityError:
+            renamed = None  # unsafe manifest name: keep the requested one
+        if renamed:
+            print(ansi.warn(f"installing {name!r} as {renamed!r} (its [meta].name)"))
+            name = renamed
     return _copy_theme(theme_dir, name, origin, force=force)
 
 
@@ -367,12 +405,12 @@ def install(
     # 1) a path to a single theme directory
     if (p / "theme.toml").is_file():
         nm = name or p.name
-        _install_one(
+        dest = _install_one(
             p, nm,
             {"type": "path", "source": str(p.resolve()), "hash": _source_hash(p)},
             **kw,
         )
-        return [nm]
+        return [dest.name]  # _install_one may rename to [meta].name
 
     # 2) a git URL or repo / a .zip archive / a local collection directory
     #    (incl. a plain dir whose immediate children are theme dirs — the
@@ -412,8 +450,10 @@ def install(
             failed: list[str] = []
             for nm in wanted:
                 try:
-                    _install_one(available[nm], nm, {**origin_base, "name": nm}, **kw)
-                    installed.append(nm)
+                    # origin keeps the selection key ``nm`` (what update() must
+                    # re-pick from the source); the report uses the final dir name.
+                    dest = _install_one(available[nm], nm, {**origin_base, "name": nm}, **kw)
+                    installed.append(dest.name)
                 except (GthemeError, OSError, shutil.Error) as exc:
                     failed.append(nm)
                     print(ansi.err(f"failed to install {nm}: {exc}"))
@@ -424,12 +464,12 @@ def install(
     # 3) a bare name already in the bundled or installed collection -> copy in
     if BUNDLED_THEMES_DIR.is_dir() and (BUNDLED_THEMES_DIR / source / "theme.toml").is_file():
         src = BUNDLED_THEMES_DIR / source
-        _install_one(
+        dest = _install_one(
             src, source,
             {"type": "bundled", "name": source, "hash": _source_hash(src)},
             **kw,
         )
-        return [source]
+        return [dest.name]
     if (INSTALLED_THEMES_DIR / source / "theme.toml").is_file():
         # Re-installing an already-installed bundled/local theme is a no-op refresh.
         return [source]
@@ -488,7 +528,13 @@ def update(
         nm = origin.get("name", d.name)
         try:
             if otype == "bundled":
-                cur = _source_hash(BUNDLED_THEMES_DIR / nm)
+                bsrc = BUNDLED_THEMES_DIR / nm
+                if not (bsrc / "theme.toml").is_file():
+                    # Dropped from the shipped collection: skip like a vanished
+                    # path origin — never warn + claim a no-op "updated".
+                    print(ansi.warn(f"skipping {d.name}: {nm!r} is no longer in the bundled collection"))
+                    continue
+                cur = _source_hash(bsrc)
                 if cur and not force and cur == origin.get("hash"):
                     print(ansi.bullet(f"{d.name} already up to date"))
                     continue

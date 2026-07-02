@@ -37,6 +37,27 @@ def test_values_equal_real_difference():
     assert settings.values_equal("'zoom'", "'centered'") is False
 
 
+def test_run_forces_c_locale(monkeypatch):
+    # apply/restore classify "No such schema/key" by English substring; gettext
+    # localizes gsettings errors, so _run must pin the C locale (merged env).
+    seen = {}
+
+    class _P:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    monkeypatch.setattr(settings.subprocess, "run",
+                        lambda args, **kw: seen.update(kw) or _P())
+    monkeypatch.setenv("LC_ALL", "de_DE.UTF-8")
+    monkeypatch.setenv("LANGUAGE", "de")
+    code, _out, _err = settings._run(["gsettings", "get", "a", "b"])
+    assert code == 0
+    env = seen["env"]
+    assert env["LC_ALL"] == "C" and env["LC_MESSAGES"] == "C" and env["LANGUAGE"] == "C"
+    assert "PATH" in env  # os.environ merged, not replaced
+
+
 def _ptyxis_ctx(monkeypatch, raw):
     """runtime_context() with gsettings_get faked to return ``raw`` for Ptyxis."""
     monkeypatch.setattr(settings, "gsettings_get", lambda schema, key: raw)

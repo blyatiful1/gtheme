@@ -81,6 +81,14 @@ def test_read_key_plain_and_special():
     assert _keys_from_bytes(b"\rq \x7f") == ["enter", "q", "space", "backspace"]
 
 
+def test_read_key_modified_page_keys_leave_no_residue():
+    # Ctrl+PgUp is ESC[5;5~ — the parameter tail must be drained, or the
+    # ';5~' would leak in and the '5' digit would instantly select row 5.
+    assert _keys_from_bytes(b"\x1b[5~\x1b[6~") == ["pgup", "pgdn"]
+    assert _keys_from_bytes(b"\x1b[5;5~") == ["pgup"]
+    assert _keys_from_bytes(b"\x1b[6;2~") == ["pgdn"]
+
+
 # ------------------------------------------------------------------- select ---
 def _scripted(keys):
     """A read() callable that pops one key per call from a list."""

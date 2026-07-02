@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import tomllib
 from pathlib import Path
 
+from ..color import is_dark
 from ..paths import INSTALLED_THEMES_DIR, safe_theme_name
 from ..registry import find
 
@@ -34,9 +36,20 @@ ansi_white = "#c9c9d2"
 """
 
 
-def _manifest(name: str, title: str) -> str:
+# Appended when the seeded palette is dark — vanilla GNOME defaults to the
+# light scheme, and a dark theme without this looks half-applied there.
+_DARK_SCHEME_SETTING = """
+[[settings]]
+component = "desktop"
+backend = "gsettings"
+key = "org.gnome.desktop.interface color-scheme"
+value = "'prefer-dark'"
+"""
+
+
+def _manifest(name: str, title: str, *, dark: bool = False) -> str:
     Name = name.capitalize()
-    return f"""# {title} — scaffolded by `gtheme new`. Palette lives in palette.toml;
+    manifest = f"""# {title} — scaffolded by `gtheme new`. Palette lives in palette.toml;
 # `gtheme build {name}` renders the files/ below from it.
 
 [meta]
@@ -96,6 +109,18 @@ backend = "gsettings"
 key = "org.gnome.desktop.interface accent-color"
 value = "'blue'"
 """
+    if dark:
+        manifest += _DARK_SCHEME_SETTING
+    return manifest
+
+
+def _palette_is_dark(palette_path: Path) -> bool:
+    """Best-effort: does the seeded palette have a dark ``bg``?"""
+    try:
+        bg = tomllib.loads(palette_path.read_text(encoding="utf-8")).get("bg")
+        return isinstance(bg, str) and is_dark(bg)
+    except (OSError, tomllib.TOMLDecodeError, ValueError):
+        return False
 
 
 def new_theme(name: str, from_base: str | None = None, title: str | None = None,
@@ -119,5 +144,6 @@ def new_theme(name: str, from_base: str | None = None, title: str | None = None,
     else:
         (target / "palette.toml").write_text(_DEFAULT_PALETTE.format(name=name))
 
-    (target / "theme.toml").write_text(_manifest(name, title or name))
+    dark = _palette_is_dark(target / "palette.toml")
+    (target / "theme.toml").write_text(_manifest(name, title or name, dark=dark))
     return target

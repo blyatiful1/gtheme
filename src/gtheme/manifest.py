@@ -45,6 +45,13 @@ class Meta(_Model):
             raise ValueError(f"theme name must be a slug (got {v!r})")
         return v
 
+    @field_validator("title", "description", "author")
+    @classmethod
+    def _printable(cls, v: str) -> str:
+        # These are printed raw in list/search/menu output; an untrusted theme
+        # must not be able to smuggle ANSI escapes or control chars through.
+        return "".join(c for c in v if c.isprintable())
+
 
 class Requires(_Model):
     packages: list[str] = Field(default_factory=list)

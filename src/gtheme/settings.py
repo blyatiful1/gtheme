@@ -11,6 +11,7 @@ from :func:`runtime_context`.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -23,8 +24,12 @@ _PLACEHOLDER = re.compile(r"\{\{\s*(\w+)\s*\}\}")
 
 
 def _run(args: list[str]) -> tuple[int, str, str]:
+    # Force the C locale so gsettings/dconf error text is stable English —
+    # apply/restore classify "No such schema/key" by substring, and gettext
+    # would otherwise localize it (values stay raw UTF-8 either way; verified).
+    env = {**os.environ, "LC_ALL": "C", "LC_MESSAGES": "C", "LANGUAGE": "C"}
     try:
-        proc = subprocess.run(args, capture_output=True, text=True, encoding="utf-8")
+        proc = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", env=env)
     except FileNotFoundError:
         return 127, "", f"{args[0]}: command not found"
     return proc.returncode, proc.stdout.strip(), proc.stderr.strip()

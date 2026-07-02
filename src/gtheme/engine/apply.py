@@ -177,6 +177,14 @@ def compute_diffs(theme: Theme, only: set[str] | None = None) -> list[Diff]:
                      "unresolved placeholder; will be skipped")
             )
             continue
+        if not _key_ok(rs):
+            # Mirror apply's _key_ok skip so dry-run/diff never promise a write
+            # ('//' dconf path) that the real apply will refuse.
+            diffs.append(
+                Diff("setting", rs.label, rs.component, "missing-src",
+                     "invalid dconf path ('//'); will be skipped")
+            )
+            continue
         current = rs.get_current()
         if settings.values_equal(current, rs.value):
             status = "unchanged"
@@ -467,6 +475,8 @@ def _dryrun_notes(theme: Theme, only: set[str] | None, result: ApplyResult) -> N
     for rs in resolved_settings(theme, only):
         if "{{" in rs.key:
             result.notes.append(f"unresolved placeholder; setting skipped: {rs.label}")
+        elif not _key_ok(rs):
+            result.notes.append(f"invalid dconf path ('//'); setting skipped: {rs.label}")
 
 
 def _atomic_write_bytes(dest: Path, data: bytes, mode: int | None) -> None:
@@ -572,7 +582,7 @@ def _switch_cleanup(
             kept += sum(1 for k in orphan_files if k in baseline.files)
 
         if orphan_settings:
-            rlog, rwarn, done = _restore_specific_settings(baseline, orphan_settings)
+            rlog, rwarn, done, _dead = _restore_specific_settings(baseline, orphan_settings)
             for line in rlog:
                 result.notes.append(f"switch-cleanup: {line}")
             result.warnings.extend(rwarn)
@@ -604,15 +614,15 @@ def _restore_specific_files(
 
 def _restore_specific_settings(
     baseline: Baseline, keys: list[str]
-) -> tuple[list[str], list[str], list[str]]:
+) -> tuple[list[str], list[str], list[str], list[str]]:
     """Restore only the given setting keys from the pristine baseline."""
     saved = baseline.settings
     baseline.settings = {k: saved[k] for k in keys if k in saved}
     try:
-        log, warns, done = baseline.restore_settings()
+        log, warns, done, dead = baseline.restore_settings()
     finally:
         baseline.settings = saved
-    return log, warns, done
+    return log, warns, done, dead
 
 
 def apply(
@@ -871,19 +881,25 @@ def _restore_locked(
         baseline.forget_hooks(ran)
 
     flog, fwarn, fdone, fdead = baseline.restore_files(only)
-    slog, swarn, sdone = baseline.restore_settings(only)
+    slog, swarn, sdone, sdead = baseline.restore_settings(only)
     log = hlog + flog + slog
     warnings.extend(fwarn)
     warnings.extend(swarn)
 
-    # R5: a dead record (blob lost, symlink without target) can never revert by
-    # re-running — its warning above names the path; drop it so restore can
-    # complete instead of wedging forever.
+    # R5: a dead record (blob lost, symlink without target, schema/key gone)
+    # can never revert by re-running — its warning above names it; drop it so
+    # restore can complete instead of wedging forever.
     if fdead:
         baseline.forget_files(fdead)
         warnings.append(
             f"dropped {len(fdead)} baseline record(s) whose pre-gtheme copy is "
             f"lost; the file(s) named above were left as-is"
+        )
+    if sdead:
+        baseline.forget_settings(sdead)
+        warnings.append(
+            f"dropped {len(sdead)} baseline setting record(s) whose schema/key "
+            f"no longer exists (app uninstalled?)"
         )
 
     # Hard failure = a TRANSIENT file/setting revert failure (not a hook notice,
@@ -920,7 +936,7 @@ def _restore_locked(
                 ledger = read_ledger()
                 ent = ledger.get(cur)
                 if isinstance(ent, dict):
-                    drop_f, drop_s = set(fdone) | set(fdead), set(sdone)
+                    drop_f, drop_s = set(fdone) | set(fdead), set(sdone) | set(sdead)
                     ent["files"] = [f for f in ent.get("files", []) if f not in drop_f]
                     ent["settings"] = [s for s in ent.get("settings", []) if s not in drop_s]
                     ledger[cur] = ent

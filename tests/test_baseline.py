@@ -486,6 +486,91 @@ def test_check_requires_extensions(sandbox, monkeypatch):
     assert not any("present@here" in w for w in warns)
 
 
+def test_restore_preserves_preexisting_empty_dirs(sandbox):
+    # Review fix: only dirs apply's mkdir actually created may be pruned — a
+    # pre-existing-but-empty dir (e.g. ~/.config/autostart) must survive.
+    autostart = sandbox.home / ".config" / "autostart"
+    autostart.mkdir(parents=True)
+    theme = make_theme(sandbox.tmp, "alpha",
+                       files=[("c", "foo.desktop", "~/.config/autostart/foo.desktop", "X")])
+    apply_mod.apply(theme)
+    _, _, hard = apply_mod.restore()
+    assert not hard
+    assert not (autostart / "foo.desktop").exists()
+    assert autostart.is_dir() and (sandbox.home / ".config").is_dir()
+
+
+def test_restore_prunes_shared_created_dir(sandbox):
+    # Two files in one mkdir-ed dir: the dir is recorded on the first record
+    # and pruned only after ALL removals (rmdir runs post-loop, deepest first).
+    theme = make_theme(sandbox.tmp, "alpha", files=[
+        ("c", "a.css", "~/.themes/X/a.css", "A"),
+        ("c", "b.css", "~/.themes/X/b.css", "B"),
+    ])
+    apply_mod.apply(theme)
+    _, _, hard = apply_mod.restore()
+    assert not hard
+    assert not (sandbox.home / ".themes").exists()
+
+
+def test_records_without_dirs_prune_nothing(sandbox):
+    # Baselines from older gtheme versions have no 'dirs' field: be conservative.
+    import json
+    theme = make_theme(sandbox.tmp, "alpha", files=[("c", "a.conf", "~/newdir/a.conf", "A")])
+    apply_mod.apply(theme)
+    meta = paths.BASELINE_DIR / "files.json"
+    recs = json.loads(meta.read_text())
+    for r in recs.values():
+        r.pop("dirs", None)
+    meta.write_text(json.dumps(recs))
+    _, _, hard = apply_mod.restore()
+    assert not hard
+    assert not (sandbox.home / "newdir" / "a.conf").exists()
+    assert (sandbox.home / "newdir").is_dir()  # left in place, never guessed
+
+
+def test_vanished_schema_does_not_wedge_restore(sandbox, monkeypatch):
+    # Review fix: a schema uninstalled AFTER apply (saved value present) is a
+    # dead record — warn, drop, complete; never an eternal exit-1 wedge.
+    sandbox.store["g:org.gone key"] = "'old'"
+    theme = make_theme(sandbox.tmp, "alpha", settings_=[
+        {"component": "c", "backend": "gsettings", "key": "org.gone key", "value": "'new'"}])
+    apply_mod.apply(theme)
+    monkeypatch.setattr(settings, "gsettings_set",
+                        lambda schema, key, val: (False, "No such schema “org.gone”"))
+    _, warns, hard = apply_mod.restore()
+    assert not hard
+    assert any("schema/key no longer exists" in w for w in warns)
+    assert not backup.Baseline().load().settings
+    assert backup.read_current() is None and backup.read_ledger() == {}
+
+
+def test_transient_setting_failure_keeps_record(sandbox, monkeypatch):
+    # Contrast: a non-schema failure (e.g. bus hiccup) stays hard + retryable.
+    sandbox.store["g:org.x key"] = "'old'"
+    theme = make_theme(sandbox.tmp, "alpha", settings_=[
+        {"component": "c", "backend": "gsettings", "key": "org.x key", "value": "'new'"}])
+    apply_mod.apply(theme)
+    monkeypatch.setattr(settings, "gsettings_set",
+                        lambda schema, key, val: (False, "error: cannot connect to bus"))
+    _, warns, hard = apply_mod.restore()
+    assert hard and any("failed to restore" in w for w in warns)
+    assert "gsettings:org.x key" in backup.Baseline().load().settings
+    assert backup.read_current() == "alpha"
+
+
+def test_diff_and_dryrun_reflect_double_slash_skip(sandbox):
+    # Review fix: dry-run/diff must not promise a write apply will refuse.
+    theme = make_theme(sandbox.tmp, "alpha", settings_=[
+        {"component": "term", "backend": "dconf",
+         "key": "/org/gnome/Ptyxis/Profiles//palette", "value": "'p'"}])
+    diffs = [d for d in apply_mod.compute_diffs(theme) if d.kind == "setting"]
+    assert len(diffs) == 1
+    assert diffs[0].status == "missing-src" and "will be skipped" in diffs[0].detail
+    res = apply_mod.apply(theme, dry_run=True)
+    assert any("invalid dconf path" in n for n in res.notes)
+
+
 def test_corrupt_files_json_recovers_from_bak(sandbox):
     d1 = sandbox.home / "a.conf"
     d1.write_text("PA")

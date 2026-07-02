@@ -140,22 +140,19 @@ def _load_json(path: Path, default):
         return default, f"baseline index {path.name} was corrupt and unrecoverable; starting empty"
 
 
-def _prune_empty_dirs(start: Path) -> None:
-    """Remove now-empty directories from ``start`` up toward ``DEST_ROOT``.
+def _missing_ancestors(parent: Path) -> list[str]:
+    """The not-yet-existing ancestors of a dest (deepest first).
 
-    Undoes the ``mkdir(parents=True)`` chains apply created for files that did
-    not exist before gtheme. ``rmdir`` refuses non-empty dirs, so this is
-    inherently safe: it stops at the first level still in use and never
-    touches ``DEST_ROOT`` itself (or anything outside it).
+    Captured BEFORE apply's ``mkdir(parents=True)`` runs, these are exactly
+    the directories that mkdir will create — so restore can remove precisely
+    them and never guess (a pre-existing-but-empty dir must survive restore).
     """
-    root = paths.DEST_ROOT.resolve()
-    cur = start
-    try:
-        while cur.resolve() != root and cur.resolve().is_relative_to(root):
-            cur.rmdir()
-            cur = cur.parent
-    except OSError:
-        pass
+    dirs: list[str] = []
+    p = parent
+    while not p.exists() and p != p.parent:
+        dirs.append(str(p))
+        p = p.parent
+    return dirs
 
 
 class Baseline:
@@ -316,6 +313,9 @@ class Baseline:
                 "symlink": False,
                 "target": None,
                 "backup": None,
+                # Dirs the coming mkdir(parents=True) will create; restore
+                # rmdirs exactly these (older records without the field: none).
+                "dirs": _missing_ancestors(dest.parent),
                 "component": component,
                 "theme": theme,
             }
@@ -337,6 +337,7 @@ class Baseline:
         warnings: list[str] = []
         done: list[str] = []
         dead: list[str] = []
+        created_dirs: list[str] = []
         for dest_str, rec in self.files.items():
             if only is not None and rec.get("component", "") not in only:
                 continue
@@ -384,10 +385,17 @@ class Baseline:
                         dest.unlink()
                         log.append(f"removed {dest}")
                     done.append(dest_str)
-                    # Drop the empty dir chain apply mkdir-ed for this install.
-                    _prune_empty_dirs(dest.parent)
+                    created_dirs.extend(rec.get("dirs") or [])
                 except OSError as exc:
                     warnings.append(f"failed to remove {dest}: {exc}")
+        # Drop the dirs apply's mkdir created (recorded per file), AFTER all
+        # removals so siblings from other records don't block the rmdir; rmdir
+        # refuses non-empty dirs, so anything still in use survives.
+        for d in sorted(set(created_dirs), key=lambda s: -len(Path(s).parts)):
+            try:
+                os.rmdir(d)
+            except OSError:
+                pass
         return log, warnings, done, dead
 
     def forget_files(self, keys: list[str]) -> None:
@@ -427,15 +435,19 @@ class Baseline:
 
     def restore_settings(
         self, only: set[str] | None = None
-    ) -> tuple[list[str], list[str], list[str]]:
+    ) -> tuple[list[str], list[str], list[str], list[str]]:
         """Reset recorded settings to their saved values.
 
-        Returns ``(log, warnings, done)`` — ``done`` holds the keys that
-        reverted (or were benignly already-pristine) and are safe to forget.
+        Returns ``(log, warnings, done, dead)`` — ``done`` holds the keys that
+        reverted (or were benignly already-pristine) and are safe to forget;
+        ``dead`` holds records whose schema/key no longer exists (app
+        uninstalled after apply): re-running can never fix those, the caller
+        decides their fate. (_run pins LC_ALL=C, so the error text is stable.)
         """
         log: list[str] = []
         warnings: list[str] = []
         done: list[str] = []
+        dead: list[str] = []
         for key, rec in self.settings.items():
             if only is not None and rec.get("component", "") not in only:
                 continue
@@ -452,8 +464,16 @@ class Baseline:
                 log.append(f"{rec['backend']} {rec['key']} left unset")
                 done.append(key)
             else:
-                warnings.append(f"failed to restore {rec['backend']} {rec['key']}")
-        return log, warnings, done
+                err = (rs.error or "").lower()
+                if "no such schema" in err or "no such key" in err:
+                    warnings.append(
+                        f"cannot restore {rec['backend']} {rec['key']}: "
+                        f"schema/key no longer exists"
+                    )
+                    dead.append(key)
+                else:
+                    warnings.append(f"failed to restore {rec['backend']} {rec['key']}")
+        return log, warnings, done, dead
 
     def forget_settings(self, keys: list[str]) -> None:
         """Drop setting records (used by switch-cleanup after reverting them)."""

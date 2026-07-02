@@ -15,6 +15,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from . import paths
 from .errors import ThemeSecurityError
 from .manifest import Theme, load_theme
 from .paths import INSTALLED_THEMES_DIR, confine_dest, confine_src
@@ -45,12 +46,10 @@ def package_installed(pkg: str) -> bool:
     return False
 
 
-# Where GNOME Shell looks for installed extensions (real $HOME on purpose:
-# extensions are live-system state, like packages above).
-_EXTENSION_DIRS = (
-    Path.home() / ".local" / "share" / "gnome-shell" / "extensions",
-    Path("/usr/share/gnome-shell/extensions"),
-)
+# System-wide GNOME Shell extension dir; the user dir is derived from
+# paths.XDG_DATA_HOME at lookup time — GNOME resolves user extensions via
+# $XDG_DATA_HOME, and apply's check_requires probes the same locations.
+_SYSTEM_EXTENSION_DIR = Path("/usr/share/gnome-shell/extensions")
 
 
 def extension_installed(uuid: str) -> bool:
@@ -59,7 +58,8 @@ def extension_installed(uuid: str) -> bool:
     Warn-only by design: a CI box / non-GNOME machine has neither dir, so every
     extension reports missing there — callers must not turn this into an error.
     """
-    return any((d / uuid).is_dir() for d in _EXTENSION_DIRS)
+    dirs = (paths.XDG_DATA_HOME / "gnome-shell" / "extensions", _SYSTEM_EXTENSION_DIR)
+    return any((d / uuid).is_dir() for d in dirs)
 
 # Special / dangerous permission bits on an installed file.
 _SETUID = 0o4000
@@ -144,9 +144,10 @@ def validate_dir(theme_dir: Path) -> tuple[Theme | None, list[str], list[str]]:
                 errors.append(f"[files] dest parent is not a dir: {parent}")
             # The installed-themes namespace is owned by `gtheme install` and
             # rmtree'd wholesale on update/remove — payload there gets deleted.
-            in_namespace = fi.dest.replace("$HOME", "~").startswith(
-                "~/.local/share/gtheme/themes"
-            )
+            # Trailing "/" so siblings like .../gtheme/themes-backup don't match.
+            ns = "~/.local/share/gtheme/themes"
+            norm = fi.dest.replace("$HOME", "~")
+            in_namespace = norm == ns or norm.startswith(ns + "/")
             try:
                 in_namespace = in_namespace or dest.resolve().is_relative_to(
                     INSTALLED_THEMES_DIR.resolve()

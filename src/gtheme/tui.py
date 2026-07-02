@@ -188,9 +188,16 @@ def read_key(fd: int | None = None) -> str:
         nxt = os.read(fd, 1)
         if nxt in (b"[", b"O"):
             code = os.read(fd, 1)
-            if code in (b"5", b"6"):  # PgUp/PgDn end with '~'
-                os.read(fd, 1)
-                return "pgup" if code == b"5" else "pgdn"
+            if code in (b"5", b"6"):
+                # PgUp/PgDn end with '~', but modified variants (ESC[5;5~)
+                # carry a parameter tail — drain to the final byte so nothing
+                # leaks in as phantom digit presses (digits select rows!).
+                key = "pgup" if code == b"5" else "pgdn"
+                while code and not 0x40 <= code[0] <= 0x7E:
+                    if not _waiting(fd, 0.02):
+                        break
+                    code = os.read(fd, 1)
+                return key
             name = _ARROWS.get(code.decode("latin-1"))
             if name:
                 return name
@@ -219,7 +226,9 @@ def _waiting(fd: int, timeout: float) -> bool:
 def _bold_gradient(text: str) -> str:
     g = ansi.gradient(text, BRAND_A, BRAND_B)
     # gradient() only resets at its end, so a leading bold survives throughout.
-    return f"\033[1m{g}" if ansi.enabled() else text
+    # The trailing reset matters when colour depth is 0 (TERM=linux/vt100):
+    # gradient() returns plain text there and the bold would otherwise leak.
+    return f"\033[1m{g}\033[0m" if ansi.enabled() else text
 
 
 def _crumbs(title: str) -> str:
@@ -244,9 +253,11 @@ def _header_lines(title: str, right: str, subtitle: str, width: int) -> list[str
     if subtitle:
         lines.append("  " + ansi.style(subtitle, "grey"))
     # A faint brand-gradient hairline under the header; dim keeps it subtle.
+    # Explicit trailing reset: at colour depth 0 gradient() is a no-op and
+    # the dim attribute would otherwise bleed into the rows below.
     hair = ansi.GLYPH["rule"] * (width - 4)
     if ansi.enabled():
-        lines.append("  \033[2m" + ansi.gradient(hair, BRAND_A, BRAND_B))
+        lines.append("  \033[2m" + ansi.gradient(hair, BRAND_A, BRAND_B) + "\033[0m")
     else:
         lines.append("  " + hair)
     return lines
@@ -534,7 +545,10 @@ def confirm(prompt: str, *, default: bool = False, read: Callable[[], str] | Non
         try:
             ans = input(f"{prompt} {suffix} ").strip().lower()
         except EOFError:
-            return default
+            # No input stream at all (closed pipe): never let a default=True
+            # silently consent to a destructive action. A blank LINE is an
+            # explicit enter and still takes the default.
+            return False
         if not ans:
             return default
         return ans in ("y", "yes")

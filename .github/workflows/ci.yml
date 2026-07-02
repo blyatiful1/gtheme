@@ -35,8 +35,10 @@ jobs:
 
       - name: Check themes/index.json is fresh
         # `gtheme index` regenerates it; a hand-edited theme merged without
-        # re-running it must fail the PR.
-        run: python -m gtheme index && git diff --exit-code themes/index.json
+        # re-running it must fail the PR. PYTHONPATH=src runs it from the
+        # checkout (a writable source tree) — the pip-installed copy would
+        # refuse to write into site-packages by design.
+        run: PYTHONPATH=src python -m gtheme index && git diff --exit-code themes/index.json
 
   lint:
     runs-on: ubuntu-latest

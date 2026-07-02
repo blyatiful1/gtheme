@@ -24,7 +24,8 @@ import tomllib
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from ..paths import DEST_ROOT, INSTALLED_THEMES_DIR, expand_dest, safe_theme_name
+from ..errors import ThemeSecurityError
+from ..paths import DEST_ROOT, INSTALLED_THEMES_DIR, confine_dest, expand_dest, safe_theme_name
 from ..settings import ResolvedSetting
 from ..manifest import Setting
 
@@ -306,7 +307,14 @@ def _bundle_companion(
     """Copy one referenced companion file into the theme with a [[files]] entry."""
     if any(r == rel for _c, r, _l in file_entries):
         return  # already captured (e.g. the reference points at a curated file)
-    src = expand_dest(live)
+    try:
+        # Companions must stay inside the user's home tree: a traversal like
+        # ~/../../etc/passwd (or a symlink out of home) in an import list must
+        # never be copied into a shareable theme.
+        src = confine_dest(live)
+    except ThemeSecurityError:
+        notes.append(f"{ref}: {live} resolves outside home; not bundled")
+        return
     if not src.is_file():
         notes.append(f"{ref}: references {live} which is missing; not bundled")
         return

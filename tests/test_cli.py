@@ -111,6 +111,21 @@ def test_plain_flag_sets_env(monkeypatch):
     assert os.environ.get("GTHEME_PLAIN") == "1"
 
 
+def test_bare_invocation_menu_errors_print_one_clean_line(monkeypatch, capsys):
+    # Engine errors escaping the menu (e.g. the process lock) must hit the same
+    # handler as subcommands: one ✗ line + exit 1, never a raw traceback.
+    import gtheme.menu as menu
+
+    def boom():
+        raise GthemeError("another gtheme is already applying/restoring — wait for it to finish")
+
+    monkeypatch.setattr(menu, "run", boom)
+    assert cli.main([]) == 1
+    err = capsys.readouterr().err
+    assert "another gtheme is already applying/restoring" in err
+    assert "Traceback" not in err
+
+
 # --- restore: empty baseline & hooks footer (cli-ux-4 / live-probe-10) ---------
 
 
@@ -317,6 +332,18 @@ def test_install_fallback_skipped_when_offline(monkeypatch, capsys):
         cli.cmd_install(_ns(source="communal", yes=True))
     # falls back to the plain local error, not a network crash
     assert "no such theme" in capsys.readouterr().err
+
+
+def test_install_fallback_rejects_non_ascii_names(monkeypatch):
+    # Same ASCII-only rule as safe_theme_name: homograph names must not even
+    # reach the index lookup / network path.
+    from gtheme.engine import remote
+
+    def netcall():
+        raise AssertionError("network must not be touched for a non-ASCII name")
+
+    monkeypatch.setattr(remote, "fetch_index", netcall)
+    assert cli._install_from_community(_ns(source="ｎｓｘ", yes=True)) is None
 
 
 # --- diff output shaping (live-probe-5) ------------------------------------------

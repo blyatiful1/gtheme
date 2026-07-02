@@ -8,6 +8,8 @@ overlap-safe, symlink-safe, force-gated _copy_theme.
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 import zipfile
 from pathlib import Path
 
@@ -38,10 +40,19 @@ def test_is_url_recognises_remotes():
     assert remote._is_url("/no/such/path/repo.git")  # nonexistent -> treated as URL
 
 
-def test_themes_in_collection_single_theme_at_root(tmp_path):
-    root = _theme(tmp_path / "solo")
+def test_themes_in_collection_single_theme_at_root_uses_meta_name(tmp_path):
+    # For zips/clones the root dir is a temp name ('unzipped'/'repo'), so the
+    # manifest's [meta].name must win over the directory name.
+    root = _theme(tmp_path / "solo")  # writes [meta].name = "x"
     found = remote._themes_in_collection(root)
-    assert found == {"solo": root}
+    assert found == {"x": root}
+
+
+def test_themes_in_collection_root_falls_back_to_dir_name(tmp_path):
+    root = tmp_path / "solo"
+    root.mkdir()
+    (root / "theme.toml").write_text("not [valid toml", encoding="utf-8")
+    assert remote._themes_in_collection(root) == {"solo": root}
 
 
 def test_themes_in_collection_with_themes_wrapper(tmp_path):
@@ -149,7 +160,6 @@ def test_copy_theme_failure_leaves_no_staging(tmp_path, installed, monkeypatch):
     src = _theme(tmp_path / "src")
 
     # Force os.replace to fail after staging is built; staging must be cleaned up.
-    import os as _os
     monkeypatch.setattr(remote.os, "replace", lambda *a, **k: (_ for _ in ()).throw(OSError("boom")))
     with pytest.raises(OSError):
         remote._copy_theme(src, "foo", {"type": "path"})
@@ -218,6 +228,64 @@ def test_update_named_failure_raises(tmp_path, installed, monkeypatch):
         remote.update("foo", assume_yes=True)
 
 
+def test_update_bundled_origin_missing_source_skips(tmp_path, installed, monkeypatch, capsys):
+    # Installed with a bundled origin, but the theme no longer ships: must skip
+    # with a notice — not warn about lost edits and then claim a no-op "updated".
+    d = installed / "olde"
+    d.mkdir()
+    (d / "theme.toml").write_text('[meta]\nname = "olde"\n', encoding="utf-8")
+    (d / remote.ORIGIN_FILE).write_text(
+        json.dumps({"type": "bundled", "name": "olde", "hash": "stale"}), encoding="utf-8"
+    )
+    monkeypatch.setattr(remote, "BUNDLED_THEMES_DIR", tmp_path / "nobundle")
+    assert remote.update("olde", assume_yes=True) == []
+    out = capsys.readouterr().out
+    assert "no longer in the bundled collection" in out
+    assert "local edits will be lost" not in out
+
+
+# --- install names follow [meta].name (temp-dir/dir-name leaks) --------------
+
+
+def test_install_flat_zip_uses_meta_name(tmp_path, installed):
+    # theme.toml at the archive ROOT (how a newcomer zips a theme): the install
+    # must use [meta].name, not the temp extraction dir name 'unzipped'.
+    src = _theme(tmp_path / "whatever", "flat")
+    zp = tmp_path / "flat.zip"
+    with zipfile.ZipFile(zp, "w") as zf:
+        for p in sorted(src.rglob("*")):
+            if p.is_file():
+                zf.write(p, arcname=str(p.relative_to(src)))
+    assert remote.install(str(zp)) == ["flat"]
+    assert (installed / "flat" / "theme.toml").is_file()
+    assert not (installed / "unzipped").exists()
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git not installed")
+def test_install_flat_git_repo_uses_meta_name(tmp_path, installed):
+    # theme.toml at the repo root: must not install under the clone dir 'repo'.
+    src = _theme(tmp_path / "repo-src", "flatgit")
+    subprocess.run(["git", "init", "-q"], cwd=src, check=True)
+    subprocess.run(["git", "add", "."], cwd=src, check=True)
+    subprocess.run(
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "x"],
+        cwd=src, check=True,
+    )
+    assert remote.install(f"file://{src}") == ["flatgit"]
+    assert (installed / "flatgit" / "theme.toml").is_file()
+    assert not (installed / "repo").exists()
+
+
+def test_install_dir_renamed_to_meta_name(tmp_path, installed, capsys):
+    # Directory name and [meta].name disagree: install under the manifest name
+    # (registry discovers by dir name; menu/CLI act by meta name).
+    src = _theme(tmp_path / "theme", "sbxtheme")
+    assert remote.install(str(src)) == ["sbxtheme"]
+    assert (installed / "sbxtheme" / "theme.toml").is_file()
+    assert not (installed / "theme").exists()
+    assert "as 'sbxtheme'" in capsys.readouterr().out  # warned about the rename
+
+
 # --- zip installs are untrusted (security re-audit) --------------------------
 
 
@@ -268,3 +336,16 @@ def test_fetch_index_offline_is_friendly(monkeypatch):
     monkeypatch.setattr(remote.urllib.request, "urlopen", boom)
     with pytest.raises(GthemeError, match="online"):
         remote.fetch_index()
+
+
+def test_fetch_index_http_error_blames_publishing_not_network(monkeypatch):
+    import urllib.error
+
+    def boom(url, timeout=0):
+        raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
+
+    monkeypatch.setattr(remote.urllib.request, "urlopen", boom)
+    with pytest.raises(GthemeError) as exc:
+        remote.fetch_index()
+    assert "HTTP 404" in str(exc.value)
+    assert "online" not in str(exc.value)

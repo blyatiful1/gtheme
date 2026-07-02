@@ -128,6 +128,13 @@ def _pause() -> None:
 def _run(cmd, ns: argparse.Namespace, crumb: str = "") -> None:
     """Run a cmd_* handler on the NORMAL screen (so its output lands in
     scrollback), pause, then return to the alternate screen."""
+    import subprocess
+    import tomllib
+
+    from pydantic import ValidationError
+
+    from .errors import GthemeError
+
     tui.leave_alt()
     print()
     if crumb:
@@ -138,6 +145,16 @@ def _run(cmd, ns: argparse.Namespace, crumb: str = "") -> None:
         pass  # _die() inside a handler already printed the message
     except KeyboardInterrupt:
         print(ansi.style("\n  cancelled", "grey"))
+    except (
+        GthemeError,
+        ValidationError,
+        tomllib.TOMLDecodeError,
+        subprocess.CalledProcessError,
+        OSError,
+    ) as exc:
+        # The same family cli.main() handles for subcommands: engine errors
+        # (e.g. the process lock) must not traceback out of the menu.
+        print(ansi.err(str(exc)))
     _pause()
     tui.enter_alt()
 
