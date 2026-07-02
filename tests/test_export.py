@@ -59,3 +59,19 @@ def test_export_coerces_extension(tmp_path, monkeypatch):
     monkeypatch.setattr(exp, "find", lambda name: d)
     out, _ = exp.export_theme("foo", out=str(tmp_path / "bundle"))
     assert out.suffix == ".zip"
+
+
+def test_export_skips_symlink_escaping_theme_dir(tmp_path, monkeypatch, capsys):
+    # zf.write follows symlinks: a link to ~/.ssh/id_rsa would bake the private
+    # key's CONTENTS into the shareable zip. Escaping targets must be skipped.
+    d = _theme(tmp_path)
+    secret = tmp_path / "id_rsa"
+    secret.write_text("SUPERSECRET", encoding="utf-8")
+    (d / "files" / "leak.conf").symlink_to(secret)
+    monkeypatch.setattr(exp, "find", lambda name: d)
+    out, count = exp.export_theme("foo", out=str(tmp_path / "out.zip"))
+    names = zipfile.ZipFile(out).namelist()
+    assert "foo/files/leak.conf" not in names
+    assert b"SUPERSECRET" not in out.read_bytes()
+    assert "leak.conf" in capsys.readouterr().out  # warned, not silently dropped
+    assert "foo/files/a.conf" in names  # in-tree files still exported

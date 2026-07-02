@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import tomllib
 from pathlib import Path
+
+from pydantic import ValidationError
 
 from .manifest import Theme, load_theme
 from .paths import theme_search_paths
@@ -25,6 +28,39 @@ def find(name: str) -> Path | None:
     return discover().get(name)
 
 
+def _short(s: str, limit: int = 60) -> str:
+    return s if len(s) <= limit else s[:limit] + "…"
+
+
+def format_load_error(exc: Exception, theme_dir: Path) -> str:
+    """Readable one-line-per-problem load error that names the file at fault.
+
+    pydantic's str() dumps the internal model name, ``type=`` noise and a
+    third-party URL; theme authors need ``<dir>/theme.toml: [meta].name: msg``.
+    Bare TOML syntax errors get the file path prefixed (palette.toml errors
+    are already prefixed by the loader).
+    """
+    manifest = Path(theme_dir) / "theme.toml"
+    if isinstance(exc, ValidationError):
+        lines = []
+        for e in exc.errors():
+            loc = e.get("loc") or ()
+            if loc:
+                head, *rest = loc
+                where = f"[{head}]" + "".join(
+                    f"[{part}]" if isinstance(part, int) else f".{part}" for part in rest
+                )
+            else:
+                where = "(top level)"
+            got = e.get("input")
+            show = "" if isinstance(got, (dict, list)) else f" (got {_short(repr(got))})"
+            lines.append(f"{manifest}: {where}: {e.get('msg', 'invalid value')}{show}")
+        return "\n".join(lines)
+    if isinstance(exc, tomllib.TOMLDecodeError):
+        return f"{manifest}: {exc}"
+    return str(exc)
+
+
 def load_all() -> tuple[list[Theme], list[tuple[str, str]]]:
     """Return (loaded themes, [(name, error)]) — invalid themes don't abort."""
     themes: list[Theme] = []
@@ -33,7 +69,7 @@ def load_all() -> tuple[list[Theme], list[tuple[str, str]]]:
         try:
             themes.append(load_theme(path))
         except Exception as exc:  # noqa: BLE001 - surfaced to the user
-            errors.append((name, str(exc)))
+            errors.append((name, format_load_error(exc, path)))
     return themes, errors
 
 

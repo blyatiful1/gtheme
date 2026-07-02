@@ -56,7 +56,6 @@ def _first_existing(*candidates: Path) -> Path:
 # Source checkout keeps the collection at <repo>/themes; an installed wheel ships
 # it inside the package as _bundled_themes (see pyproject force-include).
 BUNDLED_THEMES_DIR = _first_existing(REPO_ROOT / "themes", _PKG_DIR / "_bundled_themes")
-SKELETON_DIR = _first_existing(REPO_ROOT / "template", _PKG_DIR / "_skeleton")
 
 # Root that manifest "~" destinations expand against.
 DEST_ROOT = _env_path("GTHEME_DEST_ROOT", HOME)
@@ -145,9 +144,13 @@ def read_origin(theme_path: Path) -> dict | None:
 
 
 def theme_is_untrusted(theme_path: Path) -> bool:
-    """True iff an origin marker exists and records a remote ``git`` source."""
+    """True iff an origin marker records a downloaded source (git or .zip).
+
+    Zips are the sharing/download format, so a zip-installed theme is just as
+    untrusted as a cloned one (README: anything you downloaded is untrusted).
+    """
     origin = read_origin(theme_path)
-    return origin is not None and origin.get("type") == "git"
+    return origin is not None and origin.get("type") in ("git", "zip")
 
 
 def safe_theme_name(name: str) -> str:
@@ -159,8 +162,9 @@ def safe_theme_name(name: str) -> str:
     the installed-themes directory when it becomes ``INSTALLED_THEMES_DIR/<name>``.
     Raises :class:`ThemeSecurityError` on anything else.
     """
-    if not name or not all(c.isalnum() or c in "-_" for c in name):
+    # ASCII-only: unicode isalnum() would admit homograph names like "ｎｓｘ".
+    if not name or not all(c.isascii() and (c.isalnum() or c in "-_") for c in name):
         raise ThemeSecurityError(
-            f"unsafe theme name {name!r}: use letters, digits, '-' or '_' only"
+            f"unsafe theme name {name!r}: use ASCII letters, digits, '-' or '_' only"
         )
     return name

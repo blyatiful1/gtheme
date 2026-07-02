@@ -93,3 +93,10 @@ def test_safe_theme_name_accepts_slugs(name):
 def test_safe_theme_name_rejects_escapes(name):
     with pytest.raises(ThemeSecurityError):
         paths.safe_theme_name(name)
+
+
+@pytest.mark.parametrize("name", ["ｎｓｘ", "café", "nsx​"])
+def test_safe_theme_name_rejects_non_ascii(name):
+    # unicode isalnum() admits homograph slugs; names must be ASCII-only.
+    with pytest.raises(ThemeSecurityError):
+        paths.safe_theme_name(name)

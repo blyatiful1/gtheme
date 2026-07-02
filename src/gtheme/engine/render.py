@@ -102,7 +102,10 @@ def build(theme: Theme, force: bool = False) -> RenderResult:
     ctx = build_context(theme.palette)
     ctx["name"] = theme.meta.name
     ctx["Name"] = theme.meta.name.capitalize()
-    ctx["title"] = theme.meta.title or theme.meta.name
+    # meta.title is free text that lands verbatim in rendered config files —
+    # strip control chars so a stray newline can't inject an extra directive.
+    title = theme.meta.title or theme.meta.name
+    ctx["title"] = "".join(c for c in title if c.isprintable())
     env = _env()
     managed = set(theme.build.managed)
     written: list[str] = []

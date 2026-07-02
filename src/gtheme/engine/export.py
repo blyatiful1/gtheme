@@ -1,7 +1,7 @@
 """`gtheme export` — bundle a theme directory into one shareable .zip archive.
 
-The archive contains a single top-level ``<name>/`` directory, so unzipping it
-yields a clean theme dir that installs with ``gtheme install <unzipped-dir>``.
+The archive contains a single top-level ``<name>/`` directory and installs
+directly with ``gtheme install <name>.zip`` — no need to unzip it first.
 Install-local bookkeeping (the origin marker), caches, and staging/temp files
 are left out so the bundle is portable and reproducible.
 """
@@ -11,6 +11,7 @@ from __future__ import annotations
 import zipfile
 from pathlib import Path
 
+from .. import ansi
 from ..errors import GthemeError
 from ..paths import ORIGIN_FILE
 from ..registry import find
@@ -44,12 +45,23 @@ def export_theme(name: str, out: str | None = None) -> tuple[Path, int]:
         out_path = out_path.with_suffix(".zip")
 
     members: list[tuple[Path, Path]] = []
+    src_r = src.resolve()
     for p in sorted(src.rglob("*")):
         if not p.is_file():  # skips dirs and dangling symlinks
             continue
         rel = p.relative_to(src)
-        if _included(rel):
-            members.append((p, rel))
+        if not _included(rel):
+            continue
+        # zf.write follows symlinks: a link pointing outside the theme dir
+        # would bake foreign file contents (e.g. ~/.ssh keys) into the zip.
+        try:
+            escapes = not p.resolve().is_relative_to(src_r)
+        except OSError:
+            escapes = True
+        if escapes:
+            print(ansi.warn(f"skipping {rel}: symlink target outside the theme dir"))
+            continue
+        members.append((p, rel))
     if not members:
         raise GthemeError(f"nothing to export for {name!r} (no files found in {src})")
 
