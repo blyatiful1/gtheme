@@ -13,11 +13,9 @@ optdepends=('gnome-shell: desktop integration'
 makedepends=('python-hatchling' 'python-build' 'python-installer' 'python-wheel')
 checkdepends=('python-pytest')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-# A release tarball's hash cannot exist before the tag is pushed. The maintainer
-# MUST pin the real checksum per release once v$pkgver is tagged upstream:
+# Pinned against the released v0.1.0 tag tarball. Re-pin on every release:
 #   updpkgsums    # (or: makepkg -g) then commit the result
-# 'SKIP' is a placeholder only and disables integrity verification — do not ship it.
-sha256sums=('SKIP')
+sha256sums=('57e232207d37f7c80cd1e8fd09a1d31eab0f783ca0913d1b9868f97c02ccd417')
 
 build() {
   cd "$pkgname-$pkgver"
