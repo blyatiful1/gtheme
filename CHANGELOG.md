@@ -3,6 +3,14 @@
 All notable changes to gtheme are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [Unreleased]
+
+- **New bundled theme: `shoji`** (Paper & Ink) — the collection's first light
+  theme: washi-paper background, sumi-ink text, a single vermilion hanko
+  accent. Procedurally painted wallpapers (brush-stroke enso, ink-wash
+  ridgeline, plain washi; generator included under `assets/`), hand-authored
+  dual light/dark Ptyxis palette, and a minimal no-powerline starship prompt.
+
 ## [0.1.0] — unreleased
 
 Initial public release.

@@ -42,6 +42,26 @@
         "desktop",
         "dock"
       ]
+    },
+    {
+      "name": "shoji",
+      "title": "SHOJI \u2014 Paper & Ink",
+      "description": "Washi paper, sumi ink, one vermilion hanko. A quiet light-mode GNOME.",
+      "author": "blyatiful1",
+      "version": "1.0.0",
+      "components": [
+        "wallpaper",
+        "terminal",
+        "prompt",
+        "shell-cfg",
+        "monitor",
+        "editor",
+        "fastfetch",
+        "gtk",
+        "shell",
+        "desktop",
+        "dock"
+      ]
     }
   ]
 }

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- SHOJI enso: one open brush ring. Logo-menu loads it symbolic, so the
+       panel recolours the ink to match its own foreground. -->
+  <path d="M 9.04 2.09 A 6 6 0 1 0 3.40 4.14"
+        fill="none" stroke="#33302A" stroke-width="1.9" stroke-linecap="round"/>
+  <path d="M 9.04 2.09 A 6 6 0 0 0 4.10 3.35"
+        fill="none" stroke="#33302A" stroke-width="0.7" stroke-linecap="round" opacity="0.85"/>
+</svg>
