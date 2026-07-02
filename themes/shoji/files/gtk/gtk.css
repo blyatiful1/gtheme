@@ -1,0 +1,14 @@
+/* SHOJI — Paper & Ink — hand-authored libadwaita / GTK accent override.
+ * (Not engine-rendered: the shared template puts fg_bright on the accent,
+ * which on a light palette is near-black ink on vermilion — unreadable.
+ * Text on the hanko is always paper-white.) */
+:root {
+  --accent-bg-color: #B3402E;
+  --accent-fg-color: #FBF9F2;
+  --accent-color: #9A3626;
+}
+
+/* GTK3 fallback */
+@define-color accent_color #9A3626;
+@define-color accent_bg_color #B3402E;
+@define-color accent_fg_color #FBF9F2;

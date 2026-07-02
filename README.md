@@ -235,6 +235,7 @@ Found a boundary escape? See [SECURITY.md](SECURITY.md).
 |---|---|---|
 | ![nsx palette](docs/media/palette-nsx.svg) | **nsx** | Honda NSX (NA1): Berlina-black cabin, Formula Red, Championship White |
 | ![jojo palette](docs/media/palette-jojo.svg) | **jojo** | STONE OCEAN (JoJo Part 6+): Jolyne green, Stand-string blue, the Spin |
+| ![shoji palette](docs/media/palette-shoji.svg) | **shoji** | Paper & Ink: washi paper, sumi ink, one vermilion hanko — a light-mode rice |
 
 Contribute yours: `gtheme publish <name>` prints the exact PR steps, and
 [CONTRIBUTING.md](CONTRIBUTING.md) has the submission checklist (validate
