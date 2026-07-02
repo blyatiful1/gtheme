@@ -10,11 +10,14 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import tomllib
 from pathlib import Path
+
+from pydantic import ValidationError
 
 from .errors import ThemeSecurityError
 from .manifest import Theme, load_theme
-from .paths import confine_dest, confine_src
+from .paths import INSTALLED_THEMES_DIR, confine_dest, confine_src
 
 
 def package_installed(pkg: str) -> bool:
@@ -40,6 +43,23 @@ def package_installed(pkg: str) -> bool:
         except OSError:
             continue
     return False
+
+
+# Where GNOME Shell looks for installed extensions (real $HOME on purpose:
+# extensions are live-system state, like packages above).
+_EXTENSION_DIRS = (
+    Path.home() / ".local" / "share" / "gnome-shell" / "extensions",
+    Path("/usr/share/gnome-shell/extensions"),
+)
+
+
+def extension_installed(uuid: str) -> bool:
+    """Best-effort: does a GNOME Shell extension dir named ``uuid`` exist?
+
+    Warn-only by design: a CI box / non-GNOME machine has neither dir, so every
+    extension reports missing there — callers must not turn this into an error.
+    """
+    return any((d / uuid).is_dir() for d in _EXTENSION_DIRS)
 
 # Special / dangerous permission bits on an installed file.
 _SETUID = 0o4000
@@ -73,12 +93,31 @@ def _scan_for_home_path(path: Path) -> bool:
     return bool(_HOME_PATH_RE.search(text))
 
 
+def _format_validation_error(exc: ValidationError, theme_dir: Path) -> list[str]:
+    """One readable line per pydantic error — not the raw dump with its
+    error-count header and errors.pydantic.dev URLs."""
+    out: list[str] = []
+    for err in exc.errors(include_url=False):
+        loc = [str(p) for p in err["loc"]]
+        # palette content may come from palette.toml — name the actual file.
+        fname = "theme.toml"
+        if loc and loc[0] == "palette" and (theme_dir / "palette.toml").is_file():
+            fname = "palette.toml"
+        where = f"[{loc[0]}]" + "".join(f".{p}" for p in loc[1:]) if loc else "manifest"
+        out.append(f"{theme_dir / fname}: {where}: {err['msg']}")
+    return out or [f"{theme_dir / 'theme.toml'}: manifest invalid"]
+
+
 def validate_dir(theme_dir: Path) -> tuple[Theme | None, list[str], list[str]]:
     """Return (theme | None, errors, warnings). ``theme is None`` => fatal."""
     errors: list[str] = []
     warnings: list[str] = []
     try:
         theme = load_theme(theme_dir)
+    except ValidationError as exc:
+        return None, _format_validation_error(exc, theme_dir), []
+    except tomllib.TOMLDecodeError as exc:
+        return None, [f"{theme_dir / 'theme.toml'}: {exc}"], []
     except Exception as exc:  # noqa: BLE001
         return None, [f"manifest invalid: {exc}"], []
 
@@ -103,6 +142,23 @@ def validate_dir(theme_dir: Path) -> tuple[Theme | None, list[str], list[str]]:
             parent = dest.parent
             if parent.exists() and not parent.is_dir():
                 errors.append(f"[files] dest parent is not a dir: {parent}")
+            # The installed-themes namespace is owned by `gtheme install` and
+            # rmtree'd wholesale on update/remove — payload there gets deleted.
+            in_namespace = fi.dest.replace("$HOME", "~").startswith(
+                "~/.local/share/gtheme/themes"
+            )
+            try:
+                in_namespace = in_namespace or dest.resolve().is_relative_to(
+                    INSTALLED_THEMES_DIR.resolve()
+                )
+            except OSError:
+                pass
+            if in_namespace:
+                warnings.append(
+                    f"[files] dest {fi.dest} is inside the installed-themes dir "
+                    f"(deleted on update/remove); use "
+                    f"~/.local/share/gtheme/assets/<name>/ instead"
+                )
 
         # Dangerous permission bits.
         if fi.mode is not None:
@@ -175,9 +231,41 @@ def validate_dir(theme_dir: Path) -> tuple[Theme | None, list[str], list[str]]:
         except ValueError as exc:
             errors.append(f"[palette] {role}: {exc}")
 
-    # Soft checks: required tools / fonts.
+    # Soft checks: required tools / extensions.
     for pkg in theme.requires.packages:
         if not package_installed(pkg):
             warnings.append(f"required package may be missing: {pkg}")
+    for ext in theme.requires.extensions:
+        if not extension_installed(ext):
+            warnings.append(f"required GNOME extension may be missing: {ext}")
+
+    # A dark design without color-scheme looks half-applied on light-mode
+    # GNOME (the stock default) — light shell + apps over a black wallpaper.
+    from .color import is_dark
+
+    has_scheme = any(
+        s.backend == "gsettings"
+        and s.key == "org.gnome.desktop.interface color-scheme"
+        for s in theme.settings
+    )
+    if not has_scheme:
+        # palette bg first; else the wallpaper primary-color setting.
+        bg = theme.palette.get("bg")
+        if bg is None:
+            for s in theme.settings:
+                if s.key == "org.gnome.desktop.background primary-color":
+                    bg = s.value.strip().strip("'\"")
+                    break
+        try:
+            dark = bg is not None and is_dark(bg)
+        except ValueError:
+            dark = False
+        if dark:
+            warnings.append(
+                "theme looks dark but sets no "
+                "'org.gnome.desktop.interface color-scheme' — on light-mode "
+                "GNOME the apply will look half-broken; add a [[settings]] "
+                "entry with value \"'prefer-dark'\""
+            )
 
     return theme, errors, warnings

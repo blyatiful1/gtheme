@@ -10,7 +10,7 @@ version = "1.0.0"
 
 [requires]
 packages = ["alacritty", "starship", "btop", "micro", "fastfetch"]
-extensions = ["dash-to-dock@micxgx.gmail.com", "blur-my-shell@aunetx", "rounded-window-corners@fxgn", "just-perfection-desktop@just-perfection", "logomenu@aryan_k", "tilingshell@ferrarodomenico.com"]
+extensions = ["dash-to-dock@micxgx.gmail.com", "blur-my-shell@aunetx", "just-perfection-desktop@just-perfection", "logomenu@aryan_k", "tilingshell@ferrarodomenico.com"]
 fonts = ["MesloLGS Nerd Font"]
 
 [build]
@@ -114,6 +114,14 @@ key = "org.gnome.desktop.interface accent-color"
 value = "'red'"
 
 [[settings]]
+component = "desktop"
+backend = "gsettings"
+# NOTE: this is a dark design; vanilla GNOME defaults to the light scheme, so
+# without prefer-dark the theme looks half-applied on a stock install.
+key = "org.gnome.desktop.interface color-scheme"
+value = "'prefer-dark'"
+
+[[settings]]
 component = "terminal"
 backend = "dconf"
 key = "/org/gnome/Ptyxis/Profiles/{{ ptyxis_default_profile }}/palette"
@@ -147,7 +155,7 @@ value = "'#0D0D0F'"
 component = "shell"
 backend = "gsettings"
 key = "org.gnome.shell enabled-extensions"
-value = "['dash-to-dock@micxgx.gmail.com', 'blur-my-shell@aunetx', 'rounded-window-corners@fxgn', 'just-perfection-desktop@just-perfection', 'logomenu@aryan_k', 'tilingshell@ferrarodomenico.com']"
+value = "['dash-to-dock@micxgx.gmail.com', 'blur-my-shell@aunetx', 'just-perfection-desktop@just-perfection', 'logomenu@aryan_k', 'tilingshell@ferrarodomenico.com']"
 
 [[settings]]
 component = "dock"
@@ -317,17 +325,10 @@ backend = "dconf"
 key = "/org/gnome/shell/extensions/blur-my-shell/lockscreen/blur"
 value = "true"
 
-[[settings]]
-component = "shell"
-backend = "dconf"
-key = "/org/gnome/shell/extensions/rounded-window-corners-reborn/settings-version"
-value = "uint32 9"
-
-[[settings]]
-component = "shell"
-backend = "dconf"
-key = "/org/gnome/shell/extensions/rounded-window-corners-reborn/global-rounded-corner-settings"
-value = "{'padding': <{'left': uint32 1, 'right': 1, 'top': 1, 'bottom': 1}>, 'keepRoundedCorners': <{'maximized': false, 'fullscreen': false}>, 'borderRadius': <uint32 12>, 'smoothing': <0.0>, 'borderColor': <(0.5, 0.5, 0.5, 1.0)>, 'enabled': <true>}"
+# NOTE: rounded-window-corners@fxgn (Reborn) is deliberately NOT used by this
+# theme. It is in a hard ERROR state on GNOME 50 (see the jojo theme's manifest
+# for the failure mode); GNOME's native libadwaita rounding covers window
+# top-corners instead.
 
 [[settings]]
 component = "shell"
@@ -412,11 +413,3 @@ component = "shell"
 backend = "dconf"
 key = "/org/gnome/shell/extensions/tilingshell/show-indicator"
 value = "false"
-
-[[hooks]]
-event = "post"
-component = "boot"
-sudo = true
-optional = true
-script = "hooks/install-boot.sh"
-restore = "hooks/restore-boot.sh"

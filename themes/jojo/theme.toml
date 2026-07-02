@@ -10,7 +10,7 @@ version = "1.0.0"
 based_on = "nsx"
 
 [requires]
-packages = ["alacritty", "starship", "btop", "micro", "fastfetch", "papirus-icon-theme", "papirus-folders"]
+packages = ["alacritty", "starship", "btop", "micro", "fastfetch", "papirus-icon-theme", "papirus-folders", "ptyxis"]
 extensions = ["dash-to-dock@micxgx.gmail.com", "blur-my-shell@aunetx", "just-perfection-desktop@just-perfection", "logomenu@aryan_k", "tilingshell@ferrarodomenico.com"]
 fonts = ["MesloLGS Nerd Font"]
 
@@ -110,22 +110,32 @@ component = "shell-cfg"
 src = "files/fish/config.fish"
 dest = "~/.config/fish/config.fish"
 
+# NOTE: runtime payload lives under assets/, NOT ~/.local/share/gtheme/themes/
+# — that namespace is owned by `gtheme install` and is rmtree'd on update/remove.
 [[files]]
 component = "commands"
 src = "files/bin"
-dest = "~/.local/share/gtheme/themes/jojo/bin"
+dest = "~/.local/share/gtheme/assets/jojo/bin"
 mode = "755"
 
 [[files]]
 component = "ascii"
 src = "files/ascii"
-dest = "~/.local/share/gtheme/themes/jojo/ascii"
+dest = "~/.local/share/gtheme/assets/jojo/ascii"
 
 [[settings]]
 component = "desktop"
 backend = "gsettings"
 key = "org.gnome.desktop.interface accent-color"
 value = "'green'"
+
+[[settings]]
+component = "desktop"
+backend = "gsettings"
+# NOTE: this is a dark design; vanilla GNOME defaults to the light scheme, so
+# without prefer-dark the theme looks half-applied on a stock install.
+key = "org.gnome.desktop.interface color-scheme"
+value = "'prefer-dark'"
 
 [[settings]]
 component = "desktop"
@@ -334,11 +344,3 @@ value = "12"
 # floating on top of every window) that only a Shell restart can clear. The
 # theme relies on GNOME's native libadwaita rounding for window top-corners and
 # does not list the extension in [requires].extensions.
-
-[[hooks]]
-event = "post"
-component = "boot"
-sudo = true
-optional = true
-script = "hooks/install-boot.sh"
-restore = "hooks/restore-boot.sh"

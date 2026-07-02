@@ -7,13 +7,20 @@ files and gsettings/dconf keys that any gtheme theme can manage (derived from
 the union of all installed/bundled theme manifests, plus a curated baseline) and
 records whatever is actually present/set.
 
+Captured configs may reference companion files (the Ptyxis .palette named by
+the palette dconf key, the btop theme named by btop.conf's ``color_theme``,
+alacritty ``[general] import`` files); those are bundled too, best-effort, so
+the export is actually self-contained.
+
 The captured theme is a starting point — refine its manifest and add a palette
 afterwards. Use ``gtheme export`` to bundle it into a single shareable archive.
 """
 
 from __future__ import annotations
 
+import re
 import shutil
+import tomllib
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -64,8 +71,22 @@ _WALLPAPER_URI_KEYS = {
 }
 
 
+# TOML basic strings have named escapes for these; other C0 controls (and DEL)
+# must go through \uXXXX or the emitted manifest fails to parse back.
+_TOML_ESCAPES = {"\\": "\\\\", '"': '\\"', "\b": "\\b", "\t": "\\t",
+                 "\n": "\\n", "\f": "\\f", "\r": "\\r"}
+
+
 def _toml_str(s: str) -> str:
-    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    out = []
+    for ch in s:
+        if ch in _TOML_ESCAPES:
+            out.append(_TOML_ESCAPES[ch])
+        elif ord(ch) < 0x20 or ch == "\x7f":
+            out.append(f"\\u{ord(ch):04X}")
+        else:
+            out.append(ch)
+    return '"' + "".join(out) + '"'
 
 
 def _retemplatize_home(value: str) -> str:
@@ -158,6 +179,17 @@ def capture(name: str, title: str | None = None, dest_dir: Path | None = None) -
             cur = _retemplatize_home(cur)
         setting_entries.append((component, backend, key, cur))
 
+    # --- companions: files the captured configs reference by name/path ---
+    # Without these the export dangles: Ptyxis points at a missing palette,
+    # btop at a missing theme, alacritty at a missing import.
+    _bundle_ptyxis_palette(setting_entries, target, file_entries, notes)
+    _bundle_btop_theme(target, file_entries, notes)
+    _bundle_alacritty_imports(target, file_entries, notes)
+
+    # Captured configs are verbatim user state — flag likely secrets and
+    # machine-specific paths before this gets exported/shared.
+    _scan_captured_text(target, file_entries, notes)
+
     # --- write the manifest ---
     lines = [
         f"# {title or name} — captured from the live system by `gtheme capture`.",
@@ -244,3 +276,164 @@ def _same_file(a: Path, b: Path) -> bool:
         return a.stat().st_size == b.stat().st_size and a.read_bytes() == b.read_bytes()
     except OSError:
         return False
+
+
+# ------------------------------------------------------------- companions ---
+# Captured configs reference files by name/path; bundle those too (mirrors
+# _bundle_wallpaper) so the export is self-contained. All best-effort: a
+# missing companion becomes a note, never a failure.
+
+
+def _tildify(path: str) -> str | None:
+    """Rewrite an absolute path under home to ``~/...``; None if outside."""
+    home = str(DEST_ROOT)
+    if path.startswith("~/"):
+        return path
+    if path.startswith(home + "/"):
+        return "~" + path[len(home):]
+    return None
+
+
+def _bundle_companion(
+    live: str,
+    component: str,
+    rel: str,
+    target: Path,
+    file_entries: list[tuple[str, str, str]],
+    notes: list[str],
+    ref: str,
+) -> None:
+    """Copy one referenced companion file into the theme with a [[files]] entry."""
+    if any(r == rel for _c, r, _l in file_entries):
+        return  # already captured (e.g. the reference points at a curated file)
+    src = expand_dest(live)
+    if not src.is_file():
+        notes.append(f"{ref}: references {live} which is missing; not bundled")
+        return
+    out = target / rel
+    out.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, out)
+    file_entries.append((component, rel, live))
+    notes.append(f"{ref}: bundled {live}")
+
+
+def _bundle_ptyxis_palette(
+    setting_entries: list[tuple[str, str, str, str]],
+    target: Path,
+    file_entries: list[tuple[str, str, str]],
+    notes: list[str],
+) -> None:
+    """The captured Ptyxis palette dconf key names a .palette file — ship it."""
+    for _c, backend, key, value in setting_entries:
+        if backend != "dconf":
+            continue
+        if not (key.startswith("/org/gnome/Ptyxis/") and key.endswith("/palette")):
+            continue
+        name = value.strip().strip("'\"")
+        if not name or "/" in name:
+            continue
+        _bundle_companion(
+            f"~/.local/share/org.gnome.Ptyxis/palettes/{name}.palette",
+            "terminal", f"files/ptyxis/{name}.palette",
+            target, file_entries, notes, f"ptyxis palette '{name}'",
+        )
+
+
+_BTOP_THEME_RE = re.compile(r'^\s*color_theme\s*=\s*"?([^"\n]*?)"?\s*$', re.M)
+
+
+def _bundle_btop_theme(
+    target: Path,
+    file_entries: list[tuple[str, str, str]],
+    notes: list[str],
+) -> None:
+    """Bundle the .theme file the captured btop.conf names via color_theme=."""
+    conf = target / "files/btop/btop.conf"
+    try:
+        text = conf.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return  # btop.conf wasn't captured
+    m = _BTOP_THEME_RE.search(text)
+    if m is None:
+        return
+    name = m.group(1).strip()
+    if not name or name.lower() in ("default", "tty"):
+        return  # btop built-ins, no file to bundle
+    if "/" in name:  # a full path, not a theme name
+        live = _tildify(name)
+        if live is None:
+            # ponytail: /usr/share themes exist on the target too; a system
+            # path is not bundleable into a ~-rooted theme, just note it.
+            notes.append(f"btop color_theme: {name} is outside home; not bundled")
+            return
+    else:
+        live = f"~/.config/btop/themes/{name}.theme"
+    _bundle_companion(live, "monitor", f"files/btop/{Path(live).name}",
+                      target, file_entries, notes, "btop color_theme")
+
+
+def _bundle_alacritty_imports(
+    target: Path,
+    file_entries: list[tuple[str, str, str]],
+    notes: list[str],
+) -> None:
+    """Bundle the files the captured alacritty.toml imports ([general] import)."""
+    conf = target / "files/alacritty/alacritty.toml"
+    if not conf.is_file():
+        return
+    try:
+        with conf.open("rb") as fh:
+            data = tomllib.load(fh)
+    except (tomllib.TOMLDecodeError, OSError):
+        notes.append("alacritty.toml: unparseable; imports not bundled")
+        return
+    imports = data.get("general", {}).get("import", data.get("import", []))
+    if not isinstance(imports, list):
+        imports = [imports]
+    for imp in imports:
+        if not isinstance(imp, str):
+            continue
+        live = _tildify(imp)
+        if live is None:
+            notes.append(f"alacritty import: {imp} is outside home; not bundled")
+            continue
+        # ponytail: two imports sharing a basename would collide under
+        # files/alacritty/ — dedup keeps the first; unheard-of in practice.
+        _bundle_companion(live, "terminal", f"files/alacritty/{Path(live).name}",
+                          target, file_entries, notes, "alacritty import")
+
+
+# ------------------------------------------------------------ share safety ---
+# Captured rc files routinely carry exported API keys and literal home paths.
+# Flag them loudly (no auto-redaction — too easy to mangle a config).
+
+_SECRET_RES = (
+    re.compile(r"(api[_-]?key|token|secret|password|authorization)\s*[=:]", re.I),
+    re.compile(r"set\s+-\w*x\w*\s+\S*(KEY|TOKEN|SECRET)"),  # fish exports
+)
+_HOME_PATH_RE = re.compile(r"/home/[A-Za-z_][A-Za-z0-9_-]*/")  # = validate.py's
+_SCAN_MAX_BYTES = 256 * 1024
+
+
+def _scan_captured_text(
+    target: Path,
+    file_entries: list[tuple[str, str, str]],
+    notes: list[str],
+) -> None:
+    for _c, rel, _live in file_entries:
+        path = target / rel
+        try:
+            if path.stat().st_size > _SCAN_MAX_BYTES:
+                continue
+            text = path.read_text(encoding="utf-8")
+        except (OSError, ValueError, UnicodeDecodeError):
+            continue  # binary (wallpaper/palette images) or unreadable
+        for i, line in enumerate(text.splitlines(), 1):
+            if any(rx.search(line) for rx in _SECRET_RES):
+                notes.append(
+                    f"REVIEW BEFORE SHARING: possible secret in {rel}:{i}"
+                )
+            elif _HOME_PATH_RE.search(line):
+                notes.append(
+                    f"REVIEW BEFORE SHARING: hard-coded home path in {rel}:{i}"
+                )

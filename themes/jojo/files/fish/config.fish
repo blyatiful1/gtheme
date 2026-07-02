@@ -30,7 +30,7 @@ function fish_greeting
     echo '  (/^\)'
     echo "  '   '"
     set_color normal
-    set -l qf $HOME/.local/share/gtheme/themes/jojo/ascii/quotes.txt
+    set -l qf $HOME/.local/share/gtheme/assets/jojo/ascii/quotes.txt
     if test -r $qf
         set -l line (shuf -n1 $qf 2>/dev/null)
         if test -n "$line"
@@ -104,14 +104,14 @@ set -g fish_pager_color_description 4A5370
 
 # Stand abilities — JoJo animation scripts
 function menacing --description 'ゴゴゴ menacing rain (any key quits)'
-    $HOME/.local/share/gtheme/themes/jojo/bin/jojo-menacing $argv
+    $HOME/.local/share/gtheme/assets/jojo/bin/jojo-menacing $argv
 end
 function ora --description 'ORA ORA ORA barrage'
-    $HOME/.local/share/gtheme/themes/jojo/bin/jojo-ora $argv
+    $HOME/.local/share/gtheme/assets/jojo/bin/jojo-ora $argv
 end
 function tbc --description 'To Be Continued freeze-frame (any key quits)'
-    $HOME/.local/share/gtheme/themes/jojo/bin/jojo-tbc $argv
+    $HOME/.local/share/gtheme/assets/jojo/bin/jojo-tbc $argv
 end
 function stand --description 'Stand-stat radar card for a name'
-    $HOME/.local/share/gtheme/themes/jojo/bin/jojo-stand $argv
+    $HOME/.local/share/gtheme/assets/jojo/bin/jojo-stand $argv
 end

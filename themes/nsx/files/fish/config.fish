@@ -1,4 +1,6 @@
-source /usr/share/cachyos-fish-config/cachyos-config.fish
+# CachyOS-only base config; guarded so it doesn't error on other distros.
+test -f /usr/share/cachyos-fish-config/cachyos-config.fish
+and source /usr/share/cachyos-fish-config/cachyos-config.fish
 
 # overwrite greeting
 # potentially disabling fastfetch

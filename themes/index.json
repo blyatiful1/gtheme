@@ -20,8 +20,7 @@
         "commands",
         "ascii",
         "desktop",
-        "dock",
-        "boot"
+        "dock"
       ]
     },
     {
@@ -41,8 +40,7 @@
         "shell",
         "wallpaper",
         "desktop",
-        "dock",
-        "boot"
+        "dock"
       ]
     }
   ]
