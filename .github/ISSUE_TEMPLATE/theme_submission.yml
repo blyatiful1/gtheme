@@ -1,0 +1,31 @@
+name: Theme submission
+description: Propose a theme for the bundled collection
+labels: [theme]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Themes are contributed as pull requests (`gtheme publish <name>` prints
+        the exact steps) — this issue is for discussing one first. See
+        CONTRIBUTING.md for the submission checklist.
+  - type: input
+    id: name
+    attributes:
+      label: Theme name + one-line description
+    validations:
+      required: true
+  - type: textarea
+    id: looks
+    attributes:
+      label: Screenshot
+      description: A desktop screenshot or the palette. Visuals are the whole pitch.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: "`gtheme validate <name>` passes"
+        - label: All art/assets are original or license-compatible, with attribution preserved
+        - label: No hard-coded usernames, machine paths, or distro-only files

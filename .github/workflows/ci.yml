@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
 
@@ -22,7 +22,7 @@ jobs:
       - name: Install package + test deps
         # Install the package itself (src-layout) so `python -m gtheme` and the
         # bundled themes resolve; jinja2/pydantic come in as declared deps.
-        run: python -m pip install --upgrade pip && python -m pip install . pytest
+        run: python -m pip install --upgrade pip && python -m pip install .[dev]
 
       - name: Compile sources
         run: python -m compileall src
@@ -32,3 +32,42 @@ jobs:
 
       - name: Validate bundled themes
         run: python -m gtheme validate all
+
+      - name: Check themes/index.json is fresh
+        # `gtheme index` regenerates it; a hand-edited theme merged without
+        # re-running it must fail the PR.
+        run: python -m gtheme index && git diff --exit-code themes/index.json
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Ruff (CI-only tool; runtime deps stay jinja2+pydantic)
+        run: pipx run ruff check src tests
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build sdist + wheel
+        run: python -m pip install build twine && python -m build
+      - name: Check metadata
+        run: python -m twine check --strict dist/*
+      - name: Wheel must ship the bundled themes and templates
+        # Guards the pyproject force-include: silently dropping the bundled
+        # collection from the wheel would only surface at install time.
+        run: |
+          python - <<'EOF'
+          import glob, sys, zipfile
+          whl = glob.glob("dist/*.whl")[0]
+          names = zipfile.ZipFile(whl).namelist()
+          need = ["gtheme/_bundled_themes/index.json", "gtheme/templates/_templates.toml"]
+          missing = [n for n in need if n not in names]
+          sys.exit(f"wheel is missing: {missing}" if missing else 0)
+          EOF

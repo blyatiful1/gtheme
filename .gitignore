@@ -7,3 +7,5 @@ dist/
 .venv/
 .gtheme-origin.json
 themes/*.zip
+.pytest_cache/
+.backups/

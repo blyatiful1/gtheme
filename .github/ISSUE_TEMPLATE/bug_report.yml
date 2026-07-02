@@ -1,0 +1,48 @@
+name: Bug report
+description: Something broke or didn't work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! The environment details below matter a lot for a
+        desktop theming tool — most issues are specific to a GNOME version or
+        an enabled extension.
+  - type: input
+    id: distro
+    attributes:
+      label: Distro
+      placeholder: e.g. Ubuntu 24.04, Fedora 42, Arch
+    validations:
+      required: true
+  - type: input
+    id: gnome
+    attributes:
+      label: GNOME version
+      description: "`gnome-shell --version` (if you're not sure whether you run GNOME, paste `echo $XDG_CURRENT_DESKTOP`)"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: gtheme version + install method
+      description: "`gtheme --version`, and how you installed it (install.sh / pipx / PKGBUILD)"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you run, what did you expect, what did you get instead? Paste the full output.
+    validations:
+      required: true
+  - type: textarea
+    id: extensions
+    attributes:
+      label: Enabled GNOME extensions
+      description: "`gnome-extensions list --enabled` — extension state causes most theming surprises"
+  - type: dropdown
+    id: restore
+    attributes:
+      label: Did `gtheme restore` recover your desktop?
+      options: ["yes", "no", "didn't try"]

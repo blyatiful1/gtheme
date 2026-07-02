@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "gtheme"
-version = "0.1.0"
+dynamic = ["version"]
 description = "A GNOME desktop theme system: download, apply, switch, and author full-desktop themes from a palette"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -16,6 +16,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Environment :: Console",
     "Operating System :: POSIX :: Linux",
 ]
@@ -25,7 +26,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0"]
+dev = ["pytest>=7.0", "jsonschema>=4.0"]
 
 [project.scripts]
 gtheme = "gtheme.cli:main"
@@ -33,6 +34,10 @@ gtheme = "gtheme.cli:main"
 [project.urls]
 Homepage = "https://github.com/blyatiful1/gtheme"
 Issues = "https://github.com/blyatiful1/gtheme/issues"
+
+# Version is single-sourced from src/gtheme/__init__.py.
+[tool.hatch.version]
+path = "src/gtheme/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/gtheme"]
