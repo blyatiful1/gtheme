@@ -1,10 +1,9 @@
 name: release
 
 # Tag a version (git tag v0.1.0 && git push --tags) and this builds the
-# package, creates the GitHub release with the artifacts attached, and
-# publishes to PyPI via Trusted Publishing (configure the publisher once at
-# pypi.org: project `gtheme`, owner `blyatiful1`, repo `gtheme`,
-# workflow `release.yml`, environment `pypi` — no API token needed).
+# package and creates the GitHub release with the sdist/wheel attached.
+# PyPI publishing is deliberately NOT automatic — run the separate
+# `publish-pypi` workflow manually when you want a PyPI release.
 
 on:
   push:
@@ -41,16 +40,3 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --generate-notes
-
-  pypi:
-    needs: build
-    runs-on: ubuntu-latest
-    environment: pypi
-    permissions:
-      id-token: write  # PyPI Trusted Publishing
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
