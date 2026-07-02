@@ -261,6 +261,135 @@ def wall_washi() -> Image.Image:
     return img.convert("RGB")
 
 
+# ── bamboo (take) ────────────────────────────────────────────────────────
+
+def _stamp_leaf(bd: ImageDraw.ImageDraw, x: float, y: float, ang: float,
+                length: float, width: float) -> None:
+    """One bamboo leaf: hair-thin stem, wide wet belly, hard dry tip."""
+    steps = max(int(length / 1.5), 8)
+    for s in range(steps + 1):
+        t = s / steps
+        th = width * math.sin(math.pi * min(t * 1.25, 1.0)) ** 0.9 / 2
+        if t > 0.70:
+            th *= max(0.04, max(0.0, 1 - (t - 0.70) / 0.30) ** 1.25)
+        px = x + length * t * math.cos(ang) + random.uniform(-0.7, 0.7)
+        py = y + length * t * math.sin(ang) + random.uniform(-0.7, 0.7)
+        bd.ellipse([px - th, py - th, px + th, py + th], fill=255)
+
+
+def _stamp_twig(bd: ImageDraw.ImageDraw, x: float, y: float, ang: float,
+                length: float, th: float) -> tuple[float, float]:
+    steps = max(int(length / 2), 6)
+    for s in range(steps + 1):
+        t = s / steps
+        px = x + length * t * math.cos(ang)
+        py = y + length * t * math.sin(ang)
+        bd.ellipse([px - th, py - th, px + th, py + th], fill=255)
+    return x + length * math.cos(ang), y + length * math.sin(ang)
+
+
+def paint_culm(bd: ImageDraw.ImageDraw, w: int, h: int, x_frac: float,
+               lean: float, width: float, leaf_len: float) -> None:
+    """One culm bottom-to-past-the-top: waved internode polygons separated by
+    node gaps (paper breathing through), a collar stroke in each gap, and
+    hanging leaf clusters thrown off the upper nodes."""
+    bow = random.uniform(-0.03, 0.03) * h
+    seg_h = h * random.uniform(0.155, 0.195)
+    x0 = x_frac * w
+
+    def cx(y: float) -> float:
+        t = 1 - y / h                     # 0 at bottom, 1 at top
+        return x0 + lean * t * h + bow * math.sin(math.pi * t)
+
+    def half(y: float) -> float:
+        return width * (1 - 0.30 * (1 - y / h)) / 2
+
+    gap = width * 0.42
+    y_bot = h + seg_h * random.uniform(0.2, 0.6)
+    nodes: list[float] = []
+    while y_bot > -seg_h:
+        y_top = y_bot - seg_h * random.uniform(0.92, 1.08)
+        wave = random.uniform(0, math.tau)
+        left, right = [], []
+        yy = min(y_bot, h + 4)
+        while yy > y_top + gap:
+            wob = 1 + 0.05 * math.sin(yy / 26 + wave)
+            left.append((cx(yy) - half(yy) * wob, yy))
+            right.append((cx(yy) + half(yy) * wob, yy))
+            yy -= 6
+        if len(left) > 1:
+            bd.polygon(left + right[::-1], fill=255)
+        if y_top > 0:
+            nodes.append(y_top + gap / 2)
+        y_bot = y_top
+
+    # node collars: the short horizontal stroke pressed into each gap
+    for ny in nodes:
+        x, hw = cx(ny), half(ny)
+        bd.ellipse([x - hw * 1.18, ny - width * 0.085,
+                    x + hw * 1.18, ny + width * 0.085], fill=255)
+
+    # leaf clusters off the upper nodes, hanging down and outward
+    for ny in [n for n in nodes if n < h * 0.62]:
+        if random.random() < 0.30:
+            continue
+        side = random.choice((-1, 1))
+        tx, ty = _stamp_twig(bd, cx(ny), ny,
+                             math.radians(random.uniform(-38, -14)) if side > 0
+                             else math.radians(random.uniform(194, 218)),
+                             leaf_len * random.uniform(0.6, 1.1), width * 0.055)
+        n_leaves = random.randint(3, 5)
+        base_ang = math.radians(random.uniform(55, 95))
+        for _ in range(n_leaves):
+            ang = base_ang + math.radians(random.uniform(-42, 42))
+            _stamp_leaf(bd, tx + random.uniform(-8, 8), ty + random.uniform(-6, 6),
+                        ang, leaf_len * random.uniform(0.72, 1.15),
+                        leaf_len * random.uniform(0.14, 0.18))
+
+
+def wall_take() -> Image.Image:
+    """A bamboo grove in three washes of ink — and one vermilion leaf
+    falling where no red has any business being."""
+    img = washi_paper().convert("RGBA")
+    w2, h2 = W * SS, H * SS
+
+    planes = [
+        # colour, blur, culms as (x_frac, lean, width_frac, leaf_frac)
+        ((197, 190, 168), 3.4, [(0.335, 0.030, 0.017, 0.052),
+                                (0.500, -0.020, 0.014, 0.046)]),
+        ((128, 121, 100), 1.9, [(0.185, 0.085, 0.026, 0.066)]),
+        (SUMI, 1.1, [(0.095, 0.040, 0.042, 0.085),
+                     (0.270, -0.120, 0.036, 0.080)]),
+    ]
+    for colour, blur, culms in planes:
+        mask = Image.new("L", (w2, h2), 0)
+        bd = ImageDraw.Draw(mask)
+        for x_frac, lean, width_frac, leaf_frac in culms:
+            paint_culm(bd, w2, h2, x_frac, lean, width_frac * h2, leaf_frac * h2)
+        tone = (Image.effect_noise((w2 // 8 + 1, h2 // 8 + 1), 30)
+                .resize((w2, h2), Image.BILINEAR)
+                .point(lambda v: 196 + (v * 59) // 255))
+        mask = ImageChops.multiply(mask, tone)
+        ink = Image.new("RGBA", (w2, h2), (*colour, 0))
+        ink.putalpha(mask)
+        ink = ink.filter(ImageFilter.GaussianBlur(blur * SS / 2))
+        img = Image.alpha_composite(img, ink.resize((W, H), Image.LANCZOS))
+
+    # the one vermilion leaf, mid-fall in all that empty paper
+    leaf = Image.new("L", (w2, h2), 0)
+    _stamp_leaf(ImageDraw.Draw(leaf), 0.585 * w2, 0.415 * h2,
+                math.radians(104), 0.052 * h2, 0.0085 * h2)
+    leaf = ImageChops.multiply(leaf, Image.new("L", (w2, h2), 235))
+    red = Image.new("RGBA", (w2, h2), (*VERMILION, 0))
+    red.putalpha(leaf)
+    red = red.filter(ImageFilter.GaussianBlur(1.2))
+    img = Image.alpha_composite(img, red.resize((W, H), Image.LANCZOS))
+
+    hanko = paint_hanko(round(H * 0.065))
+    img.alpha_composite(hanko, (int(W * 0.868), int(H * 0.788)))
+    return img.convert("RGB")
+
+
 # ── braille enso for fastfetch ───────────────────────────────────────────
 
 BRAILLE_DOTS = ((0x01, 0x08), (0x02, 0x10), (0x04, 0x20), (0x40, 0x80))
@@ -298,6 +427,8 @@ def main() -> None:
     wall_ridgeline().save(OUT / "ridgeline.png", optimize=True)
     wall_washi().save(OUT / "washi.png", optimize=True)
     LOGO_OUT.write_text(braille_enso(), encoding="utf-8")
+    random.seed(0x7A4E)  # take — own seed keeps the walls above byte-stable
+    wall_take().save(OUT / "take.png", optimize=True)
     for p in sorted(OUT.iterdir()):
         print(f"{p.name}: {p.stat().st_size // 1024} KiB")
     print(f"{LOGO_OUT.name} written")

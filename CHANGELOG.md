@@ -5,6 +5,15 @@ All notable changes to gtheme are documented here. The format follows
 
 ## [Unreleased]
 
+- **shoji 1.1.0** — the vermilion Tiling Shell focus border is gone (it read
+  as an alert, not a seal; kept `false` in the manifest so re-apply heals
+  systems that had it). New procedurally painted `take.png` wallpaper — a
+  sumi-e bamboo grove in three ink washes with a single vermilion falling
+  leaf — is now the default. Zen panel: the top bar leaves the desktop and
+  appears only in the overview (just-perfection `panel=false`,
+  `panel-in-overview=true`; revert with `dconf write
+  /org/gnome/shell/extensions/just-perfection/panel true`). Fish greets each
+  new shell with one random zen line in diluted ink.
 - **New bundled theme: `shoji`** (Paper & Ink) — the collection's first light
   theme: washi-paper background, sumi-ink text, a single vermilion hanko
   accent. Procedurally painted wallpapers (brush-stroke enso, ink-wash

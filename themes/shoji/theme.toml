@@ -6,7 +6,7 @@ name = "shoji"
 title = "SHOJI — Paper & Ink"
 description = "Washi paper, sumi ink, one vermilion hanko. A quiet light-mode GNOME."
 author = "blyatiful1"
-version = "1.0.0"
+version = "1.1.0"
 
 [requires]
 packages = ["alacritty", "starship", "btop", "micro", "fastfetch", "papirus-icon-theme", "ptyxis"]
@@ -34,6 +34,11 @@ dest = "~/.local/share/backgrounds/shoji/ridgeline.png"
 component = "wallpaper"
 src = "files/wallpaper/washi.png"
 dest = "~/.local/share/backgrounds/shoji/washi.png"
+
+[[files]]
+component = "wallpaper"
+src = "files/wallpaper/take.png"
+dest = "~/.local/share/backgrounds/shoji/take.png"
 
 [[files]]
 component = "terminal"
@@ -136,6 +141,13 @@ key = "org.gnome.desktop.interface enable-hot-corners"
 value = "false"
 
 [[settings]]
+component = "desktop"
+backend = "gsettings"
+# the panel only appears in the overview now — when it does, say the day
+key = "org.gnome.desktop.interface clock-show-weekday"
+value = "true"
+
+[[settings]]
 component = "terminal"
 backend = "dconf"
 key = "/org/gnome/Ptyxis/Profiles/{{ ptyxis_default_profile }}/palette"
@@ -157,13 +169,13 @@ value = "'MesloLGS Nerd Font Mono 11'"
 component = "wallpaper"
 backend = "gsettings"
 key = "org.gnome.desktop.background picture-uri"
-value = "'file://{{ home }}/.local/share/backgrounds/shoji/enso.png'"
+value = "'file://{{ home }}/.local/share/backgrounds/shoji/take.png'"
 
 [[settings]]
 component = "wallpaper"
 backend = "gsettings"
 key = "org.gnome.desktop.background picture-uri-dark"
-value = "'file://{{ home }}/.local/share/backgrounds/shoji/enso.png'"
+value = "'file://{{ home }}/.local/share/backgrounds/shoji/take.png'"
 
 [[settings]]
 component = "wallpaper"
@@ -389,6 +401,23 @@ backend = "dconf"
 key = "/org/gnome/shell/extensions/just-perfection/startup-status"
 value = "0"
 
+# The boldest ma of all: no top panel on the desktop. The workspace is a
+# bare sheet of paper; clock, network, battery and the enso menu appear
+# the moment you enter the overview (Super). Revert with:
+#   dconf write /org/gnome/shell/extensions/just-perfection/panel true
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/just-perfection/panel"
+value = "false"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/just-perfection/panel-in-overview"
+value = "true"
+
 # ── logo menu: an enso where the distro logo was ────────────────────────────
 
 [[settings]]
@@ -409,7 +438,10 @@ backend = "dconf"
 key = "/org/gnome/shell/extensions/Logo-menu/symbolic-icon"
 value = "true"
 
-# ── tiling shell: airy gaps, one vermilion border on the focused window ────
+# ── tiling shell: airy gaps, no window chrome ──────────────────────────────
+# A painting is never framed in red: the old vermilion focus border read as
+# an alert, not a seal. Kept explicitly false so re-apply heals systems
+# that still carry it.
 
 [[settings]]
 component = "shell"
@@ -427,25 +459,13 @@ value = "true"
 component = "shell"
 backend = "dconf"
 key = "/org/gnome/shell/extensions/tilingshell/enable-window-border"
-value = "true"
+value = "false"
 
 [[settings]]
 component = "shell"
 backend = "dconf"
 key = "/org/gnome/shell/extensions/tilingshell/window-use-custom-border-color"
-value = "true"
-
-[[settings]]
-component = "shell"
-backend = "dconf"
-key = "/org/gnome/shell/extensions/tilingshell/window-border-color"
-value = "'#B3402E'"
-
-[[settings]]
-component = "shell"
-backend = "dconf"
-key = "/org/gnome/shell/extensions/tilingshell/window-border-width"
-value = "uint32 2"
+value = "false"
 
 [[settings]]
 component = "shell"

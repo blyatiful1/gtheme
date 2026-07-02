@@ -48,7 +48,7 @@
       "title": "SHOJI \u2014 Paper & Ink",
       "description": "Washi paper, sumi ink, one vermilion hanko. A quiet light-mode GNOME.",
       "author": "blyatiful1",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "components": [
         "wallpaper",
         "terminal",

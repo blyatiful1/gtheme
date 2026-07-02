@@ -15,6 +15,21 @@ if type -q starship
     starship init fish | source
 end
 
+# ichigyō-mono: one brushed line per shell, in diluted ink, then silence.
+function fish_greeting
+    set -l phrases \
+        "一期一会 — one meeting, once in a lifetime" \
+        "余白の美 — the beauty of empty space" \
+        "侘び寂び — beauty keeps its scars" \
+        "竹に上下の節あり — the bamboo has joints, high and low" \
+        "水は方円の器に随う — water takes the shape of its vessel" \
+        "初心忘るべからず — never lose the beginner's mind" \
+        "七転び八起き — fall seven times, rise eight"
+    set_color 9A9382
+    echo "  "$phrases[(random 1 (count $phrases))]
+    set_color normal
+end
+
 # bat — follows the terminal's Shoji ANSI palette
 set -gx BAT_THEME "ansi"
 if type -q bat
