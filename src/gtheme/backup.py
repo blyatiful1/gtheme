@@ -1,9 +1,11 @@
 """The pristine-baseline snapshot store that makes restore generic.
 
 The first time gtheme touches a file destination or a settings key, the prior
-state is recorded here. ``apply`` only ever *adds* to the baseline, so no
+state is recorded here. ``apply`` never overwrites a recorded snapshot, so no
 matter how many themes are applied or switched, ``restore`` always returns the
-system to the state it had before gtheme first ran.
+system to the state it had before gtheme first ran. A successful full restore
+*consumes* the records — the desktop is pristine again, and the next apply
+snapshots that (possibly user-edited) state as the new baseline.
 
 The store is written atomically and incrementally: every record persists its
 own index immediately (tmp + ``os.replace`` + fsync, with a ``.bak`` of the
@@ -14,12 +16,15 @@ last-good ``.bak`` and otherwise starts empty, remembering a warning.
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import shutil
+from contextlib import contextmanager
 from pathlib import Path
 
 from . import paths
+from .errors import GthemeError
 from .manifest import Setting
 from .settings import ResolvedSetting
 
@@ -33,11 +38,38 @@ def read_current() -> str | None:
 
 def write_current(name: str) -> None:
     paths.ensure_state_dirs()
-    paths.CURRENT_FILE.write_text(name + "\n", encoding="utf-8")
+    # tmp + replace, like every other state write — never a torn `current`.
+    tmp = paths.CURRENT_FILE.with_name(paths.CURRENT_FILE.name + ".tmp")
+    tmp.write_text(name + "\n", encoding="utf-8")
+    os.replace(tmp, paths.CURRENT_FILE)
 
 
 def clear_current() -> None:
     paths.CURRENT_FILE.unlink(missing_ok=True)
+
+
+@contextmanager
+def process_lock():
+    """L1: exclusive inter-process lock around state mutations (apply/restore/remove).
+
+    Concurrent runs interleave ledger read-modify-writes, and two Baselines
+    that loaded the same blob counter would clobber each other's PRISTINE
+    copies. Fail fast (LOCK_NB) instead of queueing behind e.g. a blocked
+    sudo hook.
+    """
+    paths.ensure_state_dirs()
+    fd = os.open(paths.STATE_DIR / "lock", os.O_CREAT | os.O_RDWR, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        os.close(fd)
+        raise GthemeError(
+            "another gtheme is already applying/restoring — wait for it to finish"
+        ) from None
+    try:
+        yield
+    finally:
+        os.close(fd)  # closing the fd releases the flock
 
 
 # ---------------------------------------------------- active-ownership ledger ---
@@ -106,6 +138,24 @@ def _load_json(path: Path, default):
             except (json.JSONDecodeError, OSError, ValueError):
                 pass
         return default, f"baseline index {path.name} was corrupt and unrecoverable; starting empty"
+
+
+def _prune_empty_dirs(start: Path) -> None:
+    """Remove now-empty directories from ``start`` up toward ``DEST_ROOT``.
+
+    Undoes the ``mkdir(parents=True)`` chains apply created for files that did
+    not exist before gtheme. ``rmdir`` refuses non-empty dirs, so this is
+    inherently safe: it stops at the first level still in use and never
+    touches ``DEST_ROOT`` itself (or anything outside it).
+    """
+    root = paths.DEST_ROOT.resolve()
+    cur = start
+    try:
+        while cur.resolve() != root and cur.resolve().is_relative_to(root):
+            cur.rmdir()
+            cur = cur.parent
+    except OSError:
+        pass
 
 
 class Baseline:
@@ -218,15 +268,18 @@ class Baseline:
         return not self.files and not self.settings
 
     # ----------------------------------------------------------------- files ---
-    def record_file(self, dest: Path, component: str = "", theme: str = "") -> None:
+    def record_file(self, dest: Path, component: str = "", theme: str = "") -> bool:
         """Snapshot ``dest``'s pristine state before it is overwritten.
 
         Symlinks are recorded as links (target only — never dereferenced) so
-        restore can recreate the link instead of writing through it.
+        restore can recreate the link instead of writing through it. Returns
+        False — recording nothing — for a FIFO/socket/device at ``dest``: no
+        snapshot is possible (a copy would raise, or block on a device node),
+        so the caller must skip the write and leave the dest alone.
         """
         key = str(dest)
         if key in self.files:
-            return
+            return True
         # Check symlink-ness BEFORE anything overwrites the destination.
         if dest.is_symlink():
             try:
@@ -241,7 +294,7 @@ class Baseline:
                 "component": component,
                 "theme": theme,
             }
-        elif dest.exists() and not dest.is_dir():
+        elif dest.is_file():
             self.files_dir.mkdir(parents=True, exist_ok=True)
             self._counter += 1
             stored = self.files_dir / f"{self._counter:04d}"
@@ -254,6 +307,9 @@ class Baseline:
                 "component": component,
                 "theme": theme,
             }
+        elif dest.exists() and not dest.is_dir():
+            # F1: special file (FIFO/socket/device) — no snapshot, no record.
+            return False
         else:
             self.files[key] = {
                 "existed": False,
@@ -264,14 +320,23 @@ class Baseline:
                 "theme": theme,
             }
         self._save_files()
+        return True
 
-    def restore_files(self, only: set[str] | None = None) -> tuple[list[str], list[str]]:
-        """Revert recorded files. Returns ``(log, warnings)``.
+    def restore_files(
+        self, only: set[str] | None = None
+    ) -> tuple[list[str], list[str], list[str], list[str]]:
+        """Revert recorded files. Returns ``(log, warnings, done, dead)``.
 
-        Filtered by component when ``only`` is given.
+        ``done`` holds the keys that actually reverted — the only ones a caller
+        may forget. ``dead`` holds unrecoverable records (blob lost, symlink
+        without a target): re-running can never fix those, the caller decides
+        their fate. A key in neither list failed transiently and must keep its
+        record AND blob. Filtered by component when ``only`` is given.
         """
         log: list[str] = []
         warnings: list[str] = []
+        done: list[str] = []
+        dead: list[str] = []
         for dest_str, rec in self.files.items():
             if only is not None and rec.get("component", "") not in only:
                 continue
@@ -281,6 +346,7 @@ class Baseline:
                     target = rec.get("target") or ""
                     if not target:
                         warnings.append(f"cannot restore symlink (no target recorded): {dest}")
+                        dead.append(dest_str)
                         continue
                     try:
                         if dest.is_symlink() or dest.exists():
@@ -288,6 +354,7 @@ class Baseline:
                         dest.parent.mkdir(parents=True, exist_ok=True)
                         dest.symlink_to(target)
                         log.append(f"restored symlink {dest} -> {target}")
+                        done.append(dest_str)
                     except OSError as exc:
                         warnings.append(f"failed to restore symlink {dest}: {exc}")
                     continue
@@ -301,10 +368,12 @@ class Baseline:
                         dest.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copy2(src, dest)
                         log.append(f"restored {dest}")
+                        done.append(dest_str)
                     except OSError as exc:
                         warnings.append(f"failed to restore {dest}: {exc}")
                 else:
                     warnings.append(f"backup blob missing for {dest}; cannot restore")
+                    dead.append(dest_str)
             else:
                 # Did not exist before gtheme: remove what we installed.
                 try:
@@ -314,12 +383,20 @@ class Baseline:
                     elif dest.exists() and not dest.is_dir():
                         dest.unlink()
                         log.append(f"removed {dest}")
+                    done.append(dest_str)
+                    # Drop the empty dir chain apply mkdir-ed for this install.
+                    _prune_empty_dirs(dest.parent)
                 except OSError as exc:
                     warnings.append(f"failed to remove {dest}: {exc}")
-        return log, warnings
+        return log, warnings, done, dead
 
     def forget_files(self, keys: list[str]) -> None:
-        """Drop file records (used by switch-cleanup after reverting them)."""
+        """Drop file records AND their pristine blobs.
+
+        Destructive: only ever pass keys whose revert succeeded (``done`` from
+        :meth:`restore_files`) or whose blob is already lost (``dead``) — never
+        a transient failure, or the only pre-gtheme copy is gone for good.
+        """
         changed = False
         for key in keys:
             if key in self.files:
@@ -348,11 +425,18 @@ class Baseline:
         }
         self._save_settings()
 
-    def restore_settings(self, only: set[str] | None = None) -> tuple[list[str], list[str]]:
-        """Reset recorded settings to their saved values. Returns ``(log, warnings)``."""
+    def restore_settings(
+        self, only: set[str] | None = None
+    ) -> tuple[list[str], list[str], list[str]]:
+        """Reset recorded settings to their saved values.
+
+        Returns ``(log, warnings, done)`` — ``done`` holds the keys that
+        reverted (or were benignly already-pristine) and are safe to forget.
+        """
         log: list[str] = []
         warnings: list[str] = []
-        for rec in self.settings.values():
+        done: list[str] = []
+        for key, rec in self.settings.items():
             if only is not None and rec.get("component", "") not in only:
                 continue
             stub = Setting(
@@ -361,13 +445,15 @@ class Baseline:
             rs = ResolvedSetting(stub, ctx={})  # key already resolved
             if rs.restore(rec["saved"]):
                 log.append(f"restored {rec['backend']} {rec['key']}")
+                done.append(key)
             elif rec.get("saved") is None:
                 # Key had no prior value; a reset that can't run (e.g. the schema
                 # is gone) is benign — it is already effectively pristine.
                 log.append(f"{rec['backend']} {rec['key']} left unset")
+                done.append(key)
             else:
                 warnings.append(f"failed to restore {rec['backend']} {rec['key']}")
-        return log, warnings
+        return log, warnings, done
 
     def forget_settings(self, keys: list[str]) -> None:
         """Drop setting records (used by switch-cleanup after reverting them)."""

@@ -100,9 +100,11 @@ def values_equal(current: str | None, wanted: str) -> bool:
 def runtime_context() -> dict[str, str]:
     """Values that can be substituted into setting keys/values at apply time."""
     ctx = {"home": str(DEST_ROOT)}
-    uuid = gsettings_get("org.gnome.Ptyxis", "default-profile-uuid")
+    # Ptyxis's schema default is '' (raw output: two quote chars) — strip BEFORE
+    # the truthiness test, or an unset profile yields a '.../Profiles//…' key.
+    uuid = (gsettings_get("org.gnome.Ptyxis", "default-profile-uuid") or "").strip().strip("'")
     if uuid:
-        ctx["ptyxis_default_profile"] = uuid.strip().strip("'")
+        ctx["ptyxis_default_profile"] = uuid
     return ctx
 
 

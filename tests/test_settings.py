@@ -37,6 +37,33 @@ def test_values_equal_real_difference():
     assert settings.values_equal("'zoom'", "'centered'") is False
 
 
+def _ptyxis_ctx(monkeypatch, raw):
+    """runtime_context() with gsettings_get faked to return ``raw`` for Ptyxis."""
+    monkeypatch.setattr(settings, "gsettings_get", lambda schema, key: raw)
+    settings.runtime_context.cache_clear()
+    try:
+        return settings.runtime_context()
+    finally:
+        settings.runtime_context.cache_clear()
+
+
+def test_runtime_context_empty_ptyxis_uuid_is_dropped(monkeypatch):
+    # live-probe-0: the schema default is '' (raw "''") — must NOT yield an
+    # empty ptyxis_default_profile (which templates into a '//' dconf path).
+    ctx = _ptyxis_ctx(monkeypatch, "''")
+    assert "ptyxis_default_profile" not in ctx
+
+
+def test_runtime_context_unset_ptyxis_uuid_is_dropped(monkeypatch):
+    ctx = _ptyxis_ctx(monkeypatch, None)
+    assert "ptyxis_default_profile" not in ctx
+
+
+def test_runtime_context_real_ptyxis_uuid_is_stripped(monkeypatch):
+    ctx = _ptyxis_ctx(monkeypatch, "'abc-123'\n")
+    assert ctx["ptyxis_default_profile"] == "abc-123"
+
+
 def test_package_installed_finds_a_real_binary():
     # 'sh' is on PATH everywhere these tests run.
     assert package_installed("sh") is True

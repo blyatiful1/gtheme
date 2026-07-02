@@ -17,6 +17,7 @@ Safety model
 
 from __future__ import annotations
 
+import ast
 import difflib
 import os
 import shutil
@@ -29,6 +30,7 @@ from .. import ansi, paths, settings
 from ..backup import (
     Baseline,
     clear_current,
+    process_lock,
     read_current,
     read_ledger,
     write_current,
@@ -278,6 +280,28 @@ def _run_hooks(
 
 
 # ---------------------------------------------------------------------- apply ---
+def _installed_extensions() -> set[str]:
+    """UUIDs of installed GNOME Shell extensions (dir names + CLI if present)."""
+    uuids: set[str] = set()
+    for root in (
+        paths.XDG_DATA_HOME / "gnome-shell" / "extensions",
+        Path("/usr/share/gnome-shell/extensions"),
+    ):
+        try:
+            uuids.update(p.name for p in root.iterdir() if p.is_dir())
+        except OSError:
+            pass
+    if shutil.which("gnome-extensions"):
+        try:
+            out = subprocess.run(
+                ["gnome-extensions", "list"], capture_output=True, text=True, timeout=10
+            ).stdout
+            uuids.update(out.split())
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    return uuids
+
+
 def check_requires(theme: Theme) -> list[str]:
     """Best-effort dependency check (warn only; never blocks an apply)."""
     from ..validate import package_installed
@@ -286,6 +310,11 @@ def check_requires(theme: Theme) -> list[str]:
     for pkg in theme.requires.packages:
         if not package_installed(pkg):
             missing.append(f"package may be missing: {pkg}")
+    if theme.requires.extensions:
+        installed = _installed_extensions()
+        for ext in theme.requires.extensions:
+            if ext not in installed:
+                missing.append(f"gnome-shell extension not installed: {ext}")
     if theme.requires.fonts and shutil.which("fc-list"):
         installed = subprocess.run(
             ["fc-list"], capture_output=True, text=True
@@ -309,6 +338,36 @@ def _has_session_bus() -> bool:
         return True
     runtime = os.environ.get("XDG_RUNTIME_DIR")
     return bool(runtime and (Path(runtime) / "bus").exists())
+
+
+def _key_ok(rs: ResolvedSetting) -> bool:
+    """False for keys apply must skip (and never record as planned/owned):
+    unresolved ``{{ }}`` tokens, or a dconf path with ``//`` — an empty
+    placeholder collapsed (e.g. unset Ptyxis profile); dconf rejects it."""
+    if "{{" in rs.key:
+        return False
+    return not (rs.backend == "dconf" and "//" in rs.key)
+
+
+def _merge_extension_lists(current: str | None, wanted: str) -> str | None:
+    """Union of the user's enabled-extensions and the theme's (user's first).
+
+    GVariant text for a string array is Python-literal compatible, and repr()
+    of a list of str is valid GVariant text again. Parse defensively: return
+    None on any surprise (caller falls back to a plain replace).
+    """
+    try:
+        cur = ast.literal_eval(current) if current else []
+        new = ast.literal_eval(wanted)
+    except (ValueError, SyntaxError):
+        return None  # e.g. gsettings' "@as []" for an empty array
+    if not (isinstance(cur, list) and isinstance(new, list)):
+        return None
+    if not all(isinstance(x, str) for x in cur + new):
+        return None
+    merged = cur + [x for x in new if x not in cur]
+    # A bare [] has no inferable GVariant type; never worth writing anyway.
+    return repr(merged) if merged else None
 
 
 def _write_ledger_entry(name: str, files, settings) -> None:
@@ -469,74 +528,91 @@ def _write_file(op: FileOp) -> None:
 
 def _switch_cleanup(
     theme: Theme,
-    only: set[str] | None,
     ops: list[FileOp],
     baseline: Baseline,
     result: ApplyResult,
 ) -> None:
-    """Revert items the outgoing theme owned that the incoming one does not manage.
+    """Revert items outgoing themes owned that the incoming one does not manage.
 
-    Strictly additive and conservative: reverts each orphaned item to the
-    pristine baseline (never mutating baseline originals), then forgets it. If
-    anything is uncertain we leave the item in place rather than revert wrongly.
+    Only runs on a FULL apply (a --only overlay is not a switch — see apply()).
+    Walks every ledger entry, not just ``current``, so components overlaid from
+    a third theme are cleaned too. Strictly conservative: reverts each orphaned
+    item to the pristine baseline (never mutating baseline originals), then
+    forgets ONLY the items that actually reverted — a failed or dead revert
+    keeps its record (and blob) so `gtheme restore` can still recover it.
     """
-    prev = read_current()
-    if not prev or prev == theme.meta.name:
-        return
     ledger = read_ledger()
-    prev_owned = ledger.get(prev)
-    if not isinstance(prev_owned, dict):
+    outgoing = [
+        n for n, owned in ledger.items()
+        if n != theme.meta.name and isinstance(owned, dict)
+    ]
+    if not outgoing:
         return
 
     # What the incoming apply manages (so we don't revert shared items).
     incoming_files = {str(op.dest) for op in ops}
     incoming_settings = {
-        f"{rs.backend}:{rs.key}" for rs in resolved_settings(theme, only) if "{{" not in rs.key
+        f"{rs.backend}:{rs.key}" for rs in resolved_settings(theme, None) if _key_ok(rs)
     }
 
-    orphan_files = [f for f in prev_owned.get("files", []) if f not in incoming_files]
-    orphan_settings = [s for s in prev_owned.get("settings", []) if s not in incoming_settings]
+    kept = 0
+    for prev in outgoing:
+        prev_owned = ledger[prev]
+        orphan_files = [f for f in prev_owned.get("files", []) if f not in incoming_files]
+        orphan_settings = [s for s in prev_owned.get("settings", []) if s not in incoming_settings]
 
-    if orphan_files:
-        # Restore just these dests from the pristine baseline, then forget them.
-        rlog, rwarn = _restore_specific_files(baseline, orphan_files)
-        for line in rlog:
-            result.notes.append(f"switch-cleanup: {line}")
-        result.warnings.extend(rwarn)
-        baseline.forget_files([k for k in orphan_files if k in baseline.files])
+        if orphan_files:
+            # Restore just these dests from the pristine baseline, then forget
+            # what reverted; failures/dead stay restorable via `gtheme restore`.
+            rlog, rwarn, done, _dead = _restore_specific_files(baseline, orphan_files)
+            for line in rlog:
+                result.notes.append(f"switch-cleanup: {line}")
+            result.warnings.extend(rwarn)
+            baseline.forget_files(done)
+            kept += sum(1 for k in orphan_files if k in baseline.files)
 
-    if orphan_settings:
-        rlog, rwarn = _restore_specific_settings(baseline, orphan_settings)
-        for line in rlog:
-            result.notes.append(f"switch-cleanup: {line}")
-        result.warnings.extend(rwarn)
-        baseline.forget_settings([k for k in orphan_settings if k in baseline.settings])
+        if orphan_settings:
+            rlog, rwarn, done = _restore_specific_settings(baseline, orphan_settings)
+            for line in rlog:
+                result.notes.append(f"switch-cleanup: {line}")
+            result.warnings.extend(rwarn)
+            baseline.forget_settings(done)
+            kept += sum(1 for k in orphan_settings if k in baseline.settings)
 
-    # Drop the outgoing theme from the ledger; the incoming theme is recorded later.
-    ledger.pop(prev, None)
+        # Drop the outgoing theme from the ledger; the incoming one is recorded later.
+        ledger.pop(prev, None)
     write_ledger(ledger)
+    if kept:
+        result.warnings.append(
+            f"{kept} item(s) from the previous theme could not be reverted; "
+            f"kept in the baseline — `gtheme restore` can still recover them"
+        )
 
 
-def _restore_specific_files(baseline: Baseline, keys: list[str]) -> tuple[list[str], list[str]]:
+def _restore_specific_files(
+    baseline: Baseline, keys: list[str]
+) -> tuple[list[str], list[str], list[str], list[str]]:
     """Restore only the given file dests from the pristine baseline."""
     saved = baseline.files
     baseline.files = {k: saved[k] for k in keys if k in saved}
     try:
-        log, warns = baseline.restore_files()
+        log, warns, done, dead = baseline.restore_files()
     finally:
         baseline.files = saved
-    return log, warns
+    return log, warns, done, dead
 
 
-def _restore_specific_settings(baseline: Baseline, keys: list[str]) -> tuple[list[str], list[str]]:
+def _restore_specific_settings(
+    baseline: Baseline, keys: list[str]
+) -> tuple[list[str], list[str], list[str]]:
     """Restore only the given setting keys from the pristine baseline."""
     saved = baseline.settings
     baseline.settings = {k: saved[k] for k in keys if k in saved}
     try:
-        log, warns = baseline.restore_settings()
+        log, warns, done = baseline.restore_settings()
     finally:
         baseline.settings = saved
-    return log, warns
+    return log, warns, done
 
 
 def apply(
@@ -557,6 +633,20 @@ def apply(
         _dryrun_notes(theme, only, result)
         return result  # caller prints compute_diffs(); nothing is written
 
+    # L1: everything below mutates shared state — one gtheme at a time.
+    with process_lock():
+        return _apply_locked(theme, only, result, do_hooks, allow_sudo, hook_gate, assume_yes)
+
+
+def _apply_locked(
+    theme: Theme,
+    only: set[str] | None,
+    result: ApplyResult,
+    do_hooks: bool,
+    allow_sudo: bool,
+    hook_gate: "HookGate | None",
+    assume_yes: bool,
+) -> ApplyResult:
     paths.ensure_state_dirs()
     baseline = Baseline().load()
     for w in baseline.warnings:
@@ -566,11 +656,13 @@ def apply(
     # A ThemeSecurityError here aborts with zero side effects (propagates to CLI).
     ops = iter_file_ops(theme, only)
 
-    # Switch-cleanup: revert orphans from the previously-applied theme.
-    try:
-        _switch_cleanup(theme, only, ops, baseline, result)
-    except Exception as exc:  # noqa: BLE001 — cleanup must never abort an apply
-        result.warnings.append(f"switch-cleanup skipped: {exc}")
+    # Switch-cleanup: revert orphans from previously-applied themes. A --only
+    # overlay is not a switch: it must never strip the rest of the desktop.
+    if only is None:
+        try:
+            _switch_cleanup(theme, ops, baseline, result)
+        except Exception as exc:  # noqa: BLE001 — cleanup must never abort an apply
+            result.warnings.append(f"switch-cleanup skipped: {exc}")
 
     owned_files: list[str] = []
     owned_settings: list[str] = []
@@ -579,11 +671,12 @@ def apply(
     _prior = read_ledger().get(theme.meta.name)
     prior_files = set(_prior.get("files", [])) if isinstance(_prior, dict) else set()
     prior_settings = set(_prior.get("settings", [])) if isinstance(_prior, dict) else set()
+    prev_current = read_current()  # pre-apply current, for the AS4 rollback
 
     # What this apply intends to own (used for the crash-safe early ledger write).
     planned_files = [str(op.dest) for op in ops]
     setting_list = resolved_settings(theme, only)
-    planned_settings = [f"{rs.backend}:{rs.key}" for rs in setting_list if "{{" not in rs.key]
+    planned_settings = [f"{rs.backend}:{rs.key}" for rs in setting_list if _key_ok(rs)]
 
     # AS5: if a settings-bearing theme is applied with no reachable session bus,
     # skip the settings phase wholesale (one note) instead of flooding failures.
@@ -621,7 +714,10 @@ def apply(
                 result.failed = True
                 continue
             try:
-                baseline.record_file(op.dest, op.install.component, theme.meta.name)
+                if not baseline.record_file(op.dest, op.install.component, theme.meta.name):
+                    # F1: FIFO/socket/device at dest — unsnapshotable; leave it be.
+                    result.warnings.append(f"cannot snapshot special file {op.dest}; skipped")
+                    continue
                 _write_file(op)
             except (OSError, ValueError) as exc:
                 # OSError: dest dir/perm/disk. ValueError: e.g. template on binary.
@@ -641,6 +737,10 @@ def apply(
                         "(e.g. Ptyxis not detected); other settings still applied"
                     )
                     continue
+                if not _key_ok(rs):
+                    # An empty placeholder collapsed to '//' — dconf rejects it.
+                    result.warnings.append(f"skipped setting with invalid dconf path: {rs.label}")
+                    continue
                 settings_selected += 1
                 if not backend_available(rs.backend):
                     result.warnings.append(f"{rs.backend} not available; skipped {rs.label}")
@@ -651,10 +751,29 @@ def apply(
                 key = f"{rs.backend}:{rs.key}"
                 newly = key not in baseline.settings
                 baseline.record_setting(rs, rs.component, theme.meta.name)
+                # X1: enabled-extensions is a shared list — merge the theme's in
+                # instead of clobbering the user's (their dock/extensions would
+                # silently vanish). The baseline still restores the exact old value.
+                if rs.backend == "gsettings" and rs.schema == "org.gnome.shell" \
+                        and rs.gkey == "enabled-extensions":
+                    merged = _merge_extension_lists(rs.get_current(), rs.value)
+                    if merged is not None and merged != rs.value:
+                        rs.value = merged
+                        result.notes.append(
+                            "merged theme extensions into enabled-extensions (yours kept)"
+                        )
                 if rs.apply():
                     owned_settings.append(key)
                     result.applied_settings += 1
                 else:
+                    err = (rs.error or "").lower()
+                    if "no such schema" in err or "no such key" in err:
+                        # AS8: key/schema absent (optional app, older GNOME) — a
+                        # per-setting skip, never a whole-apply failure.
+                        result.warnings.append(f"skipped {rs.label}: not on this system")
+                        if newly:
+                            baseline.forget_settings([key])
+                        continue
                     detail = f": {rs.error}" if rs.error else ""
                     result.warnings.append(f"failed to set {rs.label}{detail}")
                     result.failed = True
@@ -679,8 +798,17 @@ def apply(
     all_settings_unbacked = settings_selected > 0 and settings_backend_skipped == settings_selected
     if nothing_applied and (all_settings_unbacked or skip_settings_no_bus):
         result.failed = True
-        _drop_ledger_entry(theme.meta.name)
-        clear_current()
+        # AS4: roll back the R4 early write — but never destroy ownership this
+        # theme accumulated in EARLIER applies (it is still on disk).
+        if prior_files or prior_settings:
+            _write_ledger_entry(theme.meta.name, prior_files, prior_settings)
+        else:
+            _drop_ledger_entry(theme.meta.name)
+        if only is not None and prev_current and prev_current != theme.meta.name:
+            # A --only overlay ran no switch-cleanup: prev theme is still applied.
+            write_current(prev_current)
+        elif not (prior_files or prior_settings):
+            clear_current()
         return result
 
     # Replace the planned ledger entry with what was actually applied.
@@ -715,6 +843,17 @@ def restore(
     Returns ``(log, warnings, hard_failed)`` where ``hard_failed`` is True only
     if a file/setting actually failed to revert (hook notices are soft).
     """
+    with process_lock():  # L1: see apply()
+        return _restore_locked(only, wipe, allow_sudo, hook_gate, assume_yes)
+
+
+def _restore_locked(
+    only: set[str] | None,
+    wipe: bool,
+    allow_sudo: bool,
+    hook_gate: "HookGate | None",
+    assume_yes: bool,
+) -> tuple[list[str], list[str], bool]:
     baseline = Baseline().load()
     warnings: list[str] = []
     warnings.extend(baseline.warnings)
@@ -731,17 +870,37 @@ def restore(
     if ran:
         baseline.forget_hooks(ran)
 
-    flog, fwarn = baseline.restore_files(only)
-    slog, swarn = baseline.restore_settings(only)
+    flog, fwarn, fdone, fdead = baseline.restore_files(only)
+    slog, swarn, sdone = baseline.restore_settings(only)
     log = hlog + flog + slog
     warnings.extend(fwarn)
     warnings.extend(swarn)
-    # Hard failure = a real file/setting revert failure (not a hook notice).
-    hard_failed = bool(fwarn) or bool(swarn)
+
+    # R5: a dead record (blob lost, symlink without target) can never revert by
+    # re-running — its warning above names the path; drop it so restore can
+    # complete instead of wedging forever.
+    if fdead:
+        baseline.forget_files(fdead)
+        warnings.append(
+            f"dropped {len(fdead)} baseline record(s) whose pre-gtheme copy is "
+            f"lost; the file(s) named above were left as-is"
+        )
+
+    # Hard failure = a TRANSIENT file/setting revert failure (not a hook notice,
+    # not a dead record): anything selected that is neither done nor dropped.
+    f_sel = [k for k, r in baseline.files.items() if only is None or r.get("component", "") in only]
+    s_sel = [k for k, r in baseline.settings.items() if only is None or r.get("component", "") in only]
+    hard_failed = any(k not in fdone for k in f_sel) or any(k not in sdone for k in s_sel)
 
     if only is None:
         # R1: only discard recovery state when the revert actually succeeded.
         if not hard_failed:
+            # R6: consume the baseline like R3 does — after a full revert the
+            # on-disk state IS pristine; a kept record would stop the next apply
+            # from re-snapshotting and silently revert future user edits.
+            # (Un-run hook records stay retryable; --wipe removes everything.)
+            baseline.forget_files(list(baseline.files))
+            baseline.forget_settings(list(baseline.settings))
             clear_current()
             write_ledger({})
             if wipe:
@@ -754,16 +913,14 @@ def restore(
     else:
         # R3: forget the reverted components so current/ledger stay truthful.
         if not hard_failed:
-            ffk = [k for k, r in baseline.files.items() if r.get("component", "") in only]
-            sfk = [k for k, r in baseline.settings.items() if r.get("component", "") in only]
-            baseline.forget_files(ffk)
-            baseline.forget_settings(sfk)
+            baseline.forget_files(fdone)
+            baseline.forget_settings(sdone)
             cur = read_current()
             if cur:
                 ledger = read_ledger()
                 ent = ledger.get(cur)
                 if isinstance(ent, dict):
-                    drop_f, drop_s = set(ffk), set(sfk)
+                    drop_f, drop_s = set(fdone) | set(fdead), set(sdone)
                     ent["files"] = [f for f in ent.get("files", []) if f not in drop_f]
                     ent["settings"] = [s for s in ent.get("settings", []) if s not in drop_s]
                     ledger[cur] = ent
