@@ -8,12 +8,13 @@ overlap-safe, symlink-safe, force-gated _copy_theme.
 from __future__ import annotations
 
 import json
+import zipfile
 from pathlib import Path
 
 import pytest
 
 from gtheme.engine import remote
-from gtheme.errors import ThemeSecurityError
+from gtheme.errors import GthemeError, ThemeSecurityError
 
 
 def _theme(dirpath: Path, name: str = "x") -> Path:
@@ -48,6 +49,49 @@ def test_themes_in_collection_with_themes_wrapper(tmp_path):
     _theme(tmp_path / "themes" / "b")
     found = remote._themes_in_collection(tmp_path)
     assert set(found) == {"a", "b"}
+
+
+# --- .zip install source ---------------------------------------------------
+
+
+def _zip_of(theme_dir: Path, zip_path: Path, arc_prefix: str) -> Path:
+    """Zip ``theme_dir`` into ``zip_path`` under a top-level ``arc_prefix/`` dir."""
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        for p in sorted(theme_dir.rglob("*")):
+            if p.is_file():
+                zf.write(p, arcname=str(Path(arc_prefix) / p.relative_to(theme_dir)))
+    return zip_path
+
+
+def test_install_from_zip(tmp_path, installed):
+    # Mirrors `gtheme export` output: a single top-level <name>/ dir in the zip.
+    src = _theme(tmp_path / "src", "forest")
+    zp = _zip_of(src, tmp_path / "forest.zip", "forest")
+    names = remote.install(str(zp))
+    assert names == ["forest"]
+    assert (installed / "forest" / "theme.toml").is_file()
+    origin = json.loads((installed / "forest" / remote.ORIGIN_FILE).read_text())
+    assert origin["type"] == "path" and origin["source"] == str(zp.resolve())
+
+
+def test_install_zip_rejects_non_archive(tmp_path, installed):
+    bogus = tmp_path / "notreally.zip"
+    bogus.write_text("this is not a zip", encoding="utf-8")
+    # Not a real archive -> falls through to the bare-name error, not a crash.
+    with pytest.raises((GthemeError, FileNotFoundError)):
+        remote.install(str(bogus))
+
+
+def test_extract_zip_is_zip_slip_safe(tmp_path):
+    # A malicious entry with ../ must not escape the extraction dir.
+    zp = tmp_path / "evil.zip"
+    with zipfile.ZipFile(zp, "w") as zf:
+        zf.writestr("../escaped.txt", "pwned")
+    into = tmp_path / "box" / "unzipped"
+    remote._extract_zip(zp, into)
+    # Nothing written above the extraction root anywhere up the tree.
+    assert not (into.parent / "escaped.txt").exists()
+    assert not (tmp_path / "escaped.txt").exists()
 
 
 # --- _copy_theme: atomic, overlap-safe, force-gated ------------------------

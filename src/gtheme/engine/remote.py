@@ -1,8 +1,9 @@
-"""Installing themes from the bundled collection, a local path, or a git remote.
+"""Installing themes from the bundled collection, a local path, a .zip, or a git remote.
 
 A theme `source` can be:
   * a bare name already present in the bundled/installed collection (copied in),
   * a path to a theme directory (contains theme.toml) or a collection (themes/),
+  * a .zip archive of a theme/collection (e.g. one produced by `gtheme export`),
   * a git URL or local git repo (cloned shallow, then its themes/ copied in).
 
 Installed themes record where they came from in ``.gtheme-origin.json`` so
@@ -19,6 +20,7 @@ import subprocess
 import sys
 import re
 import tempfile
+import zipfile
 from pathlib import Path
 
 from .. import ansi
@@ -198,6 +200,30 @@ def _copy_theme(src: Path, name: str, origin: dict, *, force: bool = False) -> P
     return dest
 
 
+def _is_zip(p: Path) -> bool:
+    """True if ``p`` is an existing file that is a real zip archive."""
+    return p.is_file() and zipfile.is_zipfile(p)
+
+
+def _extract_zip(zip_path: Path, into: Path) -> Path:
+    """Extract a theme .zip into ``into`` and return it as a collection root.
+
+    ponytail: relies on the stdlib's member-path sanitization instead of
+    re-validating each entry — ZipFile.extractall (since 3.6.2) strips leading
+    slashes/drive and drops ``..`` components, so a malicious archive cannot
+    write outside ``into`` (zip-slip safe). Stdlib zipfile also never restores
+    symlinks, so there's no symlink-escape vector either.
+    """
+    print(ansi.bullet(f"unpacking {zip_path.name} …"))
+    into.mkdir(parents=True, exist_ok=True)
+    try:
+        with zipfile.ZipFile(zip_path) as zf:
+            zf.extractall(into)
+    except zipfile.BadZipFile as exc:
+        raise GthemeError(f"not a valid zip archive: {zip_path} ({exc})")
+    return into
+
+
 def _themes_in_collection(root: Path) -> dict[str, Path]:
     """Map theme-name -> dir for a collection root or a single-theme dir."""
     # A repo/dir whose theme.toml sits at the root (no themes/ wrapper).
@@ -248,8 +274,9 @@ def install(
         _install_one(p, nm, {"type": "path", "source": str(p.resolve())}, **kw)
         return [nm]
 
-    # 2) a git URL or repo / a local collection directory
-    if _is_url(source) or (p / "themes").is_dir() or (p / ".git").is_dir():
+    # 2) a git URL or repo / a .zip archive / a local collection directory
+    is_zip = _is_zip(p)
+    if _is_url(source) or is_zip or (p / "themes").is_dir() or (p / ".git").is_dir():
         with tempfile.TemporaryDirectory() as tmp:
             if _is_url(source):
                 scheme = _check_scheme(source, insecure=insecure)
@@ -257,6 +284,9 @@ def install(
                 print(ansi.bullet(f"fetched {source} @ {commit[:12]}"))
                 origin_base = {"type": "git", "source": source,
                                "commit": commit, "scheme": scheme}
+            elif is_zip:
+                root = _extract_zip(p, Path(tmp) / "unzipped")
+                origin_base = {"type": "path", "source": str(p.resolve())}
             else:
                 root = p
                 origin_base = {"type": "path", "source": str(p.resolve())}
@@ -298,7 +328,8 @@ def install(
 
     raise FileNotFoundError(
         f"no such theme {source!r}; available: {', '.join(discover()) or '(none)'}\n"
-        f"(to install from a remote, pass a git URL, e.g. {DEFAULT_REMOTE})"
+        f"(to install your own, pass a path to a theme dir, a .zip "
+        f"(e.g. ~/Downloads/forest.zip), or a git URL like {DEFAULT_REMOTE})"
     )
 
 
@@ -336,7 +367,7 @@ def update(name: str | None = None, insecure: bool = False, force: bool = False)
                 install(src, name=nm, insecure=insecure, force=True)
             elif otype == "path" and src:
                 sp = Path(src)
-                if not (sp / "theme.toml").is_file() and not (sp / "themes").is_dir():
+                if not _is_zip(sp) and not (sp / "theme.toml").is_file() and not (sp / "themes").is_dir():
                     print(ansi.warn(f"skipping {d.name}: origin path no longer exists ({src})"))
                     continue
                 print(ansi.warn(f"updating {d.name} replaces its contents; local edits will be lost"))

@@ -148,15 +148,16 @@ theme, fonts), the wallpaper (bundled, with `{{ home }}` rewritten so it's
 portable), terminal/prompt/shell/monitor/editor configs, and every supported
 extension (dock, blur, just-perfection, logo-menu, tiling, rounded-corners) —
 recording whatever is actually present/set. `export` packs the result into a
-single self-contained `.zip` (a clean top-level `<name>/` dir); unzip it anywhere
-and `gtheme install <unzipped-dir>` to apply it on another machine.
+single self-contained `.zip` (a clean top-level `<name>/` dir); copy it to
+another machine and `gtheme install mydesk.zip` to apply it there (a `.zip`,
+an unzipped theme dir, and a git URL all work as install sources).
 
 ## Commands
 
 | command | what it does |
 |---|---|
 | `list` / `search <q>` | browse the collection |
-| `install <name\|path\|git-url> [--insecure]` | install a theme (bundled, local, or remote) |
+| `install <name\|path\|.zip\|git-url> [--insecure]` | install a theme (bundled, local dir, .zip, or remote) |
 | `remove <name>` | uninstall a previously installed theme |
 | `update [name] [--insecure]` | refetch installed themes from their origin |
 | `diff <name>` / `apply <name> --dry-run` | preview changes |
