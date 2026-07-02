@@ -11,6 +11,7 @@ depends=('python>=3.11' 'python-jinja2' 'python-pydantic' 'glib2' 'dconf')
 optdepends=('gnome-shell: desktop integration'
             'git: install themes from remote repos')
 makedepends=('python-hatchling' 'python-build' 'python-installer' 'python-wheel')
+checkdepends=('python-pytest')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 # A release tarball's hash cannot exist before the tag is pushed. The maintainer
 # MUST pin the real checksum per release once v$pkgver is tagged upstream:
@@ -21,6 +22,12 @@ sha256sums=('SKIP')
 build() {
   cd "$pkgname-$pkgver"
   python -m build --wheel --no-isolation
+}
+
+check() {
+  cd "$pkgname-$pkgver"
+  # tests/conftest.py puts src/ on sys.path, so this runs against the tree.
+  python -m pytest -q
 }
 
 package() {
