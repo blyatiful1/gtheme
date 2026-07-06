@@ -719,7 +719,7 @@ def cmd_menu(args: argparse.Namespace) -> int:
 _EPILOG = """\
 examples:
   gtheme                        open the interactive menu
-  gtheme apply nsx --dry-run    preview a theme without changing anything
+  gtheme apply magma --dry-run  preview a theme without changing anything
   gtheme install https://github.com/you/yourtheme
                                 install a theme from a git URL (or a .zip / folder)
 """

@@ -232,7 +232,7 @@ def _bold_gradient(text: str) -> str:
 
 
 def _crumbs(title: str) -> str:
-    """Style 'gtheme › apply › jojo': gradient wordmark, dim separators."""
+    """Style 'gtheme › apply › magma': gradient wordmark, dim separators."""
     sep = ansi.GLYPH["crumb"]
     parts = [p.strip() for p in title.split("›")]
     out = [_bold_gradient(parts[0])]

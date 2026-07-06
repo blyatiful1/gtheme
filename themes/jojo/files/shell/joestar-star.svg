@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!-- jojo-theme: Joestar birthmark star — panel icon for Logo Menu (spin_gold #E8B33F) -->
-<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
-  <path d="M 8.000,1.650 L 9.558,6.406 L 14.562,6.418 L 10.520,9.369 L 12.056,14.132 L 8.000,11.200 L 3.944,14.132 L 5.480,9.369 L 1.438,6.418 L 6.442,6.406 Z"
-        fill="#E8B33F" stroke="#8A611C" stroke-width="0.75" stroke-linejoin="round"/>
-</svg>

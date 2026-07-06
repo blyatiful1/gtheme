@@ -5,6 +5,20 @@ All notable changes to gtheme are documented here. The format follows
 
 ## [Unreleased]
 
+- **The collection is now `magma`** (MAGMA — Obsidian Flow), replacing `nsx`,
+  `jojo` and `shoji`. A single all-in dark rice: obsidian-glass surfaces with
+  molten orange / lava gold accents and one cool teal vein, applied across
+  wallpaper, GTK, GNOME accent/icons, Ptyxis, Alacritty, starship, btop,
+  micro, fastfetch, fish, dash-to-dock, Tiling Shell and blur-my-shell.
+  Ships four terminal animations under `~/.local/share/gtheme/assets/magma/bin`
+  (fish shortcuts in parentheses): a live metaball lava-lamp fluid sim in
+  24-bit colour half-blocks (`lavalamp`), rising ember drift (`embers`), a
+  ~3.5 s eruption (`erupt`) and a deterministic thermal-scan gauge card
+  (`thermal`). Three procedural wallpapers — cracked obsidian, the lava lamp
+  itself, and an ember updraft — share the animation's exact heat ramp and
+  rotate on a slow GNOME slideshow crossfade; the seeded numpy generator is
+  included under `assets/`.
+
 - **shoji 1.1.0** — the vermilion Tiling Shell focus border is gone (it read
   as an alert, not a seal; kept `false` in the manifest so re-apply heals
   systems that had it). New procedurally painted `take.png` wallpaper — a

@@ -16,8 +16,8 @@ hand-written undo scripts, no half-reverted configs.
 
 ```sh
 gtheme                    # ← just run it: an interactive arrow-key menu
-gtheme apply nsx          # back up current state, apply the NSX theme
-gtheme switch jojo        # swap themes (your pre-gtheme baseline is kept)
+gtheme apply magma        # back up current state, apply the MAGMA theme
+gtheme diff magma         # preview what a theme would change, first
 gtheme restore            # revert to the desktop you had before gtheme
 ```
 
@@ -83,12 +83,12 @@ A theme is a directory with a declarative `theme.toml`:
 
 ```toml
 [meta]
-name = "jojo"
-title = "STONE OCEAN"
+name = "magma"
+title = "MAGMA — Obsidian Flow"
 
 [palette]                       # or a separate palette.toml
-bg = "#0B0E18"
-accent = "#7DC75B"
+bg = "#0D0A0F"
+accent = "#FF6D3A"
 # ...
 
 [[files]]                       # component tag drives --only and per-file backup
@@ -100,13 +100,13 @@ dest = "~/.config/gtk-4.0/gtk.css"
 component = "desktop"
 backend = "gsettings"
 key   = "org.gnome.desktop.interface accent-color"
-value = "'green'"
+value = "'orange'"
 
 [[settings]]                    # {{ runtime }} tokens resolve per-machine
 component = "terminal"
 backend = "dconf"
 key   = "/org/gnome/Ptyxis/Profiles/{{ ptyxis_default_profile }}/palette"
-value = "'JoJo'"
+value = "'Magma'"
 
 [[hooks]]                       # optional scripts for the weird 10%
 event = "post"
@@ -149,7 +149,7 @@ time, so manifests committed to the repo are portable across machines.
 ## Authoring: a palette becomes a desktop
 
 ```sh
-gtheme new ocean --from jojo     # scaffold, seeding the palette from jojo
+gtheme new ocean --from magma    # scaffold, seeding the palette from magma
 $EDITOR ~/.local/share/gtheme/themes/ocean/palette.toml
 gtheme build ocean               # render alacritty/ptyxis/btop/micro/gtk from it
 gtheme apply ocean --dry-run     # preview every file + setting change
@@ -233,9 +233,7 @@ Found a boundary escape? See [SECURITY.md](SECURITY.md).
 
 | | theme | |
 |---|---|---|
-| ![nsx palette](docs/media/palette-nsx.svg) | **nsx** | Honda NSX (NA1): Berlina-black cabin, Formula Red, Championship White |
-| ![jojo palette](docs/media/palette-jojo.svg) | **jojo** | STONE OCEAN (JoJo Part 6+): Jolyne green, Stand-string blue, the Spin |
-| ![shoji palette](docs/media/palette-shoji.svg) | **shoji** | Paper & Ink: washi paper, sumi ink, one vermilion hanko — a light-mode rice |
+| ![magma palette](docs/media/palette-magma.svg) | **magma** | MAGMA — Obsidian Flow: obsidian glass, molten orange, lava gold, one cool teal vein. Ships a live lava-lamp fluid sim for the terminal (`lavalamp`), plus `embers`, `erupt` and `thermal`, and three procedural wallpapers on a slow crossfade |
 
 Contribute yours: `gtheme publish <name>` prints the exact PR steps, and
 [CONTRIBUTING.md](CONTRIBUTING.md) has the submission checklist (validate
