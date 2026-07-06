@@ -2,9 +2,9 @@
   "version": 1,
   "themes": [
     {
-      "name": "jojo",
-      "title": "STONE OCEAN",
-      "description": "JoJo Part 6+: Stone Ocean / Steel Ball Run / JoJolion. No Part 1-5.",
+      "name": "magma",
+      "title": "MAGMA \u2014 Obsidian Flow",
+      "description": "Obsidian glass over a living magma chamber: ember orange, lava gold, one cool teal vein. Ships a real lava-lamp fluid sim for the terminal.",
       "author": "blyatiful1",
       "version": "1.0.0",
       "components": [
@@ -19,46 +19,6 @@
         "shell-cfg",
         "commands",
         "ascii",
-        "desktop",
-        "dock"
-      ]
-    },
-    {
-      "name": "nsx",
-      "title": "NSX \u2014 Formula Red",
-      "description": "Honda NSX NA1: Berlina-black cabin, Formula Red, Championship White.",
-      "author": "blyatiful1",
-      "version": "1.0.0",
-      "components": [
-        "terminal",
-        "prompt",
-        "shell-cfg",
-        "monitor",
-        "editor",
-        "fastfetch",
-        "gtk",
-        "shell",
-        "wallpaper",
-        "desktop",
-        "dock"
-      ]
-    },
-    {
-      "name": "shoji",
-      "title": "SHOJI \u2014 Paper & Ink",
-      "description": "Washi paper, sumi ink, one vermilion hanko. A quiet light-mode GNOME.",
-      "author": "blyatiful1",
-      "version": "1.1.0",
-      "components": [
-        "wallpaper",
-        "terminal",
-        "prompt",
-        "shell-cfg",
-        "monitor",
-        "editor",
-        "fastfetch",
-        "gtk",
-        "shell",
         "desktop",
         "dock"
       ]

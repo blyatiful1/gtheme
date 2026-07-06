@@ -9,7 +9,7 @@ business logic is duplicated.
 The session runs on the terminal's alternate screen; command output (diffs,
 apply logs) is printed on the normal screen so it survives in scrollback
 after the menu exits. Screens are drawn one at a time with a breadcrumb
-title (``gtheme › apply › jojo``) instead of stacking widgets.
+title (``gtheme › apply › magma``) instead of stacking widgets.
 """
 
 from __future__ import annotations

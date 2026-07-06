@@ -1,0 +1,183 @@
+# ──────────────────────────────────────────────────────────────────────
+#  MAGMA — Obsidian Flow prompt
+#  A cooling lava flow, left to right: crimson vent > molten directory >
+#  git on obsidian crust > toolchains in the one cool teal vein >
+#  obsidian clock > battery warning lamp.
+#
+#  Powerline chain (rounded wedges, like cooling pillow lava).
+#  Font: MesloLGS Nerd Font (all glyphs verified against its cmap).
+# ──────────────────────────────────────────────────────────────────────
+
+"$schema" = 'https://starship.rs/config-schema.json'
+
+# Keep it fast: short module timeout, no network-dependent modules.
+command_timeout = 500
+scan_timeout = 30
+add_newline = true
+
+palette = 'magma'
+
+format = """
+[](fg:crimson)\
+[  magma ](bold bg:crimson fg:parchment_bright)\
+$username\
+[](fg:crimson bg:lava)\
+$directory\
+[](fg:lava bg:surface2)\
+$git_branch\
+$git_status\
+[](fg:surface2 bg:surface1)\
+$nodejs\
+$rust\
+$python\
+$golang\
+$c\
+$docker_context\
+[](fg:surface1 bg:obsidian)\
+$time\
+[](fg:obsidian)\
+$battery\
+$cmd_duration\
+$line_break\
+$character"""
+
+[palettes.magma]
+# Obsidian glass surfaces
+obsidian       = '#0D0A0F'   # deepest background (cooled glass)
+surface1       = '#181019'
+surface2       = '#261826'
+parchment      = '#F2E5D5'   # main foreground text
+parchment_dim  = '#C7B4A4'
+parchment_bright = '#FFF6E8'
+# Chamber colors
+lava           = '#FF6D3A'   # PRIMARY accent (molten orange)
+lava_bright    = '#FFA05C'
+gold           = '#FFC145'   # lava gold
+gold_bright    = '#FFD168'
+crimson        = '#E0304E'   # vent crimson
+crimson_bright = '#FF7A6E'
+teal           = '#45C7B5'   # the one cool vein
+teal_bright    = '#6EE8D5'
+violet         = '#B07BE8'   # rare gas flame
+violet_bright  = '#D49CFF'
+ash            = '#7A6470'   # comments / dim chrome
+# ANSI set (named overrides: 'red', 'white' etc. resolve to these)
+black          = '#241823'
+black_bright   = '#6B5462'
+red            = '#F25050'
+red_bright     = '#FF7A6E'
+green          = '#A8C64E'
+green_bright   = '#C2E06E'
+yellow         = '#FFB454'
+yellow_bright  = '#FFD168'
+blue           = '#5FA3E6'
+blue_bright    = '#84C0FF'
+magenta        = '#B07BE8'
+magenta_bright = '#D49CFF'
+cyan           = '#45C7B5'
+cyan_bright    = '#6EE8D5'
+white          = '#D8C8B8'
+white_bright   = '#FFF6E8'
+
+[username]
+disabled = false
+show_always = false            # only when root or over SSH — then you want it
+style_user = 'bold bg:crimson fg:parchment_bright'
+style_root = 'bold bg:crimson fg:gold_bright'
+format = '[ $user]($style)'
+
+[directory]
+style = 'bold bg:lava fg:obsidian'
+format = '[  $path ]($style)[$read_only]($read_only_style)'
+read_only = ' 󰌾'
+read_only_style = 'bg:lava fg:obsidian'
+truncation_length = 3
+truncation_symbol = '…/'
+truncate_to_repo = true
+
+[directory.substitutions]
+'Documents' = '󰈙'
+'Downloads' = ''
+'Music' = '󰝚'
+'Pictures' = ''
+'Projects' = '󰲋'
+
+[git_branch]
+symbol = ''
+style = 'bg:surface2 fg:gold'
+format = '[ $symbol $branch ]($style)'
+
+[git_status]
+style = 'bg:surface2 fg:crimson_bright'
+format = '[($all_status$ahead_behind )]($style)'
+conflicted = '󰞇 '
+ahead = '⇡${count} '
+behind = '⇣${count} '
+diverged = '⇕ '
+up_to_date = ''
+untracked = '?${count} '
+stashed = '󰆓 '
+modified = '!${count} '
+staged = '+${count} '
+renamed = '»${count} '
+deleted = '✘${count} '
+
+[nodejs]
+symbol = ''
+style = 'bg:surface1 fg:teal'
+format = '[ $symbol ($version) ]($style)'
+
+[rust]
+symbol = ''
+style = 'bg:surface1 fg:teal'
+format = '[ $symbol ($version) ]($style)'
+
+[python]
+symbol = ''
+style = 'bg:surface1 fg:teal'
+format = '[ $symbol ($version) ]($style)'
+
+[golang]
+symbol = ''
+style = 'bg:surface1 fg:teal'
+format = '[ $symbol ($version) ]($style)'
+
+[c]
+symbol = ''
+style = 'bg:surface1 fg:teal'
+format = '[ $symbol ($version) ]($style)'
+
+[docker_context]
+symbol = ''
+style = 'bg:surface1 fg:teal'
+format = '[ $symbol $context ]($style)'
+
+[time]
+disabled = false
+time_format = '%H:%M'
+style = 'bg:obsidian fg:parchment_dim'
+format = '[  $time ]($style)'
+
+[battery]
+full_symbol = '󰁹'
+charging_symbol = '󰂄'
+discharging_symbol = '󰂃'
+format = '[ $symbol $percentage ]($style)'
+
+[[battery.display]]
+threshold = 20
+style = 'bold fg:crimson_bright'
+
+[[battery.display]]
+threshold = 45
+style = 'fg:gold'
+
+[cmd_duration]
+min_time = 2000
+style = 'fg:ash'
+format = '[ 󰔛 $duration ]($style)'
+
+[character]
+success_symbol = '[❯](bold fg:lava)'
+error_symbol = '[❯](bold fg:crimson_bright)'
+vimcmd_symbol = '[❮](bold fg:teal)'
