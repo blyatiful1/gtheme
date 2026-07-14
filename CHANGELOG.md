@@ -5,6 +5,33 @@ All notable changes to gtheme are documented here. The format follows
 
 ## [Unreleased]
 
+- **Shared render templates: readable text on accent fills.** The GTK accent
+  override now puts the theme's dark `bg` on accent-filled widgets instead of
+  `fg_bright` (ivory-on-brass/orange was ~2.2:1; ink is 7–7.6:1), and the
+  derived Ptyxis *Light* scheme no longer emits near-invisible white slots
+  (`Color7` → `comment`, `Color15` → `ansi_black`, cursor/bell/superuser text
+  → `bg`; the Dark superuser badge too). Both bundled themes rebuilt.
+
+- **New bundled theme: `hyperclass`** (HYPERCLASS — Gilded Void), the
+  collection's luxury liner: first class aboard a starliner crossing the
+  void. Champagne brass (`#C9A24A`, the desaturated "expensive gold" band —
+  never slot-machine `#FFD700`) as hairline trim on deep-space ink, warm
+  ivory text, one ice vein for anything technical; every contrast ratio
+  audited (body text 14:1, all six ANSI hues ≥ 5.9:1 in their canonical hue
+  slots). Applied across wallpaper, GTK, GNOME accent/icons, Ptyxis,
+  Alacritty, starship, btop, micro, fastfetch, cava, fish, dash-to-dock,
+  Tiling Shell, blur-my-shell — and Burn My Windows, whose windows now
+  open/close through a champagne hexagon lattice (profile shipped, exactly
+  one effect enabled). Three terminal instruments under
+  `~/.local/share/gtheme/assets/hyperclass/bin` (fish shortcuts in
+  parentheses): a brass ASCII orrery that is a working clock — hours,
+  minutes and a smooth seconds moon on engraved orbits (`orrery`), a
+  truecolor hyperspace starfield jump (`warp`), and a self-printing
+  art-deco boarding pass to a random exoplanet (`boarding`). Three seeded
+  procedural wallpapers — an art-deco sunburst marque, first light over a
+  ringed gas giant, and the jump itself — rotate on an unhurried GNOME
+  crossfade; the numpy generator is included under `assets/`.
+
 - **The collection is now `magma`** (MAGMA — Obsidian Flow), replacing `nsx`,
   `jojo` and `shoji`. A single all-in dark rice: obsidian-glass surfaces with
   molten orange / lava gold accents and one cool teal vein, applied across

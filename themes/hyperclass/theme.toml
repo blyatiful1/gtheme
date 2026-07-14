@@ -1,0 +1,385 @@
+# HYPERCLASS — Gilded Void desktop theme.
+# Palette in palette.toml; terminal/monitor/editor/gtk render from it.
+#
+# The conceit: the shell chrome is the starliner's cool platinum hull
+# (GNOME accent 'slate'), the apps are the warm champagne cabin (gtk.css
+# gold accent), and the terminal is the panoramic window seat.
+
+[meta]
+name = "hyperclass"
+title = "HYPERCLASS — Gilded Void"
+description = "First class aboard a starliner crossing the void: champagne brass on deep-space ink, ivory starlight, one vein of ice. Ships an orrery clock, a hyperspace warp and a self-printing boarding pass for the terminal."
+author = "blyatiful1"
+version = "1.0.0"
+
+[requires]
+packages = ["alacritty", "starship", "btop", "micro", "fastfetch", "cava", "papirus-icon-theme", "papirus-folders", "ptyxis"]
+extensions = ["dash-to-dock@micxgx.gmail.com", "blur-my-shell@aunetx", "just-perfection-desktop@just-perfection", "logomenu@aryan_k", "tilingshell@ferrarodomenico.com", "burn-my-windows@schneegans.github.com"]
+fonts = ["Iosevka Nerd Font"]
+
+[build]
+managed = ["terminal", "monitor", "editor", "gtk"]
+
+[[files]]
+component = "wallpaper"
+src = "files/wallpaper/first-light.png"
+dest = "~/.local/share/backgrounds/hyperclass/first-light.png"
+
+[[files]]
+component = "wallpaper"
+src = "files/wallpaper/gilded-void.png"
+dest = "~/.local/share/backgrounds/hyperclass/gilded-void.png"
+
+[[files]]
+component = "wallpaper"
+src = "files/wallpaper/warp-transit.png"
+dest = "~/.local/share/backgrounds/hyperclass/warp-transit.png"
+
+[[files]]
+component = "wallpaper"
+src = "files/wallpaper/hyperclass-slideshow.xml"
+dest = "~/.local/share/backgrounds/hyperclass/hyperclass-slideshow.xml"
+# Rendered through {{ home }} substitution at apply time so the slideshow
+# resolves to the running user's backgrounds dir, not the author's.
+template = true
+
+[[files]]
+component = "terminal"
+src = "files/ptyxis/Hyperclass.palette"
+dest = "~/.local/share/org.gnome.Ptyxis/palettes/Hyperclass.palette"
+
+[[files]]
+component = "terminal"
+src = "files/alacritty/hyperclass.toml"
+dest = "~/.config/alacritty/hyperclass.toml"
+
+[[files]]
+component = "terminal"
+src = "files/alacritty/alacritty.toml"
+dest = "~/.config/alacritty/alacritty.toml"
+
+[[files]]
+component = "prompt"
+src = "files/starship.toml"
+dest = "~/.config/starship.toml"
+
+[[files]]
+component = "monitor"
+src = "files/btop/hyperclass.theme"
+dest = "~/.config/btop/themes/hyperclass.theme"
+
+[[files]]
+component = "monitor"
+src = "files/btop/btop.conf"
+dest = "~/.config/btop/btop.conf"
+
+[[files]]
+component = "editor"
+src = "files/micro/hyperclass.micro"
+dest = "~/.config/micro/colorschemes/hyperclass.micro"
+
+[[files]]
+component = "editor"
+src = "files/micro/settings.json"
+dest = "~/.config/micro/settings.json"
+
+[[files]]
+component = "fastfetch"
+src = "files/fastfetch/hyperclass-logo.txt"
+dest = "~/.config/fastfetch/hyperclass-logo.txt"
+
+[[files]]
+component = "fastfetch"
+src = "files/fastfetch/config.jsonc"
+dest = "~/.config/fastfetch/config.jsonc"
+
+[[files]]
+component = "visualizer"
+src = "files/cava/config"
+dest = "~/.config/cava/config"
+
+[[files]]
+component = "gtk"
+src = "files/gtk/gtk.css"
+dest = "~/.config/gtk-4.0/gtk.css"
+
+[[files]]
+component = "gtk"
+src = "files/gtk/gtk.css"
+dest = "~/.config/gtk-3.0/gtk.css"
+
+[[files]]
+component = "shell"
+src = "files/shell/hyperclass-emblem.svg"
+dest = "~/.local/share/gtheme/assets/hyperclass/hyperclass-emblem.svg"
+
+# Burn My Windows reads effect profiles from this exact directory; the
+# active-profile dconf key below points at this file (written first — files
+# are applied before settings).
+[[files]]
+component = "effects"
+src = "files/burn-my-windows/hyperclass.conf"
+dest = "~/.config/burn-my-windows/profiles/hyperclass.conf"
+
+[[files]]
+component = "shell-cfg"
+src = "files/fish/config.fish"
+dest = "~/.config/fish/config.fish"
+
+# NOTE: runtime payload lives under assets/, NOT ~/.local/share/gtheme/themes/
+# — that namespace is owned by `gtheme install` and is rmtree'd on update/remove.
+[[files]]
+component = "commands"
+src = "files/bin"
+dest = "~/.local/share/gtheme/assets/hyperclass/bin"
+mode = "755"
+
+[[files]]
+component = "ascii"
+src = "files/ascii"
+dest = "~/.local/share/gtheme/assets/hyperclass/ascii"
+
+[[settings]]
+component = "desktop"
+backend = "gsettings"
+# Cool platinum hull for the shell chrome; the warm champagne accent lives in
+# the apps via gtk.css. GNOME has no gold accent — slate is the understated
+# metal that doesn't fight the brass.
+key = "org.gnome.desktop.interface accent-color"
+value = "'slate'"
+
+[[settings]]
+component = "desktop"
+backend = "gsettings"
+# NOTE: this is a dark design; vanilla GNOME defaults to the light scheme, so
+# without prefer-dark the theme looks half-applied on a stock install.
+key = "org.gnome.desktop.interface color-scheme"
+value = "'prefer-dark'"
+
+[[settings]]
+component = "desktop"
+backend = "gsettings"
+key = "org.gnome.desktop.interface icon-theme"
+# Papirus-Dark with folders recoloured to brass (papirus-folders -C yellow -t
+# Papirus-Dark). Package install + recolour are a one-time step; see
+# [requires].packages.
+value = "'Papirus-Dark'"
+
+[[settings]]
+component = "terminal"
+backend = "dconf"
+key = "/org/gnome/Ptyxis/Profiles/{{ ptyxis_default_profile }}/palette"
+value = "'Hyperclass'"
+
+[[settings]]
+component = "terminal"
+backend = "dconf"
+# A whisper of the wallpaper through the window seat; pairs with the
+# blur-my-shell whitelist below.
+key = "/org/gnome/Ptyxis/Profiles/{{ ptyxis_default_profile }}/opacity"
+value = "0.92"
+
+[[settings]]
+component = "terminal"
+backend = "gsettings"
+key = "org.gnome.Ptyxis use-system-font"
+value = "false"
+
+[[settings]]
+component = "terminal"
+backend = "gsettings"
+# Iosevka: narrow, tall, unapologetically art-deco letterforms.
+key = "org.gnome.Ptyxis font-name"
+value = "'Iosevka Nerd Font Mono 11'"
+
+[[settings]]
+component = "wallpaper"
+backend = "gsettings"
+key = "org.gnome.desktop.background picture-uri"
+value = "'file://{{ home }}/.local/share/backgrounds/hyperclass/hyperclass-slideshow.xml'"
+
+[[settings]]
+component = "wallpaper"
+backend = "gsettings"
+key = "org.gnome.desktop.background picture-uri-dark"
+value = "'file://{{ home }}/.local/share/backgrounds/hyperclass/hyperclass-slideshow.xml'"
+
+[[settings]]
+component = "wallpaper"
+backend = "gsettings"
+key = "org.gnome.desktop.background picture-options"
+value = "'zoom'"
+
+[[settings]]
+component = "wallpaper"
+backend = "gsettings"
+key = "org.gnome.desktop.background primary-color"
+value = "'#12151F'"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/dock-position"
+value = "'BOTTOM'"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/transparency-mode"
+value = "'FIXED'"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/custom-background-color"
+value = "true"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/background-color"
+value = "'#1A1E2C'"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/background-opacity"
+value = "0.68"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/running-indicator-style"
+value = "'DOTS'"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/custom-theme-customize-running-dots"
+value = "true"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+# Brass dot, champagne rim: the cabin's call buttons.
+key = "/org/gnome/shell/extensions/dash-to-dock/custom-theme-running-dots-color"
+value = "'#C9A24A'"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/custom-theme-running-dots-border-color"
+value = "'#EBD9A8'"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/custom-theme-running-dots-border-width"
+value = "1"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/dash-to-dock/override-background"
+value = "false"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/Logo-menu/use-custom-icon"
+value = "true"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/Logo-menu/custom-icon-path"
+value = "'{{ home }}/.local/share/gtheme/assets/hyperclass/hyperclass-emblem.svg'"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/Logo-menu/symbolic-icon"
+value = "false"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+# Boot straight to the view, not the overview.
+key = "/org/gnome/shell/extensions/just-perfection/startup-status"
+value = "0"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/tilingshell/enable-window-border"
+value = "true"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/tilingshell/window-border-width"
+value = "uint32 2"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+# The focused window wears the gold hairline — trim, not fill.
+key = "/org/gnome/shell/extensions/tilingshell/window-border-color"
+value = "'#C9A24A'"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/applications/blur"
+value = "true"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/applications/enable-all"
+value = "false"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/applications/whitelist"
+value = "['Alacritty', 'org.gnome.Ptyxis']"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/applications/sigma"
+value = "30"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/applications/static-blur"
+value = "false"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/applications/dynamic-opacity"
+value = "false"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/applications/corner-radius"
+value = "14"
+
+[[settings]]
+component = "effects"
+backend = "gsettings"
+# Burn My Windows opens/closes windows through a champagne hexagon lattice
+# (the airlock iris). The profile file above disables every other effect —
+# BMW picks randomly among all enabled ones, so exactly one stays true.
+# active-profile must be the profile's ABSOLUTE path; files are applied
+# before settings, so the .conf exists by the time this key lands.
+key = "org.gnome.shell.extensions.burn-my-windows active-profile"
+value = "'{{ home }}/.config/burn-my-windows/profiles/hyperclass.conf'"
+
+# NOTE: rounded-window-corners@fxgn (Reborn) is deliberately NOT used — it is
+# broken on GNOME 50 (shader crash strands shadow actors on the Shell stage).
+# Native libadwaita rounding covers window top-corners.

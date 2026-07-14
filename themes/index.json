@@ -2,6 +2,30 @@
   "version": 1,
   "themes": [
     {
+      "name": "hyperclass",
+      "title": "HYPERCLASS \u2014 Gilded Void",
+      "description": "First class aboard a starliner crossing the void: champagne brass on deep-space ink, ivory starlight, one vein of ice. Ships an orrery clock, a hyperspace warp and a self-printing boarding pass for the terminal.",
+      "author": "blyatiful1",
+      "version": "1.0.0",
+      "components": [
+        "wallpaper",
+        "terminal",
+        "prompt",
+        "monitor",
+        "editor",
+        "fastfetch",
+        "visualizer",
+        "gtk",
+        "shell",
+        "effects",
+        "shell-cfg",
+        "commands",
+        "ascii",
+        "desktop",
+        "dock"
+      ]
+    },
+    {
       "name": "magma",
       "title": "MAGMA \u2014 Obsidian Flow",
       "description": "Obsidian glass over a living magma chamber: ember orange, lava gold, one cool teal vein. Ships a real lava-lamp fluid sim for the terminal.",

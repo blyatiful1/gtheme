@@ -1,0 +1,30 @@
+# HYPERCLASS — Gilded Void cava config.
+# The lounge band's VU meter: bars rise from brass through champagne to
+# ivory foam. Requires cava >= 0.10 (integer noise_reduction; older cava
+# wants the 0.77 float form and an explicit gradient_count).
+
+[general]
+framerate = 60
+bars = 0
+bar_width = 2
+bar_spacing = 1
+sleep_timer = 3
+
+[output]
+method = ncurses
+channels = stereo
+
+[color]
+# cava counts the gradient stops itself — five are defined below.
+gradient = 1
+# brass -> old gold -> champagne -> pearl -> ivory
+gradient_color_1 = '#C9A24A'
+gradient_color_2 = '#D9BC6E'
+gradient_color_3 = '#EBD9A8'
+gradient_color_4 = '#F3E8C8'
+gradient_color_5 = '#FBF6E7'
+
+[smoothing]
+noise_reduction = 77
+monstercat = 1
+waves = 0

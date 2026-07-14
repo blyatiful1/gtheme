@@ -1,0 +1,366 @@
+#!/usr/bin/env python3
+"""hyperclass-boarding — print your first-class boarding pass.
+
+An engraved deco pass card, dealt inline like a receipt: no fullscreen, no
+alternate screen, so it stays in the scrollback after you disembark. On a TTY
+each line "decrypts" — dim grey scramble resolving left-to-right into brass,
+ivory and one cool vein of ice — then the cursor rests just below the card.
+Piped, --plain, or NO_COLOR: the finished card prints at once, exit 0.
+
+Design law of the house: gold is TRIM, never a fill; ice is the technical
+readout (the light-years); the rest is tuned to recede. Ctrl-C mid-reveal
+still leaves a complete, clean card.
+"""
+import getpass
+import hashlib
+import os
+import random
+import re
+import socket
+import sys
+import time
+from datetime import date
+
+ESC = "\x1b"
+RESET = f"{ESC}[0m"
+HIDE, SHOW = f"{ESC}[?25l", f"{ESC}[?25h"
+
+# Gilded Void materials (palette.toml is the single source of truth).
+BRASS = (201, 162, 74)      # #C9A24A  the signature gold — trim only
+CHAMPAGNE = (235, 217, 168)  # #EBD9A8  the bright chrome, key values
+IVORY = (234, 227, 209)     # #EAE3D1  body starlight
+FG_DIM = (194, 188, 171)    # #C2BCAB
+GREY = (110, 116, 136)      # #6E7488  the engraving that recedes
+ICE = (169, 218, 232)       # #A9DAE8  the one cool vein — system/technical
+EMERALD = (88, 181, 141)    # #58B58D  status: on time
+
+# A style is (rgb, bold, italic); None means an unstyled (plain) cell.
+def st(rgb, bold=False, italic=False):
+    return (rgb, bold, italic)
+
+GREY_S = st(GREY)
+GREY_I = st(GREY, italic=True)
+IVORY_S = st(IVORY)
+DIM_S = st(FG_DIM)
+BRASS_S = st(BRASS)
+CHAMP_S = st(CHAMPAGNE)
+CHAMP_B = st(CHAMPAGNE, bold=True)
+ICE_S = st(ICE)
+EMERALD_S = st(EMERALD)
+SCRAMBLE_S = st(GREY)
+
+# Geometry — a ~62-col card. Every row is exactly OUTER wide by construction.
+OUTER = 62
+INNER = OUTER - 2          # between the ║ / ◆ posts
+MARGIN = 2                 # generous breathing room; restraint reads expensive
+CONTENT = INNER - 2 * MARGIN   # 56 — the field bed
+LABEL_W = 21               # fits the longest letterspaced label (DESTINATION)
+GAP = 3
+VALUE_W = CONTENT - LABEL_W - GAP   # 32
+
+# Real exoplanets, real-ish distances (light-years). The pilot picks one.
+DESTINATIONS = [
+    ("Kepler-186f", "582 ly"),
+    ("TRAPPIST-1e", "40.7 ly"),
+    ("Proxima Centauri b", "4.24 ly"),
+    ("55 Cancri e", "41 ly"),
+    ("HD 189733 b", "64.5 ly"),
+    ("Gliese 667 Cc", "23.6 ly"),
+    ("WASP-12b", "1410 ly"),
+    ("Kepler-452b", "1800 ly"),
+    ("LHS 1140 b", "49 ly"),
+    ("K2-18b", "124 ly"),
+]
+GATE_NAMES = ["AURUM", "LUMEN", "SOLIS", "VESPER", "MERIDIAN",
+              "HELIOS", "ASTRA", "ORION", "CELESTE", "ZENITH"]
+AMENITIES = "lounge access · orrery deck · complimentary starlight"
+
+# Width-1 deco glyphs for the "decrypting" shimmer — nothing double-width.
+SCRAMBLE = "·•✦◆❖─═╌║▌▐▍▊∴"
+BARCODE = "█▐▌▊▍"          # the strip alphabet
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def sgr(style):
+    (r, g, b), bold, italic = style
+    pre = ("1;" if bold else "") + ("3;" if italic else "")
+    return f"{ESC}[{pre}38;2;{r};{g};{b}m"
+
+
+def strip_ansi(s):
+    return _ANSI_RE.sub("", s)
+
+
+# --- cell helpers: a line is a list of (char, style|None) of length OUTER -----
+
+def run(text, style):
+    return [(c, style) for c in text]
+
+
+def pad(n):
+    return [(" ", None)] * n
+
+
+def letterspace(word):
+    return " ".join(word)
+
+
+def fit_runs(runs, width):
+    """Trim styled runs to `width` cells, eliding with … if they overflow."""
+    out, used = [], 0
+    for text, style in runs:
+        if used + len(text) <= width:
+            out.append((text, style))
+            used += len(text)
+        else:
+            room = width - used
+            if room > 0:
+                out.append((text[: max(room - 1, 0)] + "…", style))
+            break
+    return out
+
+
+def center56(cells):
+    left = (CONTENT - len(cells)) // 2
+    return pad(left) + cells + pad(CONTENT - len(cells) - left)
+
+
+def wrap(cells56):
+    """Post a 56-wide content bed between brass ║ walls with margins."""
+    return ([("║", BRASS_S)] + pad(MARGIN) + cells56
+            + pad(MARGIN) + [("║", BRASS_S)])
+
+
+def border():
+    # Champagne corner diamonds, brass double rule between.
+    return [("◆", CHAMP_S)] + run("═" * INNER, BRASS_S) + [("◆", CHAMP_S)]
+
+
+def blank():
+    return [("║", BRASS_S)] + pad(INNER) + [("║", BRASS_S)]
+
+
+def divider():
+    # A thin brass hairline with a champagne diamond at its heart.
+    left = (CONTENT - 1) // 2
+    d = run("─" * left, BRASS_S) + [("◆", CHAMP_S)] + run("─" * (CONTENT - 1 - left), BRASS_S)
+    return wrap(d)
+
+
+def marquee():
+    core = "H Y P E R C L A S S"
+    tick = [("·", BRASS_S), (" ", None), ("✦", BRASS_S), (" ", None), ("·", BRASS_S)]
+    seg = tick + pad(3) + run(core, CHAMP_B) + pad(3) + tick
+    return wrap(center56(seg))
+
+
+def field(label, value_runs):
+    lab = letterspace(label)                       # small-caps, letterspaced
+    labcells = pad(LABEL_W - len(lab)) + run(lab, GREY_S)   # right-aligned
+    vcells = []
+    for text, style in fit_runs(value_runs, VALUE_W):
+        vcells += run(text, style)
+    vcells += pad(VALUE_W - len(vcells))
+    return wrap(labcells + pad(GAP) + vcells)
+
+
+def barcode(rng):
+    cells = []
+    for _ in range(CONTENT):
+        if rng.random() < 0.16:
+            cells.append((" ", None))              # the quiet gaps
+        else:
+            cells.append((rng.choice(BARCODE), IVORY_S))
+    return wrap(cells)
+
+
+def polite(name, fallback):
+    """Title-case a login/host into a name fit for the passenger manifest."""
+    words = re.sub(r"[._\-]+", " ", name).split()
+    return " ".join(w.capitalize() for w in words) or fallback
+
+
+def build_card():
+    user = getpass.getuser() or "guest"
+    host = (socket.gethostname() or "starliner").split(".")[0]
+    user_t = polite(user, "Guest")
+    host_t = polite(host, "Starliner")
+
+    # Gate is wayfinding, so it stays deterministic per vessel.
+    h = int(hashlib.sha256(host.encode("utf-8", "replace")).hexdigest(), 16)
+    gate = f"{GATE_NAMES[h % len(GATE_NAMES)]} {(h // len(GATE_NAMES)) % 12 + 1}"
+
+    dest_name, dist = random.choice(DESTINATIONS)
+    dep = time.strftime("%H:%M", time.localtime())
+
+    # Serial + barcode ride the same day-stable seed (date + passenger).
+    today = date.today().isoformat()
+    digest = hashlib.sha256(f"{user}|{today}".encode("utf-8", "replace")).hexdigest().upper()
+    code = f"{digest[:4]}-{digest[4:8]}-{digest[8:10]}"
+    rng = random.Random(int(digest, 16))
+
+    passenger = [(user_t, CHAMP_B), ("@", GREY_S), (host_t, DIM_S)]
+
+    lines = [
+        border(),
+        blank(),
+        marquee(),
+        blank(),
+        divider(),
+        blank(),
+        field("PASSENGER", passenger),
+        field("VESSEL", [("GILDED VOID", CHAMP_B)]),
+        field("CLASS", [("FIRST", CHAMP_B), (" — CABIN 12A", IVORY_S)]),
+        field("GATE", [(gate, IVORY_S)]),
+        field("DESTINATION", [(dest_name, CHAMP_B), ("  ·  ", GREY_S), (dist, ICE_S)]),
+        field("DEPARTURE", [(dep, IVORY_S), (" · ", GREY_S), ("on time", EMERALD_S)]),
+        field("BAGGAGE", [("weightless", IVORY_S)]),
+        blank(),
+        wrap(center56(run(AMENITIES, GREY_I))),
+        blank(),
+        divider(),
+        blank(),
+        barcode(rng),
+        wrap(center56(run(f"S E R I A L   {code}", GREY_S))),
+        blank(),
+        border(),
+    ]
+    return lines
+
+
+# --- rendering ---------------------------------------------------------------
+
+def render_line(cells, color):
+    if not color:
+        return "".join(ch for ch, _ in cells)
+    out, cur = [], object()          # sentinel: force a leading style write
+    for ch, style in cells:
+        if style != cur:
+            out.append(RESET)
+            if style is not None:
+                out.append(sgr(style))
+            cur = style
+        out.append(ch)
+    out.append(RESET)
+    return "".join(out)
+
+
+def emit_instant(lines, color):
+    parts = ["\n"]
+    for ln in lines:
+        parts.append(render_line(ln, color) + "\n")
+    sys.stdout.write("".join(parts))
+    sys.stdout.flush()
+
+
+def animate_line(cells):
+    """~120ms reveal: dim scramble locking in left-to-right, then resolve."""
+    if all(ch == " " for ch, _ in cells):
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+        time.sleep(0.018)
+        return
+    n, steps = len(cells), 7
+    scramble_pre = RESET + sgr(SCRAMBLE_S)
+    for s in range(1, steps + 1):
+        locked = (n * s) // steps
+        buf = ["\r"]
+        for i, (ch, style) in enumerate(cells):
+            if ch == " ":
+                buf.append(" ")
+            elif i < locked:
+                buf.append(RESET + sgr(style) + ch)
+            else:
+                buf.append(scramble_pre + random.choice(SCRAMBLE))
+        buf.append(RESET)
+        sys.stdout.write("".join(buf))
+        sys.stdout.flush()
+        time.sleep(0.12 / steps)
+    sys.stdout.write("\r" + render_line(cells, True) + f"{ESC}[K\n")
+    sys.stdout.flush()
+
+
+def emit_animated(lines):
+    sys.stdout.write("\n" + HIDE)
+    sys.stdout.flush()
+    completed = 0
+    try:
+        for ln in lines:
+            animate_line(ln)
+            completed += 1
+    except KeyboardInterrupt:
+        # Disembarking early still leaves a whole card: finish the rest at once.
+        buf = ["\r"]
+        for ln in lines[completed:]:
+            buf.append(render_line(ln, True) + f"{ESC}[K\n")
+        sys.stdout.write("".join(buf))
+    finally:
+        sys.stdout.write(RESET + SHOW)
+        sys.stdout.flush()
+
+
+HELP = """hyperclass-boarding — print your first-class boarding pass.
+
+usage: hyperclass-boarding [--plain] [--no-anim]
+
+  --plain     no colour, no animation (also honoured via NO_COLOR)
+  --no-anim   colour, but print the finished card at once
+  -h, --help  this note
+
+Not a TTY, --plain, or NO_COLOR set: the finished card prints instantly.
+"""
+
+
+def selftest():
+    """Every rendered card line must be exactly OUTER visible cells wide."""
+    ok = True
+    for i, ln in enumerate(build_card()):
+        for colored in (True, False):
+            vis = strip_ansi(render_line(ln, colored))
+            if len(vis) != OUTER:
+                ok = False
+                sys.stdout.write(f"line {i} ({'colour' if colored else 'plain'}) "
+                                 f"width {len(vis)} != {OUTER}: {vis!r}\n")
+    sys.stdout.write("selftest OK\n" if ok else "selftest FAIL\n")
+    return 0 if ok else 1
+
+
+def main(argv):
+    if "-h" in argv or "--help" in argv:
+        sys.stdout.write(HELP)
+        return 0
+    if "--selftest" in argv:
+        return selftest()
+
+    plain = "--plain" in argv
+    no_anim = "--no-anim" in argv
+    no_color = os.environ.get("NO_COLOR") is not None
+    is_tty = sys.stdout.isatty()
+
+    use_color = is_tty and not plain and not no_color
+    do_anim = use_color and not no_anim
+    if do_anim:
+        # The in-place reveal redraws each row with \r — on a terminal
+        # narrower than the card, wrapped rows would self-overwrite, so a
+        # tight cabin gets the finished card dealt instantly instead.
+        try:
+            if os.get_terminal_size().columns < OUTER:
+                do_anim = False
+        except OSError:
+            do_anim = False
+
+    lines = build_card()
+    if do_anim:
+        emit_animated(lines)
+    else:
+        emit_instant(lines, use_color)
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except KeyboardInterrupt:
+        # Any late Ctrl-C: leave the terminal as we found it.
+        sys.stdout.write(RESET + SHOW + "\n")
+        sys.exit(0)
