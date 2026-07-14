@@ -36,6 +36,8 @@
       }
     },
     "bar": {
+      // nested char/border options need fastfetch >= 2.50 (older releases
+      // used flat charElapsed/borderLeft keys and will ignore these)
       "width": 10,
       "char": { "elapsed": "━", "total": "─" },   // one engraved rule, filled vs bare
       "border": { "left": "", "right": "" },

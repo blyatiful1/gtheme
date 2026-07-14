@@ -5,6 +5,13 @@ All notable changes to gtheme are documented here. The format follows
 
 ## [Unreleased]
 
+- **Shared render templates: readable text on accent fills.** The GTK accent
+  override now puts the theme's dark `bg` on accent-filled widgets instead of
+  `fg_bright` (ivory-on-brass/orange was ~2.2:1; ink is 7–7.6:1), and the
+  derived Ptyxis *Light* scheme no longer emits near-invisible white slots
+  (`Color7` → `comment`, `Color15` → `ansi_black`, cursor/bell/superuser text
+  → `bg`; the Dark superuser badge too). Both bundled themes rebuilt.
+
 - **New bundled theme: `hyperclass`** (HYPERCLASS — Gilded Void), the
   collection's luxury liner: first class aboard a starliner crossing the
   void. Champagne brass (`#C9A24A`, the desaturated "expensive gold" band —
