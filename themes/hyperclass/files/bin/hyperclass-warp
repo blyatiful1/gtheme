@@ -1,0 +1,244 @@
+#!/usr/bin/env python3
+"""hyperclass-warp — engage hyperspace from the first-class cabin.
+
+A fullscreen truecolor warp: stars are born at the vanishing point (a touch
+above centre), accelerate radially outward on perspective rails and draw
+lengthening streaks as they gather speed. Two seconds of unhurried drift, then
+the jump — and it holds. Any key disembarks. Ctrl-C (and SIGTERM) safe.
+"""
+import math
+import os
+import random
+import select
+import shutil
+import signal
+import sys
+import termios
+import time
+import tty
+
+# Gilded Void materials (palette.toml is the single source of truth).
+IVORY = (234, 227, 209)         # #EAE3D1  body starlight, the common star
+STARLIGHT = (251, 246, 231)     # #FBF6E7  its brightest grade
+CHAMPAGNE = (235, 217, 168)     # #EBD9A8  ~25% of the field
+BRASS = (201, 162, 74)          # #C9A24A  the signature gold — trim, ~10%, never a fill
+ICE = (169, 218, 232)           # #A9DAE8  the one cool vein — rare, ~4%
+GREY = (110, 116, 136)          # #6E7488  engraving that recedes
+
+ESC = "\x1b"
+HIDE, SHOW = f"{ESC}[?25l", f"{ESC}[?25h"
+ALT_ON, ALT_OFF = f"{ESC}[?1049h", f"{ESC}[?1049l"
+CLEAR = f"{ESC}[2J"
+RESET = f"{ESC}[0m"
+
+FPS = 30.0
+ASPECT = 0.55           # cells are ~2x taller than wide — squash y so the void reads round
+ZMAX = 5.0              # the far plane; new stars are born here, near the vanishing point
+ZNEAR = 0.34            # past this a star has flown by the porthole — recycle it
+DRIFT = 0.45            # gentle approach (depth units/s) before the jump
+WARP = 5.6              # the money shot
+JUMP_AT = 2.0           # seconds of drift before...
+JUMP_DUR = 0.7          # ...easing up to full warp
+STREAK_MAX = 12         # longest trail we bother drawing
+LIT_CAP = 440           # cap lit cells per frame for speed (closest stars win the budget)
+
+
+def fg(col):
+    return f"{ESC}[38;2;{col[0]};{col[1]};{col[2]}m"
+
+
+def dim(col, k):
+    return (int(col[0] * k), int(col[1] * k), int(col[2] * k))
+
+
+def blend(a, b, t):
+    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
+
+
+def new_star(z=ZMAX):
+    """A star as [ux, uy, z, prev_px, prev_py, colour, point_glyph].
+
+    ux/uy fix its heading on the view plane; dividing by z gives perspective, so
+    a shrinking z races the star outward along a straight radial from centre."""
+    while True:
+        ux = random.uniform(-1.0, 1.0)
+        uy = random.uniform(-1.0, 1.0)
+        if ux * ux + uy * uy > 0.0025:   # keep a dead zone off the exact vanishing point
+            break
+    r = random.random()
+    if r < 0.04:
+        col = ICE
+    elif r < 0.14:
+        col = BRASS
+    elif r < 0.39:
+        col = CHAMPAGNE
+    else:
+        col = blend(IVORY, STARLIGHT, random.random())
+    return [ux, uy, z, None, None, col, "✦" if random.random() < 0.6 else "*"]
+
+
+def make_field(w, h):
+    n = max(40, min((w * h) // 160, 230))
+    # scatter starting depths so the void is already full when the doors open
+    return [new_star(random.uniform(0.9, ZMAX)) for _ in range(n)]
+
+
+def geometry(w, h):
+    cx = w / 2.0
+    cy = h * 0.44                 # vanishing point sits a touch above centre
+    sx = w * 0.55
+    return cx, cy, sx, sx * ASPECT
+
+
+def project(s, cx, cy, sx, sy):
+    return cx + (s[0] / s[2]) * sx, cy + (s[1] / s[2]) * sy
+
+
+def put(cells, x, y, ch, col, w, h):
+    xi, yi = int(round(x)), int(round(y))
+    if 0 <= xi < w and 0 <= yi < h:
+        cells[(yi, xi)] = (ch, col)
+
+
+def orient(dx, dy):
+    """The streak glyph, aligned to the cell path (terminal y runs downward)."""
+    ax, ay = abs(dx), abs(dy)
+    if ay <= 0.4 * ax:
+        return "─"
+    if ax <= 0.4 * ay:
+        return "│"
+    return "╱" if (dx > 0) != (dy > 0) else "╲"
+
+
+def warp_v(t):
+    if t < JUMP_AT:
+        return DRIFT
+    if t < JUMP_AT + JUMP_DUR:
+        p = (t - JUMP_AT) / JUMP_DUR
+        return DRIFT + (WARP - DRIFT) * (p * p * (3 - 2 * p))   # smoothstep into the jump
+    return WARP
+
+
+def advance(stars, v, dt, w, h, cx, cy, sx, sy):
+    """Pull every star one step closer; recycle any that have flown past."""
+    m = 3
+    for i, s in enumerate(stars):
+        s[2] -= v * dt
+        if s[2] <= ZNEAR:
+            stars[i] = new_star()
+            continue
+        px, py = project(s, cx, cy, sx, sy)
+        if px < -m or px > w + m or py < -m or py > h + m:
+            stars[i] = new_star()
+
+
+def render(stars, w, h, cx, cy, sx, sy):
+    cells = {}
+    stars.sort(key=lambda s: s[2])       # closest first — the big streaks make the cap
+    full = False
+    for s in stars:
+        px, py = project(s, cx, cy, sx, sy)
+        if s[3] is None:                 # freshly spawned: no trail on its first frame
+            s[3], s[4] = px, py
+        ppx, ppy = s[3], s[4]
+        dx, dy = px - ppx, py - ppy
+        dist = math.hypot(dx, dy)
+        closeness = max(0.0, min((ZMAX - s[2]) / (ZMAX - 1.0), 1.0))
+        k = 0.30 + 0.70 * closeness      # dim near the vanishing point, bright at the rim
+        if not full:
+            if dist < 0.9:               # too slow to streak: a single point of light
+                if closeness < 0.34:
+                    put(cells, px, py, "·", dim(s[5], 0.30 + 0.35 * closeness), w, h)
+                else:
+                    put(cells, px, py, s[6], dim(s[5], k), w, h)
+            else:
+                g = orient(dx, dy)
+                n = min(int(dist) + 1, STREAK_MAX)
+                for j in range(n):       # tail (dim) astern → head (bright) at the star
+                    f = j / (n - 1) if n > 1 else 1.0
+                    put(cells, ppx + dx * f, ppy + dy * f,
+                        g, dim(s[5], k * (0.20 + 0.80 * f)), w, h)
+            if len(cells) >= LIT_CAP:
+                full = True
+        s[3], s[4] = px, py              # advance the trail anchor even past the cap
+    return cells
+
+
+def footer(cells, w, h):
+    """A faint engraved plate — brass hairline text that the void shows through."""
+    if h < 6 or w < 34:
+        return
+    plate = "H Y P E R C L A S S   ·   H Y P E R S P A C E"
+    if len(plate) <= w - 4:
+        x0 = (w - len(plate)) // 2
+        for i, ch in enumerate(plate):
+            if ch != " ":
+                cells[(h - 2, x0 + i)] = (ch, dim(BRASS, 0.55))
+    note = "any key to disembark"
+    if len(note) <= w - 4:
+        for i, ch in enumerate(note):
+            if ch != " ":
+                cells[(h - 1, 2 + i)] = (ch, dim(GREY, 0.7))
+
+
+def main():
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+
+    def _term(*_):                       # SIGTERM lands in the same restore path as a key
+        raise KeyboardInterrupt
+    signal.signal(signal.SIGTERM, _term)
+
+    sys.stdout.write(ALT_ON + HIDE)
+    sys.stdout.flush()
+    stars, size, prev = [], (0, 0), {}
+    t0 = last = time.monotonic()
+    try:
+        tty.setcbreak(fd)
+        while True:
+            now = time.monotonic()
+            w, h = shutil.get_terminal_size()
+            cx, cy, sx, sy = geometry(w, h)
+            if (w, h) != size:           # boarding or resize: fresh void, clear once
+                size = (w, h)
+                stars = make_field(w, h)
+                sys.stdout.write(CLEAR)
+                prev = {}
+            dt = min(now - last, 0.1)    # clamp so a stall or resize can't teleport stars
+            last = now
+            v = warp_v(now - t0)
+            advance(stars, v, dt, w, h, cx, cy, sx, sy)
+            cells = render(stars, w, h, cx, cy, sx, sy)
+            footer(cells, w, h)
+
+            out = [f"{ESC}[H"]
+            for pos in prev:             # heal the cells that went dark this frame
+                if pos not in cells:
+                    y, x = pos
+                    out.append(f"{ESC}[{y + 1};{x + 1}H ")
+            for (y, x), (ch, c) in cells.items():
+                out.append(f"{ESC}[{y + 1};{x + 1}H{fg(c)}{ch}")
+            out.append(RESET)
+            sys.stdout.write("".join(out))
+            sys.stdout.flush()
+            prev = cells
+
+            # pace to ~30 fps; any key ends the jump
+            budget = 1.0 / FPS - (time.monotonic() - now)
+            r, _, _ = select.select([sys.stdin], [], [], max(budget, 0.0))
+            if r:
+                os.read(fd, 64)
+                return
+    except KeyboardInterrupt:
+        pass
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        sys.stdout.write(RESET + SHOW + ALT_OFF)
+        sys.stdout.flush()
+
+
+if __name__ == "__main__":
+    if not sys.stdout.isatty() or not sys.stdin.isatty():
+        print("hyperclass-warp needs a TTY — it engages the whole screen.")
+        sys.exit(0)
+    main()

@@ -1,0 +1,198 @@
+#!/usr/bin/env python3
+"""hyperclass-orrery — the brass planetarium clock.
+
+A working orrery in the observation lounge: three bodies circle an ivory
+sun on engraved orbit rings, and the orrery IS the clock — the outer brass
+giant is the hour hand (12 h), the champagne planet the minute hand, the
+swift ice moon sweeps the seconds. Brass ticks at the quarters, Roman
+numerals on the bezel. ~15 fps truecolor, quits on any key. Ctrl-C safe.
+"""
+import math
+import os
+import select
+import shutil
+import signal
+import sys
+import termios
+import time
+import tty
+
+# Cabin materials (palette.toml).
+BRASS = (201, 162, 74)
+CHAMPAGNE = (235, 217, 168)
+IVORY = (234, 227, 209)
+STARLIGHT = (251, 246, 231)
+ICE = (169, 218, 232)
+GREY = (110, 116, 136)          # comment — the engraving that recedes
+
+ESC = "\x1b"
+HIDE, SHOW = f"{ESC}[?25l", f"{ESC}[?25h"
+ALT_ON, ALT_OFF = f"{ESC}[?1049h", f"{ESC}[?1049l"
+RESET = f"{ESC}[0m"
+ASPECT = 0.5                    # cells are ~2x taller than wide
+
+# (ring radius fraction, period s, glyph, colour, trail dots, trail spacing rad)
+ORBITS = (
+    (0.42, 60.0,        "•", ICE,       9, 0.070),   # the seconds moon
+    (0.70, 3600.0,      "◆", CHAMPAGNE, 6, 0.050),   # the minutes planet
+    (0.95, 12 * 3600.0, "●", BRASS,     5, 0.040),   # the hours giant
+)
+NUMERALS = {0: "XII", 3: "III", 6: "VI", 9: "IX"}
+
+
+def dim(colour, k):
+    return tuple(int(c * k) for c in colour)
+
+
+def fg(colour):
+    r, g, b = colour
+    return f"{ESC}[38;2;{r};{g};{b}m"
+
+
+def put(cells, x, y, ch, colour, w, h):
+    """Plot into a {pos: (ch, colour)} cell map; later plots win."""
+    xi, yi = int(round(x)), int(round(y))
+    if 0 <= xi < w and 0 <= yi < h - 1:
+        cells[(yi, xi)] = (ch, colour)
+
+
+def emit(cells):
+    return "".join(f"{ESC}[{y + 1};{x + 1}H{fg(c)}{ch}"
+                   for (y, x), (ch, c) in cells.items())
+
+
+def face_geometry(w, h):
+    cx, cy = w / 2.0, (h - 1) / 2.0
+    radius = max(min(cx - 6, (cy - 1.5) / ASPECT) * 0.92, 4.0)
+    return cx, cy, radius
+
+
+def static_layer(w, h):
+    """Everything that never moves: stars, bezel, rings, numerals, plate."""
+    cells = {}
+    cx, cy, radius = face_geometry(w, h)
+
+    seed = 0x5DEECE66D                     # deterministic stars, stable per size
+    for _ in range(max(12, (w * h) // 240)):
+        seed = (seed * 6364136223846793005 + 1442695040888963407) & (2**64 - 1)
+        put(cells, (seed >> 8) % w, (seed >> 32) % h, "·",
+            dim(IVORY, 0.22 + 0.3 * ((seed >> 48) % 100) / 100), w, h)
+
+    for k in range(96):                    # the engraved bezel
+        a = k / 96 * 2 * math.pi - math.pi / 2
+        x = cx + radius * math.cos(a)
+        y = cy + radius * ASPECT * math.sin(a)
+        if k % 8 == 0:
+            hour_idx = k // 8
+            if hour_idx in NUMERALS:
+                label = NUMERALS[hour_idx]
+                nx = cx + (radius + 4.0) * math.cos(a) - len(label) / 2 + 0.5
+                # keep VI off the engraved plate row on short terminals
+                ny = min(cy + (radius * ASPECT + 1.6) * math.sin(a), h - 3)
+                for i, ch in enumerate(label):
+                    put(cells, nx + i, ny, ch, dim(BRASS, 0.8), w, h)
+            put(cells, x, y, "◆", dim(BRASS, 0.9), w, h)
+        elif k % 2 == 0:
+            put(cells, x, y, "·", dim(GREY, 0.8), w, h)
+
+    for r_frac, *_ in ORBITS[:2]:          # quiet dotted inner orbits
+        r = radius * r_frac
+        for k in range(0, 72, 2):
+            a = k / 72 * 2 * math.pi
+            put(cells, cx + r * math.cos(a), cy + r * ASPECT * math.sin(a),
+                "·", dim(GREY, 0.5), w, h)
+
+    plate = "H Y P E R C L A S S · O R R E R Y"
+    for i, ch in enumerate(plate):
+        put(cells, cx - len(plate) / 2 + 0.5 + i, h - 2, ch, dim(BRASS, 0.75), w, h)
+    note = "any key disembarks"
+    for i, ch in enumerate(note):
+        put(cells, w - len(note) - 2 + i, h - 2, ch, dim(GREY, 0.7), w, h)
+    return cells
+
+
+def dynamic_layer(w, h, now):
+    """The moving parts: sun pulse, three bodies with wakes, the timestamp."""
+    cells = {}
+    cx, cy, radius = face_geometry(w, h)
+
+    pulse = 0.75 + 0.25 * math.sin(now * 1.8)   # the sun breathes
+    for hx, hy in ((-2, 0), (2, 0), (0, -1), (0, 1)):
+        put(cells, cx + hx, cy + hy, "·", dim(CHAMPAGNE, 0.55 * pulse), w, h)
+    put(cells, cx, cy, "☉", dim(STARLIGHT, 0.8 + 0.2 * pulse), w, h)
+
+    lt = time.localtime(now)
+    hands = (
+        now % 60.0,                              # smooth seconds sweep
+        lt.tm_min * 60 + lt.tm_sec,
+        (lt.tm_hour % 12) * 3600 + lt.tm_min * 60 + lt.tm_sec,
+    )
+    for (r_frac, period, glyph, colour, trail, spacing), t_val in zip(ORBITS, hands):
+        r = radius * r_frac
+        # clock convention: 12 is up, hands sweep clockwise
+        a = (t_val % period) / period * 2 * math.pi - math.pi / 2
+        for i in range(trail, 0, -1):            # wake astern
+            ta = a - i * spacing
+            put(cells, cx + r * math.cos(ta), cy + r * ASPECT * math.sin(ta),
+                "·", dim(colour, max(0.55 * (1 - i / (trail + 1)), 0.14)), w, h)
+        put(cells, cx + r * math.cos(a), cy + r * ASPECT * math.sin(a),
+            glyph, colour, w, h)
+
+    stamp = time.strftime("%H:%M:%S", lt) + " · ship time"
+    for i, ch in enumerate(stamp):
+        put(cells, 2 + i, h - 2, ch, dim(GREY, 0.9), w, h)
+    return cells
+
+
+def main():
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+
+    def _term(*_):                       # SIGTERM lands in the same restore path
+        raise KeyboardInterrupt
+    signal.signal(signal.SIGTERM, _term)
+
+    sys.stdout.write(ALT_ON + HIDE)
+    prev_dynamic, static_cells, size = {}, None, (0, 0)
+    try:
+        tty.setcbreak(fd)
+        while True:
+            w, h = shutil.get_terminal_size()
+            if (w, h) != size:
+                size = (w, h)
+                static_cells = static_layer(w, h)
+                sys.stdout.write(f"{ESC}[2J" + emit(static_cells))
+                prev_dynamic = {}
+            dyn = dynamic_layer(w, h, time.time())
+            out = []
+            for pos in prev_dynamic:             # heal what the hands crossed
+                if pos in dyn:
+                    continue
+                y, x = pos
+                if pos in static_cells:
+                    ch, c = static_cells[pos]
+                    out.append(f"{ESC}[{y + 1};{x + 1}H{fg(c)}{ch}")
+                else:
+                    out.append(f"{ESC}[{y + 1};{x + 1}H ")
+            out.append(emit(dyn))
+            sys.stdout.write("".join(out) + RESET)
+            sys.stdout.flush()
+            prev_dynamic = dyn
+            # ~15 fps, and any key ends the observation
+            r, _, _ = select.select([sys.stdin], [], [], 1 / 15)
+            if r:
+                os.read(fd, 64)
+                return
+    except KeyboardInterrupt:
+        pass
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        sys.stdout.write(RESET + SHOW + ALT_OFF)
+        sys.stdout.flush()
+
+
+if __name__ == "__main__":
+    if not sys.stdout.isatty() or not sys.stdin.isatty():
+        print("hyperclass-orrery needs a TTY (it draws full-screen).")
+        sys.exit(0)
+    main()

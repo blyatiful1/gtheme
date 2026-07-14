@@ -233,6 +233,7 @@ Found a boundary escape? See [SECURITY.md](SECURITY.md).
 
 | | theme | |
 |---|---|---|
+| ![hyperclass palette](docs/media/palette-hyperclass.svg) | **hyperclass** | HYPERCLASS — Gilded Void: first class aboard a starliner; champagne brass trim on deep-space ink, ivory starlight, one vein of ice. Ships an ASCII orrery that is a working clock (`orrery`), a truecolor hyperspace jump (`warp`), a self-printing art-deco boarding pass (`boarding`), three procedural wallpapers on a slow crossfade, and a champagne hexagon Burn-My-Windows profile |
 | ![magma palette](docs/media/palette-magma.svg) | **magma** | MAGMA — Obsidian Flow: obsidian glass, molten orange, lava gold, one cool teal vein. Ships a live lava-lamp fluid sim for the terminal (`lavalamp`), plus `embers`, `erupt` and `thermal`, and three procedural wallpapers on a slow crossfade |
 
 Contribute yours: `gtheme publish <name>` prints the exact PR steps, and
