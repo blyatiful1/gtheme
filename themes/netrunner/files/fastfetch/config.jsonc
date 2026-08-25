@@ -1,0 +1,81 @@
+// ── NETRUNNER ─ fastfetch ───────────────────────────────────────────
+// Jack in. HUD cyan on desaturated navy · one vein of cyber-yellow.
+// Install both halves: ~/.config/fastfetch/config.jsonc
+//                      ~/.config/fastfetch/netrunner-logo.txt
+{
+  "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+
+  "logo": {
+    "type": "file",
+    "source": "~/.config/fastfetch/netrunner-logo.txt",
+    // $1..$3 in the emblem land here. SGR truecolor so the neon never quantises.
+    "color": {
+      "1": "38;2;16;200;216",   // HUD cyan     — the visor & the whole shell
+      "2": "38;2;252;238;10",   // cyber-yellow — the single scan glint (used once)
+      "3": "38;2;95;115;150"    // steel blue   — dim structural strokes
+    },
+    "padding": { "top": 1, "left": 2, "right": 4 }
+  },
+
+  "display": {
+    // Tight, legible, terminal-flavoured. The keys are HUD tags, not fills.
+    "separator": "  ",
+    "key": { "width": 13 },
+    "color": {
+      "keys": "38;2;16;200;216",     // cyan — every label reads as a HUD tag
+      "output": "38;2;216;231;240"   // cool off-white readout
+    },
+    "percent": {
+      "type": 3,                     // hairline gauge + number
+      "color": {
+        "green":  "38;2;43;232;168",   // mint  — nominal
+        "yellow": "38;2;239;223;51",   // amber — load (clear of the signature yellow)
+        "red":    "38;2;255;61;94"     // rose  — critical / semantic only
+      }
+    },
+    "bar": {
+      // nested char/border options need fastfetch >= 2.50 (older releases
+      // used flat charElapsed/borderLeft keys and will ignore these)
+      "width": 10,
+      "char": { "elapsed": "━", "total": "─" },   // one filled rule vs a bare track
+      "border": { "left": "", "right": "" },
+      "color": {
+        "elapsed": "38;2;16;200;216",  // cyan — the workhorse readout
+        "total":   "38;2;95;115;150"   // steel — recessed track
+      }
+    }
+  },
+
+  "modules": [
+    {
+      "type": "title",
+      // user@host — cyan runner · steel at-sign · bright-cyan node
+      "color": { "user": "38;2;16;200;216", "at": "38;2;95;115;150", "host": "38;2;99;237;248" }
+    },
+    {
+      "type": "separator",
+      "string": "─",                    // a single cyan hairline — the jack-in rule
+      "outputColor": "38;2;16;200;216"
+    },
+    { "type": "os",       "key": " OS" },
+    { "type": "host",     "key": " NODE" },
+    { "type": "kernel",   "key": " KERNEL" },
+    { "type": "uptime",   "key": " UPLINK" },
+    { "type": "packages", "key": " PACKAGES" },
+    { "type": "shell",    "key": " SHELL" },
+    { "type": "de",       "key": " DESKTOP" },
+    { "type": "wm",       "key": " WM" },
+    { "type": "terminal", "key": " TERM" },
+    { "type": "font",     "key": " FONT" },
+    { "type": "cpu",      "key": " CPU",    "temp": true },
+    { "type": "gpu",      "key": " GPU",    "temp": true },
+    { "type": "memory",   "key": "󰍛 MEMORY" },
+    { "type": "disk",     "key": " DISK" },
+    "break",
+    {
+      "type": "colors",
+      "symbol": "circle",
+      "paddingLeft": 2
+    }
+  ]
+}

@@ -1,0 +1,120 @@
+# HYPERCLASS — Gilded Void prompt.
+# Two lines, no powerline pills: gold is trim, not fill. Line 1 is the
+# instrument readout (where you are, what's checked out, what's running,
+# how long the last command took); line 2 is a single engraved chevron.
+# Font: Iosevka Nerd Font (complete build — Powerline, Seti-UI and Devicons
+# glyph sets are all present in every "complete" Nerd Font release).
+
+"$schema" = 'https://starship.rs/config-schema.json'
+
+# No network-dependent modules; keep the readout instant.
+command_timeout = 500
+scan_timeout = 30
+add_newline = true
+
+palette = 'hyperclass'
+
+format = """
+$username\
+$hostname\
+$directory\
+$git_branch\
+$git_status\
+$nodejs\
+$python\
+$rust\
+$golang\
+$cmd_duration\
+$line_break\
+$character"""
+
+# Ship's clock, starboard side — the one thing that always shows.
+right_format = """$time"""
+
+[palettes.hyperclass]
+accent   = '#C9A24A'   # champagne brass — trim only, never a fill
+ice      = '#A9DAE8'   # the one cool vein: technical chrome
+info     = '#8FC6D8'   # a shade further into the vein, for git's readout
+warn     = '#D98E48'   # muted amber, distinct from the gold
+error    = '#E2707F'   # velvet rose
+comment  = '#6E7488'   # recessed grey-blue
+platinum = '#C3C8D4'   # hull metal — only surfaces over SSH
+
+[username]
+disabled = false
+show_always = false            # root or a foreign login only — otherwise silent
+style_user = 'fg:platinum'
+style_root = 'bold fg:platinum'
+format = '[$user]($style)'
+
+[hostname]
+ssh_only = true                 # the starliner only announces the vessel name in transit
+style = 'fg:platinum'
+format = '[@$hostname ]($style)'
+trim_at = '.'
+
+[directory]
+style = 'bold fg:accent'
+format = '[$path]($style)[$read_only]($read_only_style)'
+truncation_length = 3
+truncation_symbol = '…/'
+truncate_to_repo = true
+read_only = ' ◆'
+read_only_style = 'fg:comment'
+
+[git_branch]
+symbol = ''
+style = 'fg:info'
+format = '[ ╌ $symbol $branch]($style)'
+
+[git_status]
+style = 'fg:warn'
+format = '[( $all_status$ahead_behind)]($style)'
+conflicted = '✕${count}'
+ahead = '↑${count}'
+behind = '↓${count}'
+diverged = '↕${count}'
+up_to_date = ''
+untracked = '?${count}'
+stashed = '✦${count}'
+modified = '~${count}'
+staged = '+${count}'
+renamed = '»${count}'
+deleted = '-${count}'
+
+# Toolchain readouts — only surface in a repo that actually uses them.
+[nodejs]
+symbol = ''
+style = 'fg:ice'
+format = '[ · $symbol $version]($style)'
+
+[python]
+symbol = ''
+style = 'fg:ice'
+format = '[ · $symbol $version]($style)'
+
+[rust]
+symbol = ''
+style = 'fg:ice'
+format = '[ · $symbol $version]($style)'
+
+[golang]
+symbol = ''
+style = 'fg:ice'
+format = '[ · $symbol $version]($style)'
+
+[cmd_duration]
+min_time = 2000
+style = 'fg:comment'
+format = '[ · $duration adrift]($style)'
+
+[character]
+success_symbol = '[❯](bold fg:accent)'
+error_symbol = '[❯](bold fg:error)'
+vimcmd_symbol = '[❮](bold fg:ice)'
+
+[time]
+disabled = false
+time_format = '%H:%M'
+style = 'fg:comment'
+format = '[✦ $time]($style)'

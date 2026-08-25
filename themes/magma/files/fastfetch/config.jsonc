@@ -1,0 +1,74 @@
+// ── MAGMA ─ fastfetch ──────────────────────────────────────────────
+// Obsidian Flow · obsidian glass / molten orange / lava gold
+// Install: ~/.config/fastfetch/config.jsonc  +  ~/.config/fastfetch/magma-logo.txt
+{
+  "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+
+  "logo": {
+    "type": "file",
+    "source": "~/.config/fastfetch/magma-logo.txt",
+    "color": {
+      "1": "#3A2030",  // cooled cone crust
+      "2": "#FF6D3A",  // molten veins (accent)
+      "3": "#FFC145",  // lava gold sparks / brackets
+      "4": "#E0304E",  // crimson embers
+      "5": "#FFF6E8",  // white-hot apex spark
+      "6": "#FFA05C",  // vent glow / title
+      "7": "#7A6470",  // ash baseline
+      "8": "#FFD168",  // bright gold highlight
+      "9": "#45C7B5"   // teal vein (reserved cool accent)
+    },
+    "padding": { "top": 1, "left": 1, "right": 4 }
+  },
+
+  "display": {
+    "separator": " ",
+    "color": {
+      "keys": "#FFC145",   // lava-gold keys
+      "output": "#F2E5D5"  // parchment values
+    },
+    "key": { "width": 13 },
+    "percent": {
+      "type": 3, // gauge bar + number
+      "color": { "green": "#45C7B5", "yellow": "#FFB454", "red": "#F25050" }
+    },
+    "bar": {
+      "width": 8,
+      "char": { "elapsed": "▰", "total": "▱" },
+      "border": { "left": "", "right": " " },
+      "color": {
+        "elapsed": "#FF6D3A", // molten gauge fill
+        "total": "#7A6470"    // ash track
+      }
+    }
+  },
+
+  "modules": [
+    {
+      "type": "title",
+      "color": { "user": "#FF6D3A", "at": "#7A6470", "host": "#FFC145" }
+    },
+    {
+      "type": "separator",
+      "string": "─",
+      "outputColor": "#7A6470"
+    },
+    { "type": "os",       "key": "「OS」" },
+    { "type": "kernel",   "key": "「KERNEL」" },
+    { "type": "uptime",   "key": "「UPTIME」" },
+    { "type": "packages", "key": "「PACKAGES」" },
+    { "type": "shell",    "key": "「SHELL」" },
+    { "type": "de",       "key": "「DESKTOP」" },
+    { "type": "terminal", "key": "「TERMINAL」" },
+    { "type": "cpu",      "key": "「CPU」", "temp": true },
+    { "type": "gpu",      "key": "「GPU」", "temp": true },
+    { "type": "memory",   "key": "「MEMORY」" },
+    { "type": "disk",     "key": "「DISK」" },
+    "break",
+    {
+      "type": "colors",
+      "symbol": "circle",
+      "paddingLeft": 2
+    }
+  ]
+}

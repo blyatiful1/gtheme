@@ -1,0 +1,351 @@
+# Converted from the v1 gtheme theme format by tools in src/gtheme/preset/v1_import.py.
+# See README.md in this folder for everything the conversion left behind.
+
+format = 2
+
+[meta]
+name = "hyperclass"
+title = "HYPERCLASS — Gilded Void"
+description = "First class aboard a starliner crossing the void: champagne brass on deep-space ink, ivory starlight, one vein of ice. A brass hairline round the focused window and an airlock-iris animation when it opens."
+author = "blyatiful1"
+version = "1.0.0"
+screenshots = ["files/wallpaper/first-light.png"]
+
+[palette]
+bg = "#12151F"
+surface1 = "#1A1E2C"
+surface2 = "#232838"
+fg = "#EAE3D1"
+fg_bright = "#FBF6E7"
+fg_dim = "#C2BCAB"
+accent = "#C9A24A"
+accent_bright = "#E9CD8A"
+warn = "#D98E48"
+error = "#E2707F"
+info = "#8FC6D8"
+selection = "#2A3046"
+comment = "#6E7488"
+cursor = "#C9A24A"
+champagne = "#EBD9A8"
+gold = "#C9A24A"
+platinum = "#C3C8D4"
+ice = "#A9DAE8"
+emerald = "#58B58D"
+ansi_black = "#242A3C"
+red = "#E2707F"
+green = "#86C28F"
+yellow = "#D9B45C"
+blue = "#85ABE3"
+magenta = "#B79BE0"
+cyan = "#7CC5CE"
+ansi_white = "#D3CDBE"
+bright_black = "#6E7488"
+bright_red = "#F18E9B"
+bright_green = "#A3D8A9"
+bright_yellow = "#EDCD82"
+bright_blue = "#A6C4F2"
+bright_magenta = "#CFB6EF"
+bright_cyan = "#9ADEE6"
+bright_white = "#FBF6E7"
+
+[[files]]
+src = "files/wallpaper/first-light.png"
+dest = "~/.local/share/backgrounds/hyperclass/first-light.png"
+
+[[files]]
+src = "files/wallpaper/gilded-void.png"
+dest = "~/.local/share/backgrounds/hyperclass/gilded-void.png"
+
+[[files]]
+src = "files/wallpaper/warp-transit.png"
+dest = "~/.local/share/backgrounds/hyperclass/warp-transit.png"
+
+[[files]]
+src = "files/wallpaper/hyperclass-slideshow.xml"
+dest = "~/.local/share/backgrounds/hyperclass/hyperclass-slideshow.xml"
+template = true
+
+[[files]]
+src = "files/ptyxis/Hyperclass.palette"
+dest = "~/.local/share/org.gnome.Ptyxis/palettes/Hyperclass.palette"
+
+[[files]]
+src = "files/alacritty/hyperclass.toml"
+dest = "~/.config/alacritty/hyperclass.toml"
+
+[[files]]
+src = "files/alacritty/alacritty.toml"
+dest = "~/.config/alacritty/alacritty.toml"
+
+[[files]]
+src = "files/starship.toml"
+dest = "~/.config/starship.toml"
+
+[[files]]
+src = "files/btop/hyperclass.theme"
+dest = "~/.config/btop/themes/hyperclass.theme"
+
+[[files]]
+src = "files/btop/btop.conf"
+dest = "~/.config/btop/btop.conf"
+
+[[files]]
+src = "files/micro/hyperclass.micro"
+dest = "~/.config/micro/colorschemes/hyperclass.micro"
+
+[[files]]
+src = "files/micro/settings.json"
+dest = "~/.config/micro/settings.json"
+
+[[files]]
+src = "files/fastfetch/hyperclass-logo.txt"
+dest = "~/.config/fastfetch/hyperclass-logo.txt"
+
+[[files]]
+src = "files/fastfetch/config.jsonc"
+dest = "~/.config/fastfetch/config.jsonc"
+
+[[files]]
+src = "files/cava/config"
+dest = "~/.config/cava/config"
+
+[[files]]
+src = "files/gtk/gtk.css"
+dest = "~/.config/gtk-4.0/gtk.css"
+
+[[files]]
+src = "files/gtk/gtk.css"
+dest = "~/.config/gtk-3.0/gtk.css"
+
+[[files]]
+src = "files/shell/hyperclass-emblem.svg"
+dest = "~/.local/share/gtheme/assets/hyperclass/hyperclass-emblem.svg"
+
+[[files]]
+src = "files/burn-my-windows/hyperclass.conf"
+dest = "~/.config/burn-my-windows/profiles/hyperclass.conf"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface accent-color"
+value = "'slate'"
+component = "colors"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface color-scheme"
+value = "'prefer-dark'"
+component = "colors"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface icon-theme"
+value = "'Papirus-Dark'"
+component = "icons"
+
+[[settings]]
+key = "dconf:/org/gnome/Ptyxis/Profiles/{{ ptyxis_default_profile }}/palette"
+value = "'Hyperclass'"
+component = "terminal"
+
+[[settings]]
+key = "dconf:/org/gnome/Ptyxis/Profiles/{{ ptyxis_default_profile }}/opacity"
+value = "0.92"
+component = "terminal"
+
+[[settings]]
+key = "gsettings:org.gnome.Ptyxis use-system-font"
+value = "false"
+component = "fonts"
+
+[[settings]]
+key = "gsettings:org.gnome.Ptyxis font-name"
+value = "'Iosevka Nerd Font Mono 11'"
+component = "fonts"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background picture-uri"
+value = "'file://{{ home }}/.local/share/backgrounds/hyperclass/hyperclass-slideshow.xml'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background picture-uri-dark"
+value = "'file://{{ home }}/.local/share/backgrounds/hyperclass/hyperclass-slideshow.xml'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background picture-options"
+value = "'zoom'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background primary-color"
+value = "'#12151F'"
+component = "wallpaper"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/dock-position"
+value = "'BOTTOM'"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/transparency-mode"
+value = "'FIXED'"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/custom-background-color"
+value = "true"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/background-color"
+value = "'#1A1E2C'"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/background-opacity"
+value = "0.68"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/running-indicator-style"
+value = "'DOTS'"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/custom-theme-customize-running-dots"
+value = "true"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/custom-theme-running-dots-color"
+value = "'#C9A24A'"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/custom-theme-running-dots-border-color"
+value = "'#EBD9A8'"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/custom-theme-running-dots-border-width"
+value = "1"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/dash-to-dock/override-background"
+value = "false"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/Logo-menu/use-custom-icon"
+value = "true"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/Logo-menu/custom-icon-path"
+value = "'{{ home }}/.local/share/gtheme/assets/hyperclass/hyperclass-emblem.svg'"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/Logo-menu/symbolic-icon"
+value = "false"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/just-perfection/startup-status"
+value = "0"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/tilingshell/enable-window-border"
+value = "true"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/tilingshell/window-border-width"
+value = "uint32 2"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/tilingshell/window-border-color"
+value = "'#C9A24A'"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/applications/blur"
+value = "true"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/applications/enable-all"
+value = "false"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/applications/whitelist"
+value = "['Alacritty', 'org.gnome.Ptyxis']"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/applications/sigma"
+value = "30"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/applications/static-blur"
+value = "false"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/applications/dynamic-opacity"
+value = "false"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/applications/corner-radius"
+value = "14"
+component = "addons"
+
+[[settings]]
+key = "gsettings:org.gnome.shell.extensions.burn-my-windows active-profile"
+value = "'{{ home }}/.config/burn-my-windows/profiles/hyperclass.conf'"
+component = "addons"
+
+[extensions]
+enable = [
+    "dash-to-dock@micxgx.gmail.com",
+    "blur-my-shell@aunetx",
+    "just-perfection-desktop@just-perfection",
+    "logomenu@aryan_k",
+    "tilingshell@ferrarodomenico.com",
+    "burn-my-windows@schneegans.github.com",
+]
+
+[[extensions.install]]
+uuid = "dash-to-dock@micxgx.gmail.com"
+source = "ego"
+ego_pk = 307
+
+[[extensions.install]]
+uuid = "blur-my-shell@aunetx"
+source = "ego"
+ego_pk = 3193
+
+[[extensions.install]]
+uuid = "just-perfection-desktop@just-perfection"
+source = "ego"
+ego_pk = 3843
+
+[[extensions.install]]
+uuid = "logomenu@aryan_k"
+source = "ego"
+ego_pk = 4451
+
+[[extensions.install]]
+uuid = "tilingshell@ferrarodomenico.com"
+source = "ego"
+ego_pk = 7065
+
+[[extensions.install]]
+uuid = "burn-my-windows@schneegans.github.com"
+source = "ego"
+ego_pk = 4679

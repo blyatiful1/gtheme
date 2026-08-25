@@ -1,0 +1,46 @@
+/* NIGHTBLOOM — Ghostty GTK chrome: the tab bar is a glass shelf, not an
+ * Adwaita slab. Applies only inside Ghostty (gtk-custom-css). */
+
+window {
+  background-color: transparent;
+}
+
+/* Tab bar (shown when >1 tab): verdigris glass, hairline underline, no border */
+tabbar .box {
+  background: rgba(15, 23, 18, 0.55);
+  box-shadow: none;
+}
+
+tabbar tabbox {
+  background: transparent;
+  box-shadow: inset 0 -1px rgba(42, 61, 49, 0.8);
+}
+
+tabbar tab {
+  background: transparent;
+  border-radius: 8px;
+  margin: 3px 2px;
+  color: #8CA294;
+}
+
+tabbar tab:selected {
+  background: rgba(62, 122, 99, 0.28);
+  color: #E8E4D6;
+  box-shadow: none;
+}
+
+tabbar tab:hover {
+  background: rgba(62, 122, 99, 0.16);
+}
+
+/* Headerbar if it ever shows (maximized toggle etc.) */
+headerbar {
+  background: rgba(15, 23, 18, 0.62);
+  color: #E8E4D6;
+  border: none;
+  box-shadow: inset 0 -1px rgba(42, 61, 49, 0.8);
+}
+
+headerbar windowtitle {
+  color: #8CA294;
+}

@@ -1,0 +1,46 @@
+# NETRUNNER — jack in.
+# Colours live in netrunner.toml (generated from palette.toml — edit that).
+
+[general]
+import = ["~/.config/alacritty/netrunner.toml"]
+
+[env]
+TERM = "xterm-256color"
+
+[window]
+# The void bleeds through the glass; blur-my-shell frosts it on GNOME,
+# `blur` covers compositors with native support.
+opacity = 0.88
+blur = true
+dynamic_padding = true
+padding = { x = 18, y = 16 }
+decorations_theme_variant = "Dark"
+
+[font]
+size = 11.5
+
+[font.normal]
+family = "Iosevka Nerd Font Mono"
+style  = "Regular"
+
+[font.bold]
+family = "Iosevka Nerd Font Mono"
+style  = "Bold"
+
+[font.italic]
+family = "Iosevka Nerd Font Mono"
+style  = "Italic"
+
+[cursor]
+unfocused_hollow = true
+# A steady cyber-yellow block — no blink, no static.
+style = { shape = "Block", blinking = "Off" }
+
+[scrolling]
+history = 10000
+
+# Shift+Enter sends ESC + CR (escaped newline)
+[[keyboard.bindings]]
+key   = "Return"
+mods  = "Shift"
+chars = "\u001B\r"

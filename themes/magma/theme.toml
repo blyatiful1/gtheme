@@ -1,0 +1,461 @@
+# Converted from the v1 gtheme theme format by tools in src/gtheme/preset/v1_import.py.
+# See README.md in this folder for everything the conversion left behind.
+
+format = 2
+
+[meta]
+name = "magma"
+title = "MAGMA — Obsidian Flow"
+description = "Obsidian glass over a living magma chamber: ember orange, lava gold, one cool teal vein. Molten-glass blur, ember running dots and a slideshow of the chamber itself."
+author = "blyatiful1"
+version = "2.0.0"
+screenshots = ["files/wallpaper/obsidian-flow.png"]
+
+[palette]
+bg = "#0D0A0F"
+surface1 = "#181019"
+surface2 = "#261826"
+fg = "#F2E5D5"
+fg_bright = "#FFF6E8"
+fg_dim = "#C7B4A4"
+accent = "#FF6D3A"
+accent_bright = "#FFA05C"
+warn = "#FFB454"
+error = "#F25050"
+info = "#45C7B5"
+selection = "#3A2030"
+comment = "#7A6470"
+cursor = "#FF6D3A"
+gold = "#FFC145"
+crimson = "#E0304E"
+violet = "#B07BE8"
+teal = "#45C7B5"
+ansi_black = "#241823"
+red = "#F25050"
+green = "#A8C64E"
+yellow = "#FFB454"
+blue = "#5FA3E6"
+magenta = "#B07BE8"
+cyan = "#45C7B5"
+ansi_white = "#D8C8B8"
+bright_black = "#6B5462"
+bright_red = "#FF7A6E"
+bright_green = "#C2E06E"
+bright_yellow = "#FFD168"
+bright_blue = "#84C0FF"
+bright_magenta = "#D49CFF"
+bright_cyan = "#6EE8D5"
+bright_white = "#FFF6E8"
+
+[[files]]
+src = "files/wallpaper/obsidian-flow.png"
+dest = "~/.local/share/backgrounds/magma/obsidian-flow.png"
+
+[[files]]
+src = "files/wallpaper/molten-core.png"
+dest = "~/.local/share/backgrounds/magma/molten-core.png"
+
+[[files]]
+src = "files/wallpaper/ember-drift.png"
+dest = "~/.local/share/backgrounds/magma/ember-drift.png"
+
+[[files]]
+src = "files/wallpaper/magma-slideshow.xml"
+dest = "~/.local/share/backgrounds/magma/magma-slideshow.xml"
+template = true
+
+[[files]]
+src = "files/wallpaper/magma-loop.mp4"
+dest = "~/.local/share/backgrounds/magma/magma-loop.mp4"
+
+[[files]]
+src = "files/ptyxis/Magma.palette"
+dest = "~/.local/share/org.gnome.Ptyxis/palettes/Magma.palette"
+
+[[files]]
+src = "files/alacritty/magma.toml"
+dest = "~/.config/alacritty/magma.toml"
+
+[[files]]
+src = "files/alacritty/alacritty.toml"
+dest = "~/.config/alacritty/alacritty.toml"
+
+[[files]]
+src = "files/starship/starship.toml"
+dest = "~/.config/starship.toml"
+
+[[files]]
+src = "files/shell-theme/gnome-shell.css"
+dest = "~/.local/share/themes/Magma/gnome-shell/gnome-shell.css"
+
+[[files]]
+src = "files/btop/magma.theme"
+dest = "~/.config/btop/themes/magma.theme"
+
+[[files]]
+src = "files/btop/btop.conf"
+dest = "~/.config/btop/btop.conf"
+
+[[files]]
+src = "files/micro/magma.micro"
+dest = "~/.config/micro/colorschemes/magma.micro"
+
+[[files]]
+src = "files/micro/settings.json"
+dest = "~/.config/micro/settings.json"
+
+[[files]]
+src = "files/fastfetch/magma-logo.txt"
+dest = "~/.config/fastfetch/magma-logo.txt"
+
+[[files]]
+src = "files/fastfetch/config.jsonc"
+dest = "~/.config/fastfetch/config.jsonc"
+
+[[files]]
+src = "files/gtk/gtk4.css"
+dest = "~/.config/gtk-4.0/gtk.css"
+
+[[files]]
+src = "files/gtk/gtk3.css"
+dest = "~/.config/gtk-3.0/gtk.css"
+
+[[files]]
+src = "files/cava/config"
+dest = "~/.config/cava/config"
+
+[[files]]
+src = "files/shell/magma-flame.svg"
+dest = "~/.local/share/gtheme/assets/magma/magma-flame.svg"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface accent-color"
+value = "'orange'"
+component = "colors"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface color-scheme"
+value = "'prefer-dark'"
+component = "colors"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface icon-theme"
+value = "'Papirus-Dark'"
+component = "icons"
+
+[[settings]]
+key = "dconf:/org/gnome/Ptyxis/Profiles/{{ ptyxis_default_profile }}/palette"
+value = "'Magma'"
+component = "terminal"
+
+[[settings]]
+key = "gsettings:org.gnome.Ptyxis use-system-font"
+value = "false"
+component = "fonts"
+
+[[settings]]
+key = "gsettings:org.gnome.Ptyxis font-name"
+value = "'MesloLGS Nerd Font Mono 11'"
+component = "fonts"
+
+[[settings]]
+key = "dconf:/org/gnome/Ptyxis/Profiles/{{ ptyxis_default_profile }}/opacity"
+value = "0.85"
+component = "terminal"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface monospace-font-name"
+value = "'MesloLGS Nerd Font Mono 11'"
+component = "fonts"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background picture-uri"
+value = "'file://{{ home }}/.local/share/backgrounds/magma/magma-slideshow.xml'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background picture-uri-dark"
+value = "'file://{{ home }}/.local/share/backgrounds/magma/magma-slideshow.xml'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background picture-options"
+value = "'zoom'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background primary-color"
+value = "'#0D0A0F'"
+component = "wallpaper"
+
+[[settings]]
+key = "dconf:/io/github/jeffshee/hanabi-extension/video-path"
+value = "'{{ home }}/.local/share/backgrounds/magma/magma-loop.mp4'"
+component = "wallpaper"
+
+[[settings]]
+key = "dconf:/io/github/jeffshee/hanabi-extension/mute"
+value = "true"
+component = "wallpaper"
+
+[[settings]]
+key = "dconf:/io/github/jeffshee/hanabi-extension/content-fit"
+value = "2"
+component = "wallpaper"
+
+[[settings]]
+key = "dconf:/io/github/jeffshee/hanabi-extension/startup-delay"
+value = "2000"
+component = "wallpaper"
+
+[[settings]]
+key = "dconf:/io/github/jeffshee/hanabi-extension/pause-on-maximize-or-fullscreen"
+value = "2"
+component = "wallpaper"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/dock-position"
+value = "'BOTTOM'"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/transparency-mode"
+value = "'FIXED'"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/custom-background-color"
+value = "true"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/background-color"
+value = "'#181019'"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/background-opacity"
+value = "0.40"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/running-indicator-style"
+value = "'DOTS'"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/custom-theme-customize-running-dots"
+value = "true"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/custom-theme-running-dots-color"
+value = "'#FF6D3A'"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/custom-theme-running-dots-border-color"
+value = "'#FFC145'"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/custom-theme-running-dots-border-width"
+value = "1"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/panel/blur"
+value = "true"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/overview/blur"
+value = "true"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/dash-to-dock/blur"
+value = "true"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/dash-to-dock/pipeline"
+value = "'pipeline_default_rounded'"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/dash-to-dock/override-background"
+value = "true"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/hacks-level"
+value = "1"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/Logo-menu/use-custom-icon"
+value = "true"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/Logo-menu/custom-icon-path"
+value = "'{{ home }}/.local/share/gtheme/assets/magma/magma-flame.svg'"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/Logo-menu/symbolic-icon"
+value = "false"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/just-perfection/startup-status"
+value = "0"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/just-perfection/animation"
+value = "4"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/tilingshell/enable-window-border"
+value = "false"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/desktop-cube/enable-desktop-dragging"
+value = "false"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/desktop-cube/enable-panel-dragging"
+value = "false"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/user-theme/name"
+value = "'Magma'"
+component = "shell-theme"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/net/gfxmonk/impatience/speed-factor"
+value = "0.6"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/hotedge/pressure-threshold"
+value = "uint32 200"
+component = "addons"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface gtk-theme"
+value = "'adw-gtk3-dark'"
+component = "colors"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/applications/blur"
+value = "true"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/applications/enable-all"
+value = "false"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/applications/whitelist"
+value = "['Alacritty', 'org.gnome.Ptyxis', 'org.gnome.Nautilus']"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/applications/opacity"
+value = "255"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/applications/sigma"
+value = "24"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/applications/static-blur"
+value = "false"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/applications/dynamic-opacity"
+value = "false"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/applications/corner-radius"
+value = "12"
+component = "addons"
+
+[extensions]
+enable = [
+    "blur-my-shell@aunetx",
+    "just-perfection-desktop@just-perfection",
+    "logomenu@aryan_k",
+    "tilingshell@ferrarodomenico.com",
+    "compiz-windows-effect@hermes83.github.com",
+    "desktop-cube@schneegans.github.com",
+    "dash-to-dock@micxgx.gmail.com",
+    "hanabi-extension@jeffshee.github.io",
+    "hotedge@jonathan.jdoda.ca",
+    "impatience@gfxmonk.net",
+    "user-theme@gnome-shell-extensions.gcampax.github.com",
+]
+
+[[extensions.install]]
+uuid = "blur-my-shell@aunetx"
+source = "ego"
+ego_pk = 3193
+
+[[extensions.install]]
+uuid = "just-perfection-desktop@just-perfection"
+source = "ego"
+ego_pk = 3843
+
+[[extensions.install]]
+uuid = "logomenu@aryan_k"
+source = "ego"
+ego_pk = 4451
+
+[[extensions.install]]
+uuid = "tilingshell@ferrarodomenico.com"
+source = "ego"
+ego_pk = 7065
+
+[[extensions.install]]
+uuid = "compiz-windows-effect@hermes83.github.com"
+source = "ego"
+ego_pk = 3210
+
+[[extensions.install]]
+uuid = "desktop-cube@schneegans.github.com"
+source = "ego"
+
+[[extensions.install]]
+uuid = "dash-to-dock@micxgx.gmail.com"
+source = "ego"
+ego_pk = 307
+
+[[extensions.install]]
+uuid = "hanabi-extension@jeffshee.github.io"
+source = "ego"
+
+[[extensions.install]]
+uuid = "hotedge@jonathan.jdoda.ca"
+source = "ego"
+
+[[extensions.install]]
+uuid = "impatience@gfxmonk.net"
+source = "ego"
+ego_pk = 277
+
+[[extensions.install]]
+uuid = "user-theme@gnome-shell-extensions.gcampax.github.com"
+source = "ego"
+ego_pk = 19

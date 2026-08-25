@@ -1,0 +1,5 @@
+bg = "#101010"
+accent = "#7fd6a2"
+
+[ansi]
+red = "#ff0000"

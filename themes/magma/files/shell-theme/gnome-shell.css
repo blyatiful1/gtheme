@@ -1,0 +1,139 @@
+/* Magma — GNOME Shell 50 user theme: translucent obsidian glass.
+ * Loaded as St application_stylesheet; cascades OVER the stock
+ * gnome-shell-dark.css (gnome-shell-theme.gresource), so only overrides live here.
+ * Deliberately untouched: overview & dash backgrounds (blur-my-shell +
+ * dash-to-dock own those). #panel is themed at the bottom of this file;
+ * blur-my-shell still owns its blur layer + background override.
+ * Shell CSS cannot blur — translucency only. */
+
+/* Overrides stock `.popup-menu-content, .candidate-popup-content`
+ * (bg #36363a, border 1px #424247). The quick-settings and calendar/date-menu
+ * popovers are this same node: quickSettings.js adds .quick-settings and
+ * dateMenu.js adds .datemenu-popover to the popup-menu-content box. */
+.popup-menu-content,
+.candidate-popup-content {
+  background-color: rgba(13, 10, 15, 0.78);
+  border: 1px solid rgba(38, 24, 38, 0.9);
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.35);
+}
+
+/* Overrides stock `.quick-toggle-menu, .message, .events-button,
+ * .world-clocks-button, .weather-button` (card bg #47474c):
+ * cards inside the quick-settings / date-menu popovers — deep plum glass. */
+.quick-toggle-menu, .message, .events-button,
+.world-clocks-button,
+.weather-button {
+  background-color: rgba(38, 24, 38, 0.6);
+}
+
+/* Overrides stock card :hover/:active (st-lighten(#47474c, …) grays)
+ * so interaction feedback stays in the plum family (selection #3A2030). */
+.quick-toggle-menu:hover, .message:hover, .events-button:hover,
+.world-clocks-button:hover,
+.weather-button:hover,
+.quick-toggle-menu:active, .message:active, .events-button:active,
+.world-clocks-button:active,
+.weather-button:active {
+  background-color: rgba(58, 32, 48, 0.7);
+}
+
+/* Overrides stock `.calendar .calendar-day.calendar-today`
+ * (bg -st-accent-color): today highlight in lava. Text color stays stock. */
+.calendar .calendar-day.calendar-today {
+  background-color: #FF6D3A;
+}
+.calendar .calendar-day.calendar-today:hover,
+.calendar .calendar-day.calendar-today:active {
+  background-color: st-lighten(#FF6D3A, 6%);
+}
+
+/* Overrides stock `.message-list` (border: solid rgba(255,255,255,0.1)):
+ * the notification-column separator inside the date-menu popover. */
+.message-list {
+  border-color: rgba(38, 24, 38, 0.9);
+}
+
+/* Overrides stock `#LookingGlassDialog, .screenshot-ui-panel,
+ * .workspace-switcher, .switcher-list, .resize-popup, .osd-window`
+ * (bg #2e2e33): volume/brightness OSD, alt-tab switcher, resize popup. */
+.osd-window,
+.switcher-list,
+.workspace-switcher,
+.resize-popup {
+  background-color: rgba(13, 10, 15, 0.78);
+  border: 1px solid rgba(38, 24, 38, 0.9);
+}
+
+/* Overrides stock `.modal-dialog` (bg #36363a): system modal dialogs —
+ * slightly more opaque for legibility. */
+.modal-dialog {
+  background-color: rgba(13, 10, 15, 0.85);
+  border: 1px solid rgba(38, 24, 38, 0.9);
+}
+
+/* ===================== Top bar (#panel) ===================== */
+
+/* Overrides stock `#panel` (bg #000000). Blur-my-shell (panel/blur=true,
+ * override-background=true, style-panel=0 defaults) stacks its blurred
+ * wallpaper copy behind the panel and adds `.transparent-panel`
+ * (`#panel.transparent-panel { background: transparent }`, higher
+ * specificity) — so while blur is live this tint is inert by design and
+ * the frosted glass + brightness 0.6 darkening shows through. The tint
+ * only paints as an obsidian-glass fallback if BMS is disabled or
+ * mid-reload. No border/box-shadow here: chrome stays calm. */
+#panel {
+  background-color: rgba(13, 10, 15, 0.22);
+}
+
+/* Overrides stock `#panel .panel-button` (color #ffffff) and the
+ * Activities `.workspace-dot` (bg #ffffff): warm white over the glass. */
+#panel .panel-button {
+  color: #FFF6E8;
+}
+#panel .panel-button#panelActivities .workspace-dot {
+  background-color: #FFF6E8;
+}
+
+/* Overrides stock panel-button hover/active pills (inset 0 0 0 100px
+ * white at 0.17/0.28/0.32). Same stock mechanism, recolored: the inset
+ * 100px box-shadow is the pill's FILL inside the 999px radius + 3px
+ * transparent border (not a ring/outline) — translucent lava. The clock's
+ * pill lives on the inner `.clock` node (stock disables the clock-display
+ * button's own shadow with !important), hence the .clock selectors. */
+#panel .panel-button:focus, #panel .panel-button:hover,
+#panel .panel-button.clock-display:focus .clock,
+#panel .panel-button.clock-display:hover .clock {
+  box-shadow: inset 0 0 0 100px rgba(255, 109, 58, 0.16);
+}
+#panel .panel-button:active, #panel .panel-button:checked,
+#panel .panel-button.clock-display:active .clock,
+#panel .panel-button.clock-display:checked .clock {
+  box-shadow: inset 0 0 0 100px rgba(255, 109, 58, 0.26);
+}
+#panel .panel-button:active:hover, #panel .panel-button:checked:hover,
+#panel .panel-button.clock-display:active .clock:hover,
+#panel .panel-button.clock-display:checked .clock:hover {
+  box-shadow: inset 0 0 0 100px rgba(255, 109, 58, 0.32);
+}
+
+/* Overrides stock `#panel:overview .panel-button` (cool #fafafb text +
+ * white pills — higher specificity than the base rules above, so it needs
+ * its own overrides): same warm white + lava language in the overview. */
+#panel:overview .panel-button {
+  color: #FFF6E8;
+}
+#panel:overview .panel-button:focus, #panel:overview .panel-button:hover,
+#panel:overview .panel-button.clock-display:focus .clock,
+#panel:overview .panel-button.clock-display:hover .clock {
+  box-shadow: inset 0 0 0 100px rgba(255, 109, 58, 0.16);
+}
+#panel:overview .panel-button:active, #panel:overview .panel-button:checked,
+#panel:overview .panel-button.clock-display:active .clock,
+#panel:overview .panel-button.clock-display:checked .clock {
+  box-shadow: inset 0 0 0 100px rgba(255, 109, 58, 0.26);
+}
+#panel:overview .panel-button:active:hover, #panel:overview .panel-button:checked:hover,
+#panel:overview .panel-button.clock-display:active .clock:hover,
+#panel:overview .panel-button.clock-display:checked .clock:hover {
+  box-shadow: inset 0 0 0 100px rgba(255, 109, 58, 0.32);
+}

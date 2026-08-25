@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- HYPERCLASS (Gilded Void theme) GNOME background slideshow.
+     The itinerary: the marque rises, a dawn breaks over a ringed world,
+     the ship jumps. 900 s per view, 12 s overlay crossfades, loops forever —
+     first class does not fidget. -->
+<background>
+  <starttime>
+    <year>2026</year>
+    <month>01</month>
+    <day>01</day>
+    <hour>00</hour>
+    <minute>00</minute>
+    <second>00</second>
+  </starttime>
+  <static>
+    <duration>900.0</duration>
+    <file>{{ home }}/.local/share/backgrounds/hyperclass/gilded-void.png</file>
+  </static>
+  <transition type="overlay">
+    <duration>12.0</duration>
+    <from>{{ home }}/.local/share/backgrounds/hyperclass/gilded-void.png</from>
+    <to>{{ home }}/.local/share/backgrounds/hyperclass/first-light.png</to>
+  </transition>
+  <static>
+    <duration>900.0</duration>
+    <file>{{ home }}/.local/share/backgrounds/hyperclass/first-light.png</file>
+  </static>
+  <transition type="overlay">
+    <duration>12.0</duration>
+    <from>{{ home }}/.local/share/backgrounds/hyperclass/first-light.png</from>
+    <to>{{ home }}/.local/share/backgrounds/hyperclass/warp-transit.png</to>
+  </transition>
+  <static>
+    <duration>900.0</duration>
+    <file>{{ home }}/.local/share/backgrounds/hyperclass/warp-transit.png</file>
+  </static>
+  <transition type="overlay">
+    <duration>12.0</duration>
+    <from>{{ home }}/.local/share/backgrounds/hyperclass/warp-transit.png</from>
+    <to>{{ home }}/.local/share/backgrounds/hyperclass/gilded-void.png</to>
+  </transition>
+</background>

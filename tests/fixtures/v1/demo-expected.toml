@@ -1,0 +1,63 @@
+format = 2
+
+[meta]
+name = "demo"
+title = "DEMO — a v1 theme"
+description = "A small v1 theme used to pin the converter's behaviour."
+author = "test"
+version = "1.2.3"
+screenshots = ["files/wallpaper/demo.png"]
+
+[palette]
+bg = "#101010"
+accent = "#7fd6a2"
+red = "#ff0000"
+
+[[files]]
+src = "files/wallpaper/demo.png"
+dest = "~/.local/share/backgrounds/demo/demo.png"
+
+[[files]]
+src = "files/theme.css"
+dest = "~/.local/share/themes/Demo/gnome-shell/gnome-shell.css"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface color-scheme"
+value = "'prefer-dark'"
+component = "colors"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface icon-theme"
+value = "'Papirus-Dark'"
+component = "icons"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface monospace-font-name"
+value = "'Iosevka Nerd Font Mono 11'"
+component = "fonts"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background picture-uri"
+value = "'file://{{ home }}/.local/share/backgrounds/demo/demo.png'"
+component = "wallpaper"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/dock-position"
+value = "'BOTTOM'"
+component = "addons"
+
+[extensions]
+enable = [
+    "blur-my-shell@aunetx",
+    "user-theme@gnome-shell-extensions.gcampax.github.com",
+]
+
+[[extensions.install]]
+uuid = "blur-my-shell@aunetx"
+source = "ego"
+ego_pk = 3193
+
+[[extensions.install]]
+uuid = "user-theme@gnome-shell-extensions.gcampax.github.com"
+source = "ego"
+ego_pk = 19

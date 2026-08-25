@@ -1,0 +1,502 @@
+# NIGHTBLOOM, authored for gtheme v2 from the live rice at ~/nightbloom.
+# The rice itself is a hand-run repo with a README as its manual; this Look is the
+# part of it that reduces to files and settings. README.md in this folder names
+# every piece that did not come across, and why.
+
+format = 2
+
+[meta]
+name = "nightbloom"
+title = "NIGHTBLOOM — the glasshouse after dark"
+description = "A Victorian glass conservatory at night: real glass panes over deep green dark, bioluminescent jade, and exactly one amber firefly on every surface. Rare violet grow-lights. Nothing pure black, no window borders."
+author = "blyatiful1"
+version = "1.0.0"
+min_shell = "49"
+screenshots = ["wallpaper/nightbloom-glasshouse.png"]
+
+[palette]
+void = "#0A100C"
+surface = "#0F1712"
+moss = "#16211A"
+glassline = "#2A3D31"
+verdigris = "#3E7A63"
+jade = "#52E0A4"
+jade_dim = "#3DA97E"
+teal = "#7BD8C4"
+amber = "#F5C04A"
+growlight = "#C77DFF"
+bone = "#E8E4D6"
+sage = "#8CA294"
+error = "#E05A47"
+brass = "#BD9738"
+ansi_black = "#16211A"
+ansi_red = "#E05A47"
+ansi_green = "#52E0A4"
+ansi_yellow = "#F5C04A"
+ansi_blue = "#6E9ECF"
+ansi_magenta = "#C77DFF"
+ansi_cyan = "#7BD8C4"
+ansi_white = "#E8E4D6"
+ansi_bright_black = "#5C6E62"
+ansi_bright_red = "#F07B66"
+ansi_bright_green = "#7FF0C0"
+ansi_bright_yellow = "#FFD97A"
+ansi_bright_blue = "#8FB8E0"
+ansi_bright_magenta = "#DBA6FF"
+ansi_bright_cyan = "#A3EBDC"
+ansi_bright_white = "#F4F1E8"
+term_background = "#0A100C"
+term_foreground = "#E8E4D6"
+term_cursor = "#F5C04A"
+term_cursor_text = "#0A100C"
+term_selection_background = "#2A3D31"
+term_selection_foreground = "#E8E4D6"
+
+[[files]]
+src = "ghostty/config"
+dest = "~/.config/ghostty/config"
+
+[[files]]
+src = "ghostty/nightbloom.css"
+dest = "~/.config/ghostty/nightbloom.css"
+
+[[files]]
+src = "ghostty/themes/nightbloom"
+dest = "~/.config/ghostty/themes/nightbloom"
+
+[[files]]
+src = "ghostty/shaders/nightbloom_firefly.glsl"
+dest = "~/.config/ghostty/shaders/nightbloom_firefly.glsl"
+
+[[files]]
+src = "ghostty/shaders/nightbloom_fog.glsl"
+dest = "~/.config/ghostty/shaders/nightbloom_fog.glsl"
+
+[[files]]
+src = "wallpaper/nightbloom-glasshouse.png"
+dest = "~/.local/share/backgrounds/nightbloom/nightbloom-glasshouse.png"
+
+[[files]]
+src = "shell-theme/gnome-shell.css"
+dest = "~/.local/share/themes/Nightbloom/gnome-shell/gnome-shell.css"
+
+[[files]]
+src = "ptyxis/Nightbloom.palette"
+dest = "~/.local/share/org.gnome.Ptyxis/palettes/Nightbloom.palette"
+
+[[files]]
+src = "emblem/nightbloom-emblem.svg"
+dest = "~/.local/share/gtheme/assets/nightbloom/nightbloom-emblem.svg"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface color-scheme"
+value = "'prefer-dark'"
+component = "colors"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface accent-color"
+value = "'green'"
+component = "colors"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface gtk-theme"
+value = "'adw-gtk3-dark'"
+component = "colors"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface icon-theme"
+value = "'Papirus-Dark'"
+component = "icons"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface cursor-theme"
+value = "'Adwaita'"
+component = "cursor"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface cursor-size"
+value = "24"
+component = "cursor"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface font-name"
+value = "'Adwaita Sans 11 @wght=460'"
+component = "fonts"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface document-font-name"
+value = "'Adwaita Sans 12'"
+component = "fonts"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface monospace-font-name"
+value = "'Monaspace Neon 11'"
+component = "fonts"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface clock-format"
+value = "'24h'"
+component = "topbar"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface clock-show-date"
+value = "true"
+component = "topbar"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface clock-show-weekday"
+value = "false"
+component = "topbar"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface show-battery-percentage"
+value = "false"
+component = "topbar"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface enable-hot-corners"
+value = "false"
+component = "topbar"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background picture-uri"
+value = "'file://{{ home }}/.local/share/backgrounds/nightbloom/nightbloom-glasshouse.png'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background picture-uri-dark"
+value = "'file://{{ home }}/.local/share/backgrounds/nightbloom/nightbloom-glasshouse.png'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background picture-options"
+value = "'zoom'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background primary-color"
+value = "'#0A100C'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.screensaver picture-uri"
+value = "'file://{{ home }}/.local/share/backgrounds/nightbloom/nightbloom-glasshouse.png'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.screensaver picture-options"
+value = "'zoom'"
+component = "wallpaper"
+
+[extensions]
+enable = [
+    "blur-my-shell@aunetx",
+    "dash-to-dock@micxgx.gmail.com",
+    "just-perfection-desktop@just-perfection",
+    "tilingshell@ferrarodomenico.com",
+    "impatience@gfxmonk.net",
+    "compiz-windows-effect@hermes83.github.com",
+    "logomenu@aryan_k",
+    "hotedge@jonathan.jdoda.ca",
+    "hanabi-extension@jeffshee.github.io",
+    "user-theme@gnome-shell-extensions.gcampax.github.com",
+    "intellibar@nightbloom.local",
+]
+
+[[extensions.install]]
+uuid = "blur-my-shell@aunetx"
+source = "ego"
+ego_pk = 3193
+
+[[extensions.install]]
+uuid = "dash-to-dock@micxgx.gmail.com"
+source = "ego"
+ego_pk = 307
+
+[[extensions.install]]
+uuid = "just-perfection-desktop@just-perfection"
+source = "ego"
+ego_pk = 3843
+
+[[extensions.install]]
+uuid = "tilingshell@ferrarodomenico.com"
+source = "ego"
+ego_pk = 7065
+
+[[extensions.install]]
+uuid = "impatience@gfxmonk.net"
+source = "ego"
+ego_pk = 277
+
+[[extensions.install]]
+uuid = "compiz-windows-effect@hermes83.github.com"
+source = "ego"
+ego_pk = 3210
+
+[[extensions.install]]
+uuid = "logomenu@aryan_k"
+source = "ego"
+ego_pk = 4451
+
+[[extensions.install]]
+uuid = "hotedge@jonathan.jdoda.ca"
+source = "ego"
+
+[[extensions.install]]
+uuid = "hanabi-extension@jeffshee.github.io"
+source = "ego"
+
+[[extensions.install]]
+uuid = "user-theme@gnome-shell-extensions.gcampax.github.com"
+source = "ego"
+ego_pk = 19
+
+[[extensions.install]]
+uuid = "intellibar@nightbloom.local"
+source = "local-only"
+
+[[extensions.settings]]
+uuid = "blur-my-shell@aunetx"
+schema_id = "org.gnome.shell.extensions.blur-my-shell.panel"
+key = "blur"
+value = "false"
+
+[[extensions.settings]]
+uuid = "blur-my-shell@aunetx"
+schema_id = "org.gnome.shell.extensions.blur-my-shell.applications"
+key = "blur"
+value = "true"
+
+[[extensions.settings]]
+uuid = "blur-my-shell@aunetx"
+schema_id = "org.gnome.shell.extensions.blur-my-shell.applications"
+key = "enable-all"
+value = "false"
+
+[[extensions.settings]]
+uuid = "blur-my-shell@aunetx"
+schema_id = "org.gnome.shell.extensions.blur-my-shell.applications"
+key = "whitelist"
+value = "['Alacritty', 'org.gnome.Ptyxis', 'com.mitchellh.ghostty']"
+
+[[extensions.settings]]
+uuid = "blur-my-shell@aunetx"
+schema_id = "org.gnome.shell.extensions.blur-my-shell.applications"
+key = "sigma"
+value = "30"
+
+[[extensions.settings]]
+uuid = "blur-my-shell@aunetx"
+schema_id = "org.gnome.shell.extensions.blur-my-shell.applications"
+key = "corner-radius"
+value = "12"
+
+[[extensions.settings]]
+uuid = "blur-my-shell@aunetx"
+schema_id = "org.gnome.shell.extensions.blur-my-shell.applications"
+key = "static-blur"
+value = "false"
+
+[[extensions.settings]]
+uuid = "blur-my-shell@aunetx"
+schema_id = "org.gnome.shell.extensions.blur-my-shell.applications"
+key = "dynamic-opacity"
+value = "false"
+
+[[extensions.settings]]
+uuid = "blur-my-shell@aunetx"
+schema_id = "org.gnome.shell.extensions.blur-my-shell.applications"
+key = "noise-amount"
+value = "0.04"
+
+[[extensions.settings]]
+uuid = "blur-my-shell@aunetx"
+schema_id = "org.gnome.shell.extensions.blur-my-shell.applications"
+key = "noise-lightness"
+value = "1.3"
+
+[[extensions.settings]]
+uuid = "blur-my-shell@aunetx"
+schema_id = "org.gnome.shell.extensions.blur-my-shell.dash-to-dock"
+key = "static-blur"
+value = "true"
+
+[[extensions.settings]]
+uuid = "blur-my-shell@aunetx"
+schema_id = "org.gnome.shell.extensions.blur-my-shell.dash-to-dock"
+key = "override-background"
+value = "false"
+
+[[extensions.settings]]
+uuid = "blur-my-shell@aunetx"
+schema_id = "org.gnome.shell.extensions.blur-my-shell.dash-to-dock"
+key = "sigma"
+value = "30"
+
+[[extensions.settings]]
+uuid = "blur-my-shell@aunetx"
+schema_id = "org.gnome.shell.extensions.blur-my-shell.dash-to-dock"
+key = "noise-amount"
+value = "0.04"
+
+[[extensions.settings]]
+uuid = "blur-my-shell@aunetx"
+schema_id = "org.gnome.shell.extensions.blur-my-shell.dash-to-dock"
+key = "noise-lightness"
+value = "1.3"
+
+[[extensions.settings]]
+uuid = "dash-to-dock@micxgx.gmail.com"
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "dock-position"
+value = "'BOTTOM'"
+
+[[extensions.settings]]
+uuid = "dash-to-dock@micxgx.gmail.com"
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "transparency-mode"
+value = "'FIXED'"
+
+[[extensions.settings]]
+uuid = "dash-to-dock@micxgx.gmail.com"
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "custom-background-color"
+value = "true"
+
+[[extensions.settings]]
+uuid = "dash-to-dock@micxgx.gmail.com"
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "background-color"
+value = "'#0A100C'"
+
+[[extensions.settings]]
+uuid = "dash-to-dock@micxgx.gmail.com"
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "background-opacity"
+value = "0.72"
+
+[[extensions.settings]]
+uuid = "dash-to-dock@micxgx.gmail.com"
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "running-indicator-style"
+value = "'DOTS'"
+
+[[extensions.settings]]
+uuid = "dash-to-dock@micxgx.gmail.com"
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "custom-theme-customize-running-dots"
+value = "true"
+
+[[extensions.settings]]
+uuid = "dash-to-dock@micxgx.gmail.com"
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "custom-theme-running-dots-color"
+value = "'#F5C04A'"
+
+[[extensions.settings]]
+uuid = "dash-to-dock@micxgx.gmail.com"
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "custom-theme-running-dots-border-width"
+value = "0"
+
+[[extensions.settings]]
+uuid = "dash-to-dock@micxgx.gmail.com"
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "dash-max-icon-size"
+value = "48"
+
+[[extensions.settings]]
+uuid = "dash-to-dock@micxgx.gmail.com"
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "show-apps-at-top"
+value = "true"
+
+[[extensions.settings]]
+uuid = "dash-to-dock@micxgx.gmail.com"
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "click-action"
+value = "'focus-minimize-or-previews'"
+
+[[extensions.settings]]
+uuid = "tilingshell@ferrarodomenico.com"
+schema_id = "org.gnome.shell.extensions.tilingshell"
+key = "enable-window-border"
+value = "false"
+
+[[extensions.settings]]
+uuid = "tilingshell@ferrarodomenico.com"
+schema_id = "org.gnome.shell.extensions.tilingshell"
+key = "window-use-custom-border-color"
+value = "false"
+
+[[extensions.settings]]
+uuid = "just-perfection-desktop@just-perfection"
+schema_id = "org.gnome.shell.extensions.just-perfection"
+key = "startup-status"
+value = "0"
+
+[[extensions.settings]]
+uuid = "just-perfection-desktop@just-perfection"
+schema_id = "org.gnome.shell.extensions.just-perfection"
+key = "animation"
+value = "4"
+
+[[extensions.settings]]
+uuid = "just-perfection-desktop@just-perfection"
+schema_id = "org.gnome.shell.extensions.just-perfection"
+key = "workspace-background-corner-size"
+value = "14"
+
+[[extensions.settings]]
+uuid = "impatience@gfxmonk.net"
+schema_id = "org.gnome.shell.extensions.net.gfxmonk.impatience"
+key = "speed-factor"
+value = "0.6"
+
+[[extensions.settings]]
+uuid = "compiz-windows-effect@hermes83.github.com"
+schema_id = "org.gnome.shell.extensions.com.github.hermes83.compiz-windows-effect"
+key = "preset"
+value = "'R'"
+
+[[extensions.settings]]
+uuid = "compiz-windows-effect@hermes83.github.com"
+schema_id = "org.gnome.shell.extensions.com.github.hermes83.compiz-windows-effect"
+key = "maximize-effect"
+value = "false"
+
+[[extensions.settings]]
+uuid = "compiz-windows-effect@hermes83.github.com"
+schema_id = "org.gnome.shell.extensions.com.github.hermes83.compiz-windows-effect"
+key = "resize-effect"
+value = "false"
+
+[[extensions.settings]]
+uuid = "hotedge@jonathan.jdoda.ca"
+schema_id = "org.gnome.shell.extensions.hotedge"
+key = "pressure-threshold"
+value = "uint32 200"
+
+[[extensions.settings]]
+uuid = "logomenu@aryan_k"
+schema_id = "org.gnome.shell.extensions.logo-menu"
+key = "use-custom-icon"
+value = "true"
+
+[[extensions.settings]]
+uuid = "logomenu@aryan_k"
+schema_id = "org.gnome.shell.extensions.logo-menu"
+key = "symbolic-icon"
+value = "false"
+
+[[extensions.settings]]
+uuid = "logomenu@aryan_k"
+schema_id = "org.gnome.shell.extensions.logo-menu"
+key = "custom-icon-path"
+value = "'{{ home }}/.local/share/gtheme/assets/nightbloom/nightbloom-emblem.svg'"
+
+[[extensions.settings]]
+uuid = "user-theme@gnome-shell-extensions.gcampax.github.com"
+schema_id = "org.gnome.shell.extensions.user-theme"
+key = "name"
+value = "'Nightbloom'"

@@ -1,0 +1,23 @@
+# NIGHTBLOOM — the glasshouse after dark
+palette = 0=#16211A
+palette = 1=#E05A47
+palette = 2=#52E0A4
+palette = 3=#F5C04A
+palette = 4=#6E9ECF
+palette = 5=#C77DFF
+palette = 6=#7BD8C4
+palette = 7=#E8E4D6
+palette = 8=#5C6E62
+palette = 9=#F07B66
+palette = 10=#7FF0C0
+palette = 11=#FFD97A
+palette = 12=#8FB8E0
+palette = 13=#DBA6FF
+palette = 14=#A3EBDC
+palette = 15=#F4F1E8
+background = #0A100C
+foreground = #E8E4D6
+cursor-color = #F5C04A
+cursor-text = #0A100C
+selection-background = #2A3D31
+selection-foreground = #E8E4D6
