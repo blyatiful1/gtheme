@@ -88,11 +88,14 @@ class Corpus:
 def _read(path: Path) -> dict:
     """Parse one descriptor file, accepting either spelling of the row table.
 
-    DESIGN.md writes the row tables as ``[[row]]``; the frozen model calls the
-    field ``rows`` and forbids anything it does not know, so a file written the
-    way the plan spells it would fail to load with a message about an
-    unexpected key. Both spellings are accepted here and mean the same thing;
-    a file that uses both is a mistake and says so.
+    ``[[rows]]`` is the spelling, because ``rows`` is what the model calls the
+    field and one name for one thing is worth more than either name being
+    prettier. DESIGN.md writes ``[[row]]`` in places; every committed data file
+    uses ``[[rows]]``, and a test keeps it that way.
+
+    ``[[row]]`` is still accepted, because the alternative is a Look or panel
+    author hitting "unexpected key 'row'" for a file that is obviously correct.
+    A file that uses both spellings is a mistake and says so.
     """
     with path.open("rb") as handle:
         data = tomllib.load(handle)
@@ -103,10 +106,24 @@ def _read(path: Path) -> dict:
     return data
 
 
+#: Files that live in ``data/domains/`` but are not descriptors. They are
+#: listed by name, never guessed at: a descriptor that fails to load has to
+#: stay a loud problem, so the only way a file gets to be silently skipped is
+#: by being written down here.
+NOT_DESCRIPTORS: frozenset[str] = frozenset(
+    {
+        # The per-key disposition manifest — same directory, different shape.
+        "coverage.toml",
+    }
+)
+
+
 def _load_dir(directory: Path, model: type, problems: list[str]) -> Iterator[object]:
     if not directory.is_dir():
         return
     for path in sorted(directory.glob("*.toml")):
+        if path.name in NOT_DESCRIPTORS:
+            continue
         try:
             yield model.model_validate(_read(path))
         except ValidationError as exc:

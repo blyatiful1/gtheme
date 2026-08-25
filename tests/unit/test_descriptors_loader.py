@@ -184,3 +184,81 @@ def test_every_committed_row_names_a_setting_that_exists(monkeypatch):
         in (Presence.MISSING_ADDON, Presence.MISSING_SETTING)
     ]
     assert unresolved == []
+
+
+# -- one setting, two surfaces ---------------------------------------------
+
+
+def test_the_same_setting_may_appear_on_two_surfaces(repo_root):
+    """A key described by a domain AND a panel is allowed, and is real.
+
+    ``org.gnome.shell.extensions.user-theme:name`` is the shell theme. It is a
+    row on Top Bar & Overview because that is where somebody looks for it, and
+    a row on the User Themes add-on panel because that is where somebody who
+    went looking for the add-on looks for it. Two surfaces, one setting, one
+    value — the same shape as the dark-mode pairing.
+
+    What is NOT allowed is the same setting twice *within* one corpus: two rows
+    in the same list are two controls in the same place fighting each other.
+    Those are checked by ``domains_corpus_test`` and ``panels_curated_test``.
+    """
+    corpus = load_corpus(repo_root / "data")
+    assert corpus.problems == []
+
+    domain_ids = [row.id for domain in corpus.domains for row in domain.rows]
+    panel_ids = [row.id for panel in corpus.panels for row in panel.rows]
+    assert len(domain_ids) == len(set(domain_ids)), "a domain describes a setting twice"
+    assert len(panel_ids) == len(set(panel_ids)), "a panel describes a setting twice"
+
+    shared = sorted(set(domain_ids) & set(panel_ids))
+    assert "org.gnome.shell.extensions.user-theme:name" in shared, (
+        "the shell-theme row vanished from one of its two surfaces"
+    )
+    # Loading the whole corpus reports no problem about the overlap.
+    assert not any("user-theme" in problem for problem in corpus.problems)
+
+
+def test_a_setting_on_two_surfaces_is_the_same_setting(repo_root):
+    """Both rows must address the same key, or they are not two surfaces at all."""
+    corpus = load_corpus(repo_root / "data")
+    rows = [
+        row
+        for group in (*corpus.domains, *corpus.panels)
+        for row in group.rows
+        if row.id == "org.gnome.shell.extensions.user-theme:name"
+    ]
+    assert len(rows) == 2, f"expected two surfaces, found {len(rows)}"
+    assert {row.schema_id for row in rows} == {"org.gnome.shell.extensions.user-theme"}
+    assert {row.key for row in rows} == {"name"}
+
+
+def test_every_committed_descriptor_uses_the_canonical_spelling(repo_root):
+    """``[[rows]]``, matching the model's field name.
+
+    The loader accepts ``[[row]]`` too, so this is not about what would break —
+    it is about the corpus staying one thing rather than two, which is the sort
+    of drift nobody notices until a grep comes back half-empty.
+    """
+    offenders = [
+        path.relative_to(repo_root)
+        for folder in ("panels", "domains")
+        for path in sorted((repo_root / "data" / folder).glob("*.toml"))
+        if "\n[[row]]" in path.read_text(encoding="utf-8")
+    ]
+    assert offenders == [], f"use [[rows]], not [[row]]: {offenders}"
+
+
+def test_no_committed_descriptor_names_a_settings_file(repo_root):
+    """``keyfile`` is filled in at runtime, never authored.
+
+    A committed descriptor cannot know which profile file an add-on is using —
+    the name is a timestamp generated on one machine. Anything written here
+    would be wrong on every computer but the author's.
+    """
+    offenders = [
+        path.relative_to(repo_root)
+        for folder in ("panels", "domains")
+        for path in sorted((repo_root / "data" / folder).glob("*.toml"))
+        if "keyfile" in path.read_text(encoding="utf-8")
+    ]
+    assert offenders == [], f"keyfile is not an authoring field: {offenders}"
