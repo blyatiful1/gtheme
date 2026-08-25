@@ -1,0 +1,6 @@
+{
+  "uuid": "dash-to-dock@micxgx.gmail.com",
+  "name": "Dash to Dock",
+  "description": "A dock for the GNOME Shell",
+  "shell-version": ["45", "46", "47", "48", "49", "50"]
+}

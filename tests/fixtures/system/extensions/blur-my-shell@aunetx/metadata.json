@@ -1,0 +1,5 @@
+{
+  "uuid": "blur-my-shell@aunetx",
+  "name": "Blur my Shell",
+  "shell-version": ["46", "47", "48", "49", "50"]
+}

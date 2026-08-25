@@ -1,0 +1,7 @@
+<schemalist>
+  <schema id="org.gnome.shell.extensions.clipboard-history" path="/org/gnome/shell/extensions/clipboard-history/">
+    <key name="history-size" type="i">
+      <default>50</default>
+    </key>
+  </schema>
+</schemalist>
