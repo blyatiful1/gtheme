@@ -1,0 +1,409 @@
+# gtheme domain descriptors — core GNOME, authored by hand.
+#
+# Every row here is dispositioned surfaced(windows) in coverage.toml.
+# Titles and subtitles are checked by the plain-language lint in
+# tests/unit/domains_jargon_test.py; synonyms deliberately are not, because they
+# exist to catch the words a person actually types into the search box.
+
+id = "windows"
+title = "Windows & Desktops"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.preferences"
+key = "button-layout"
+title = "Window buttons"
+subtitle = "Which buttons appear in the strip at the top of a window, and which side they sit on."
+synonyms = ["close button", "minimize", "maximize", "window controls", "buttons"]
+kind = "choice"
+
+[[rows.choices]]
+value = "'appmenu:minimize,maximize,close'"
+label = "Minimise, restore and close, on the right"
+
+[[rows.choices]]
+value = "'appmenu:close'"
+label = "Close only, on the right"
+
+[[rows.choices]]
+value = "'appmenu:minimize,close'"
+label = "Minimise and close, on the right"
+
+[[rows.choices]]
+value = "'close,minimize,maximize:appmenu'"
+label = "All three on the left"
+
+[[rows.choices]]
+value = "'close:appmenu'"
+label = "Close only, on the left"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.preferences"
+key = "focus-mode"
+title = "How a window becomes the one you are typing in"
+subtitle = "Either you click it, or it happens as soon as the mouse moves over it."
+synonyms = ["focus", "click to focus", "focus follows mouse"]
+kind = "choice"
+
+[[rows.choices]]
+value = "'click'"
+label = "Click the window"
+
+[[rows.choices]]
+value = "'sloppy'"
+label = "Point at the window"
+
+[[rows.choices]]
+value = "'mouse'"
+label = "Point at the window, and let go when you point away"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.preferences"
+key = "focus-new-windows"
+title = "What a newly opened window does"
+subtitle = "Whether a window that has just opened jumps in front of what you were doing."
+synonyms = ["focus new windows", "steal focus", "popup"]
+kind = "choice"
+advanced = true
+
+[[rows.choices]]
+value = "'smart'"
+label = "Come to the front"
+
+[[rows.choices]]
+value = "'strict'"
+label = "Stay behind, and light up in the app row"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.preferences"
+key = "action-double-click-titlebar"
+title = "Double-clicking the top of a window"
+subtitle = "What happens when you double-click the strip along the top of a window."
+synonyms = ["double click", "title bar", "maximize"]
+kind = "choice"
+
+[[rows.choices]]
+value = "'toggle-maximize'"
+label = "Make it fill the screen, or put it back"
+
+[[rows.choices]]
+value = "'toggle-maximize-horizontally'"
+label = "Make it as wide as the screen"
+
+[[rows.choices]]
+value = "'toggle-maximize-vertically'"
+label = "Make it as tall as the screen"
+
+[[rows.choices]]
+value = "'minimize'"
+label = "Hide it away"
+
+[[rows.choices]]
+value = "'lower'"
+label = "Put it behind the other windows"
+
+[[rows.choices]]
+value = "'menu'"
+label = "Open the window menu"
+
+[[rows.choices]]
+value = "'toggle-shade'"
+label = "Roll it up so only the top strip shows"
+
+[[rows.choices]]
+value = "'none'"
+label = "Do nothing"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.preferences"
+key = "action-middle-click-titlebar"
+title = "Middle-clicking the top of a window"
+subtitle = "What happens when you click the strip along the top of a window with the scroll wheel."
+synonyms = ["middle click", "wheel click", "title bar"]
+kind = "choice"
+advanced = true
+
+[[rows.choices]]
+value = "'toggle-maximize'"
+label = "Make it fill the screen, or put it back"
+
+[[rows.choices]]
+value = "'toggle-maximize-horizontally'"
+label = "Make it as wide as the screen"
+
+[[rows.choices]]
+value = "'toggle-maximize-vertically'"
+label = "Make it as tall as the screen"
+
+[[rows.choices]]
+value = "'minimize'"
+label = "Hide it away"
+
+[[rows.choices]]
+value = "'lower'"
+label = "Put it behind the other windows"
+
+[[rows.choices]]
+value = "'menu'"
+label = "Open the window menu"
+
+[[rows.choices]]
+value = "'toggle-shade'"
+label = "Roll it up so only the top strip shows"
+
+[[rows.choices]]
+value = "'none'"
+label = "Do nothing"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.preferences"
+key = "action-right-click-titlebar"
+title = "Right-clicking the top of a window"
+subtitle = "What happens when you right-click the strip along the top of a window."
+synonyms = ["right click", "context menu", "title bar"]
+kind = "choice"
+advanced = true
+
+[[rows.choices]]
+value = "'toggle-maximize'"
+label = "Make it fill the screen, or put it back"
+
+[[rows.choices]]
+value = "'toggle-maximize-horizontally'"
+label = "Make it as wide as the screen"
+
+[[rows.choices]]
+value = "'toggle-maximize-vertically'"
+label = "Make it as tall as the screen"
+
+[[rows.choices]]
+value = "'minimize'"
+label = "Hide it away"
+
+[[rows.choices]]
+value = "'lower'"
+label = "Put it behind the other windows"
+
+[[rows.choices]]
+value = "'menu'"
+label = "Open the window menu"
+
+[[rows.choices]]
+value = "'toggle-shade'"
+label = "Roll it up so only the top strip shows"
+
+[[rows.choices]]
+value = "'none'"
+label = "Do nothing"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.preferences"
+key = "mouse-button-modifier"
+title = "Key held to drag a window from anywhere"
+subtitle = "Hold this key and you can drag a window by any part of it, not only by its top strip."
+synonyms = ["super", "alt drag", "move window"]
+kind = "choice"
+advanced = true
+
+[[rows.choices]]
+value = "'<Super>'"
+label = "The key with the Windows or Command symbol"
+
+[[rows.choices]]
+value = "'<Alt>'"
+label = "The Alt key"
+
+[[rows.choices]]
+value = "''"
+label = "No key — dragging from anywhere is off"
+
+[[rows]]
+schema_id = "org.gnome.mutter"
+key = "dynamic-workspaces"
+title = "Add and remove desktops automatically"
+subtitle = "New desktops appear as you fill them up, and empty ones disappear again."
+synonyms = ["workspaces", "virtual desktops", "dynamic"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.preferences"
+key = "num-workspaces"
+title = "How many desktops"
+subtitle = "The fixed number of desktops to keep, when they are not being added automatically."
+synonyms = ["workspaces", "virtual desktops", "number of desktops"]
+kind = "slider"
+clamp_min = 1
+clamp_max = 36
+step = 1
+
+[[rows.requires_first]]
+schema_id = "org.gnome.mutter"
+key = "dynamic-workspaces"
+value = "false"
+explain = "To set a fixed number, gtheme also has to stop desktops from being added and removed for you."
+
+[[rows]]
+schema_id = "org.gnome.mutter"
+key = "workspaces-only-on-primary"
+title = "Desktops apply to the main screen only"
+subtitle = "With more than one screen, switching desktops changes only the main screen; the others stay put."
+synonyms = ["multi monitor", "second screen", "workspaces"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.mutter"
+key = "edge-tiling"
+title = "Snap windows to the sides of the screen"
+subtitle = "Dragging a window against an edge makes it fill that half of the screen."
+synonyms = ["snap", "tiling", "half screen", "aero snap"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.mutter"
+key = "center-new-windows"
+title = "Open new windows in the middle"
+subtitle = "A window that has just opened is placed in the centre of the screen."
+synonyms = ["center", "window placement", "new window"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.mutter"
+key = "attach-modal-dialogs"
+title = "Attach pop-up windows to their window"
+subtitle = "Small question windows hang from the top of the window they belong to instead of floating free."
+synonyms = ["modal", "dialog", "attached"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.mutter"
+key = "auto-maximize"
+title = "Open large windows already filling the screen"
+subtitle = "A window that opens nearly as big as the screen is made to fill it straight away."
+synonyms = ["maximize", "auto maximise", "full screen"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.mutter"
+key = "overlay-key"
+title = "Key that opens the app view"
+subtitle = "The single key that shows all your open windows and lets you search for apps."
+synonyms = ["super key", "windows key", "activities", "overview"]
+kind = "choice"
+advanced = true
+
+[[rows.choices]]
+value = "'Super'"
+label = "The left key with the Windows or Command symbol"
+
+[[rows.choices]]
+value = "'Super_R'"
+label = "The right key with the Windows or Command symbol"
+
+[[rows]]
+schema_id = "org.gnome.mutter"
+key = "draggable-border-width"
+title = "How wide the invisible grab edge is"
+subtitle = "How far outside a window you can still grab it to resize. Larger is easier to hit."
+synonyms = ["resize", "border", "grab", "edge"]
+kind = "slider"
+clamp_min = 0
+clamp_max = 32
+step = 1
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.mutter"
+key = "focus-change-on-pointer-rest"
+title = "Wait for the mouse to settle before switching"
+subtitle = "Stops windows from grabbing your typing as the mouse sweeps across them."
+synonyms = ["focus", "pointer rest", "hover"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.preferences"
+key = "auto-raise"
+title = "Bring a window to the front when you point at it"
+subtitle = "A window you point at comes in front of the others on its own, after a short wait."
+synonyms = ["auto raise", "focus", "hover"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.preferences"
+key = "auto-raise-delay"
+title = "How long to wait before bringing it to the front"
+subtitle = "The pause between pointing at a window and it coming forward, in thousandths of a second."
+synonyms = ["auto raise delay", "hover delay"]
+kind = "slider"
+clamp_min = 0
+clamp_max = 10000
+step = 100
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.preferences"
+key = "raise-on-click"
+title = "Bring a window to the front when you click it"
+subtitle = "Clicking anywhere in a window puts it in front of the others."
+synonyms = ["raise", "click to front"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.preferences"
+key = "resize-with-right-button"
+title = "Resize windows with the right mouse button"
+subtitle = "While holding the drag key, the right button resizes instead of the middle one."
+synonyms = ["resize", "right button"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.interface"
+key = "enable-animations"
+title = "Animations"
+subtitle = "Whether windows and menus slide and fade, or simply appear."
+synonyms = ["animation", "effects", "motion", "speed", "snappy"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.app-switcher"
+key = "current-workspace-only"
+title = "Only switch between apps on this desktop"
+subtitle = "When you hold the switch-apps keys, skip apps that are open on your other desktops."
+synonyms = ["alt tab", "app switcher", "workspace"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.window-switcher"
+key = "current-workspace-only"
+title = "Only switch between windows on this desktop"
+subtitle = "When you hold the switch-windows keys, skip windows on your other desktops."
+synonyms = ["alt tab", "window switcher", "workspace"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.window-switcher"
+key = "app-icon-mode"
+title = "What the window switcher shows"
+subtitle = "Whether holding the switch-windows keys shows small pictures of the windows, app symbols, or both."
+synonyms = ["alt tab", "window switcher", "thumbnails"]
+kind = "choice"
+advanced = true
+
+[[rows.choices]]
+value = "'both'"
+label = "A small picture with the app symbol on it"
+
+[[rows.choices]]
+value = "'thumbnail-only'"
+label = "A small picture of the window"
+
+[[rows.choices]]
+value = "'app-icon-only'"
+label = "The app symbol"

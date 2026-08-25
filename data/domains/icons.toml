@@ -1,0 +1,53 @@
+# gtheme domain descriptors — core GNOME, authored by hand.
+#
+# Every row here is dispositioned surfaced(icons) in coverage.toml.
+# Titles and subtitles are checked by the plain-language lint in
+# tests/unit/domains_jargon_test.py; synonyms deliberately are not, because they
+# exist to catch the words a person actually types into the search box.
+
+id = "icons"
+title = "Icons & Pointer"
+
+[[rows]]
+schema_id = "org.gnome.desktop.interface"
+key = "icon-theme"
+title = "Icon set"
+subtitle = "Changes the small pictures used for apps, folders and files."
+synonyms = ["icons", "icon theme", "papirus", "symbols"]
+kind = "picker"
+
+[[rows]]
+schema_id = "org.gnome.desktop.interface"
+key = "cursor-theme"
+title = "Pointer style"
+subtitle = "Changes how the arrow you move with the mouse looks."
+synonyms = ["cursor", "mouse pointer", "arrow", "cursor theme"]
+kind = "picker"
+
+[[rows]]
+schema_id = "org.gnome.desktop.interface"
+key = "cursor-size"
+title = "Pointer size"
+subtitle = "Makes the mouse pointer larger, which helps if you keep losing it on screen."
+synonyms = ["cursor size", "big cursor", "mouse size"]
+kind = "choice"
+
+[[rows.choices]]
+value = "24"
+label = "Normal"
+
+[[rows.choices]]
+value = "32"
+label = "Large"
+
+[[rows.choices]]
+value = "48"
+label = "Very large"
+
+[[rows]]
+schema_id = "org.gnome.desktop.interface"
+key = "locate-pointer"
+title = "Show where the pointer is when you tap Control"
+subtitle = "Draws a ring around the mouse pointer when you tap the Control key, so you can find it."
+synonyms = ["find cursor", "locate pointer", "where is my mouse"]
+kind = "toggle"

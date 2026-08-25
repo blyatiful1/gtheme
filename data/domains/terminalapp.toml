@@ -1,0 +1,17 @@
+# gtheme domain descriptors — core GNOME, authored by hand.
+#
+# Every row here is dispositioned surfaced(terminal) in coverage.toml.
+# Titles and subtitles are checked by the plain-language lint in
+# tests/unit/domains_jargon_test.py; synonyms deliberately are not, because they
+# exist to catch the words a person actually types into the search box.
+
+id = "terminalapp"
+title = "Command Window App"
+
+[[rows]]
+schema_id = "org.gnome.desktop.default-applications.terminal"
+key = "exec"
+title = "Command window app"
+subtitle = "The app that opens when something on your desktop needs a command window."
+synonyms = ["terminal", "console", "shell app", "default terminal"]
+kind = "picker"

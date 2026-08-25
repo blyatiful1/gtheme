@@ -1,0 +1,305 @@
+# gtheme domain descriptors — core GNOME, authored by hand.
+#
+# Every row here is dispositioned surfaced(more) in coverage.toml.
+# Titles and subtitles are checked by the plain-language lint in
+# tests/unit/domains_jargon_test.py; synonyms deliberately are not, because they
+# exist to catch the words a person actually types into the search box.
+
+id = "peripherals"
+title = "Mouse, Touchpad & Keyboard"
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.mouse"
+key = "left-handed"
+title = "Swap the mouse buttons"
+subtitle = "Puts the main click on the right button, for left-handed use."
+synonyms = ["left handed", "mouse buttons", "swap"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.mouse"
+key = "natural-scroll"
+title = "Scroll the mouse wheel the other way"
+subtitle = "Content follows your fingers, the way it does on a phone."
+synonyms = ["natural scrolling", "reverse scroll", "inverted"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.mouse"
+key = "speed"
+title = "Mouse speed"
+subtitle = "How far the pointer travels for a given movement of the mouse."
+synonyms = ["sensitivity", "mouse speed", "pointer speed"]
+kind = "slider"
+clamp_min = -1.0
+clamp_max = 1.0
+step = 0.05
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.mouse"
+key = "accel-profile"
+title = "How mouse speed builds up"
+subtitle = "Whether moving the mouse faster makes the pointer travel further than the movement alone."
+synonyms = ["acceleration", "accel", "sensitivity"]
+kind = "choice"
+advanced = true
+
+[[rows.choices]]
+value = "'default'"
+label = "Whatever suits the device"
+
+[[rows.choices]]
+value = "'adaptive'"
+label = "Speed up when you move quickly"
+
+[[rows.choices]]
+value = "'flat'"
+label = "Always the same speed"
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.mouse"
+key = "double-click"
+title = "Double-click speed"
+subtitle = "How quickly two clicks have to follow each other to count as a double-click."
+synonyms = ["double click", "click speed"]
+kind = "slider"
+clamp_min = 100
+clamp_max = 1000
+step = 50
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.mouse"
+key = "drag-threshold"
+title = "How far to move before it counts as dragging"
+subtitle = "Small movements below this are treated as a click, not as dragging something."
+synonyms = ["drag", "threshold", "accidental drag"]
+kind = "slider"
+clamp_min = 1
+clamp_max = 32
+step = 1
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.mouse"
+key = "middle-click-emulation"
+title = "Both buttons at once acts as the middle button"
+subtitle = "For a mouse with no wheel button: press left and right together instead."
+synonyms = ["middle click", "emulation"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.touchpad"
+key = "tap-to-click"
+title = "Tap the touchpad to click"
+subtitle = "A light tap counts as a click, so you do not have to press the pad down."
+synonyms = ["tap to click", "touchpad", "trackpad"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.touchpad"
+key = "natural-scroll"
+title = "Scroll the touchpad the other way"
+subtitle = "Content follows your fingers, the way it does on a phone."
+synonyms = ["natural scrolling", "reverse scroll", "touchpad"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.touchpad"
+key = "speed"
+title = "Touchpad speed"
+subtitle = "How far the pointer travels for a given movement of your finger."
+synonyms = ["sensitivity", "touchpad speed"]
+kind = "slider"
+clamp_min = -1.0
+clamp_max = 1.0
+step = 0.05
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.touchpad"
+key = "click-method"
+title = "How a right-click works on the touchpad"
+subtitle = "Either press in a corner, or press with two fingers."
+synonyms = ["right click", "two finger", "touchpad"]
+kind = "choice"
+
+[[rows.choices]]
+value = "'fingers'"
+label = "Press with two fingers"
+
+[[rows.choices]]
+value = "'areas'"
+label = "Press in the bottom-right corner"
+
+[[rows.choices]]
+value = "'default'"
+label = "Whatever suits the touchpad"
+
+[[rows.choices]]
+value = "'none'"
+label = "No right-click on the touchpad"
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.touchpad"
+key = "two-finger-scrolling-enabled"
+title = "Scroll with two fingers"
+subtitle = "Slide two fingers on the touchpad to scroll."
+synonyms = ["two finger scroll", "touchpad"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.touchpad"
+key = "edge-scrolling-enabled"
+title = "Scroll along the edge"
+subtitle = "Slide one finger down the right-hand edge of the touchpad to scroll."
+synonyms = ["edge scroll", "touchpad"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.touchpad"
+key = "disable-while-typing"
+title = "Ignore the touchpad while typing"
+subtitle = "Stops your palm from moving the pointer in the middle of a sentence."
+synonyms = ["palm rejection", "typing", "touchpad"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.touchpad"
+key = "left-handed"
+title = "Swap the touchpad buttons"
+subtitle = "Puts the main click on the right, for left-handed use."
+synonyms = ["left handed", "touchpad buttons"]
+kind = "choice"
+advanced = true
+
+[[rows.choices]]
+value = "'mouse'"
+label = "Follow the mouse setting"
+
+[[rows.choices]]
+value = "'right'"
+label = "Main click on the left"
+
+[[rows.choices]]
+value = "'left'"
+label = "Main click on the right"
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.touchpad"
+key = "send-events"
+title = "Use the touchpad"
+subtitle = "Switch the touchpad off entirely, or only while a mouse is plugged in."
+synonyms = ["disable touchpad", "touchpad off"]
+kind = "choice"
+
+[[rows.choices]]
+value = "'enabled'"
+label = "Always"
+
+[[rows.choices]]
+value = "'disabled-on-external-mouse'"
+label = "Except when a mouse is plugged in"
+
+[[rows.choices]]
+value = "'disabled'"
+label = "Never"
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.touchpad"
+key = "tap-and-drag"
+title = "Tap then slide to drag"
+subtitle = "Tap once and keep your finger down to pick something up and move it."
+synonyms = ["drag", "tap drag", "touchpad"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.touchpad"
+key = "tap-button-map"
+title = "What two and three fingers tap as"
+subtitle = "Which button a two-finger and a three-finger tap count as."
+synonyms = ["tap", "three finger", "touchpad"]
+kind = "choice"
+advanced = true
+
+[[rows.choices]]
+value = "'default'"
+label = "Whatever suits the touchpad"
+
+[[rows.choices]]
+value = "'lrm'"
+label = "Two fingers is a right-click"
+
+[[rows.choices]]
+value = "'lmr'"
+label = "Two fingers is a middle-click"
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.touchpad"
+key = "accel-profile"
+title = "How touchpad speed builds up"
+subtitle = "Whether moving your finger faster makes the pointer travel further than the movement alone."
+synonyms = ["acceleration", "touchpad"]
+kind = "choice"
+advanced = true
+
+[[rows.choices]]
+value = "'default'"
+label = "Whatever suits the device"
+
+[[rows.choices]]
+value = "'adaptive'"
+label = "Speed up when you move quickly"
+
+[[rows.choices]]
+value = "'flat'"
+label = "Always the same speed"
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.touchpad"
+key = "middle-click-emulation"
+title = "Both touchpad buttons at once acts as the middle button"
+subtitle = "Press the bottom-left and bottom-right of the pad together for a middle-click."
+synonyms = ["middle click", "touchpad"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.keyboard"
+key = "repeat"
+title = "Repeat a key while it is held down"
+subtitle = "Holding a letter down types it over and over."
+synonyms = ["key repeat", "keyboard", "held key"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.keyboard"
+key = "delay"
+title = "How long before a held key repeats"
+subtitle = "The pause between holding a key down and it starting to repeat, in thousandths of a second."
+synonyms = ["repeat delay", "keyboard"]
+kind = "slider"
+clamp_min = 100
+clamp_max = 2000
+step = 50
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.keyboard"
+key = "repeat-interval"
+title = "How fast it repeats"
+subtitle = "The gap between repeats once a held key has got going, in thousandths of a second."
+synonyms = ["repeat rate", "keyboard"]
+kind = "slider"
+clamp_min = 5
+clamp_max = 200
+step = 5
+
+[[rows]]
+schema_id = "org.gnome.desktop.peripherals.keyboard"
+key = "remember-numlock-state"
+title = "Remember the number lock"
+subtitle = "Puts the number pad back the way you left it when you next start up."
+synonyms = ["numlock", "number lock", "keyboard"]
+kind = "toggle"
+advanced = true

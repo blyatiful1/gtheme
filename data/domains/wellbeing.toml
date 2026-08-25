@@ -1,0 +1,230 @@
+# gtheme domain descriptors — core GNOME, authored by hand.
+#
+# Every row here is dispositioned surfaced(more) in coverage.toml.
+# Titles and subtitles are checked by the plain-language lint in
+# tests/unit/domains_jargon_test.py; synonyms deliberately are not, because they
+# exist to catch the words a person actually types into the search box.
+
+id = "wellbeing"
+title = "Breaks & Screen Time"
+
+[[rows]]
+schema_id = "org.gnome.desktop.break-reminders.eyesight"
+key = "interval-seconds"
+title = "Eyesight break: how often"
+subtitle = "How long you work before your desktop reminds you to look away, in seconds."
+synonyms = ["break", "reminder", "eyesight", "wellbeing"]
+kind = "slider"
+clamp_min = 60
+clamp_max = 21600
+step = 60
+
+[[rows]]
+schema_id = "org.gnome.desktop.break-reminders.eyesight"
+key = "duration-seconds"
+title = "Eyesight break: how long"
+subtitle = "How long the break lasts, in seconds."
+synonyms = ["break", "reminder", "eyesight"]
+kind = "slider"
+clamp_min = 10
+clamp_max = 3600
+step = 10
+
+[[rows]]
+schema_id = "org.gnome.desktop.break-reminders.eyesight"
+key = "delay-seconds"
+title = "Eyesight break: how long you may put it off"
+subtitle = "How much longer you get when you postpone the break, in seconds."
+synonyms = ["break", "snooze", "eyesight"]
+kind = "slider"
+clamp_min = 10
+clamp_max = 3600
+step = 10
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.break-reminders.eyesight"
+key = "countdown"
+title = "Eyesight break: count the break down"
+subtitle = "Shows the seconds ticking away while the break is running."
+synonyms = ["break", "countdown", "eyesight"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.break-reminders.eyesight"
+key = "fade-screen"
+title = "Eyesight break: fade the screen"
+subtitle = "Dims the screen while the break runs, so it is harder to keep working through it."
+synonyms = ["break", "fade", "dim", "eyesight"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.break-reminders.eyesight"
+key = "lock-screen"
+title = "Eyesight break: lock the screen"
+subtitle = "Locks the computer for the length of the break."
+synonyms = ["break", "lock", "eyesight"]
+kind = "toggle"
+warn = "You will have to type your password to get back to what you were doing."
+
+[[rows]]
+schema_id = "org.gnome.desktop.break-reminders.eyesight"
+key = "notify"
+title = "Eyesight break: say when it starts"
+subtitle = "Shows a message the moment the break begins."
+synonyms = ["break", "notification", "eyesight"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.break-reminders.eyesight"
+key = "notify-upcoming"
+title = "Eyesight break: warn just before"
+subtitle = "Shows a message shortly before the break, so you can finish a sentence."
+synonyms = ["break", "warning", "eyesight"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.break-reminders.eyesight"
+key = "notify-overdue"
+title = "Eyesight break: nag when it is overdue"
+subtitle = "Keeps reminding you if you skipped the break."
+synonyms = ["break", "overdue", "eyesight"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.break-reminders.eyesight"
+key = "play-sound"
+title = "Eyesight break: play a sound"
+subtitle = "Makes a short sound when the break starts."
+synonyms = ["break", "sound", "eyesight"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.break-reminders.movement"
+key = "interval-seconds"
+title = "Movement break: how often"
+subtitle = "How long you work before your desktop reminds you to get up and move, in seconds."
+synonyms = ["break", "reminder", "movement", "wellbeing"]
+kind = "slider"
+clamp_min = 60
+clamp_max = 21600
+step = 60
+
+[[rows]]
+schema_id = "org.gnome.desktop.break-reminders.movement"
+key = "duration-seconds"
+title = "Movement break: how long"
+subtitle = "How long the break lasts, in seconds."
+synonyms = ["break", "reminder", "movement"]
+kind = "slider"
+clamp_min = 10
+clamp_max = 3600
+step = 10
+
+[[rows]]
+schema_id = "org.gnome.desktop.break-reminders.movement"
+key = "delay-seconds"
+title = "Movement break: how long you may put it off"
+subtitle = "How much longer you get when you postpone the break, in seconds."
+synonyms = ["break", "snooze", "movement"]
+kind = "slider"
+clamp_min = 10
+clamp_max = 3600
+step = 10
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.break-reminders.movement"
+key = "countdown"
+title = "Movement break: count the break down"
+subtitle = "Shows the seconds ticking away while the break is running."
+synonyms = ["break", "countdown", "movement"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.break-reminders.movement"
+key = "fade-screen"
+title = "Movement break: fade the screen"
+subtitle = "Dims the screen while the break runs, so it is harder to keep working through it."
+synonyms = ["break", "fade", "dim", "movement"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.break-reminders.movement"
+key = "lock-screen"
+title = "Movement break: lock the screen"
+subtitle = "Locks the computer for the length of the break."
+synonyms = ["break", "lock", "movement"]
+kind = "toggle"
+warn = "You will have to type your password to get back to what you were doing."
+
+[[rows]]
+schema_id = "org.gnome.desktop.break-reminders.movement"
+key = "notify"
+title = "Movement break: say when it starts"
+subtitle = "Shows a message the moment the break begins."
+synonyms = ["break", "notification", "movement"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.break-reminders.movement"
+key = "notify-upcoming"
+title = "Movement break: warn just before"
+subtitle = "Shows a message shortly before the break, so you can finish a sentence."
+synonyms = ["break", "warning", "movement"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.break-reminders.movement"
+key = "notify-overdue"
+title = "Movement break: nag when it is overdue"
+subtitle = "Keeps reminding you if you skipped the break."
+synonyms = ["break", "overdue", "movement"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.break-reminders.movement"
+key = "play-sound"
+title = "Movement break: play a sound"
+subtitle = "Makes a short sound when the break starts."
+synonyms = ["break", "sound", "movement"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.screen-time-limits"
+key = "daily-limit-enabled"
+title = "Limit how long you use the computer each day"
+subtitle = "Warns you once you pass a daily amount of screen time you set."
+synonyms = ["screen time", "daily limit", "wellbeing"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.screen-time-limits"
+key = "daily-limit-seconds"
+title = "The daily amount"
+subtitle = "How much screen time you allow yourself in a day, in seconds."
+synonyms = ["screen time", "daily limit"]
+kind = "slider"
+clamp_min = 1800
+clamp_max = 57600
+step = 900
+
+[[rows]]
+schema_id = "org.gnome.desktop.screen-time-limits"
+key = "grayscale"
+title = "Drain the colour when you reach the limit"
+subtitle = "The whole screen turns grey once you are over your daily amount, as a gentle nudge."
+synonyms = ["grayscale", "greyscale", "screen time", "black and white"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.screen-time-limits"
+key = "history-enabled"
+title = "Keep a record of screen time"
+subtitle = "Stores how long you used the computer each day, so it can be shown back to you."
+synonyms = ["screen time", "history", "privacy"]
+kind = "toggle"

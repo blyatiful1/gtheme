@@ -1,0 +1,37 @@
+# gtheme domain descriptors — core GNOME, authored by hand.
+#
+# Every row here is dispositioned surfaced(addons) in coverage.toml.
+# Titles and subtitles are checked by the plain-language lint in
+# tests/unit/domains_jargon_test.py; synonyms deliberately are not, because they
+# exist to catch the words a person actually types into the search box.
+
+id = "addons"
+title = "Add-on Master Switches"
+
+[[rows]]
+schema_id = "org.gnome.shell"
+key = "disable-user-extensions"
+title = "Turn every add-on off"
+subtitle = "Switches off all add-ons at once without forgetting which ones you had on."
+synonyms = ["disable extensions", "safe mode", "turn off addons"]
+kind = "toggle"
+warn = "While this is on, none of your add-ons do anything, however they are set."
+
+[[rows]]
+schema_id = "org.gnome.shell"
+key = "disable-extension-version-validation"
+title = "Allow add-ons built for an older desktop"
+subtitle = "Lets add-ons run even when they were not written for this version of your desktop."
+synonyms = ["version check", "unsupported extensions", "compatibility"]
+kind = "toggle"
+advanced = true
+warn = "An add-on that was not built for this desktop can make the top bar stop responding until you log out and back in."
+
+[[rows]]
+schema_id = "org.gnome.shell"
+key = "allow-extension-installation"
+title = "Allow new add-ons to be installed"
+subtitle = "Turn this off to stop anything, including gtheme, from adding new add-ons."
+synonyms = ["install extensions", "lock down addons"]
+kind = "toggle"
+advanced = true

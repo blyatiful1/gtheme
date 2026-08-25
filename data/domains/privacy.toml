@@ -1,0 +1,162 @@
+# gtheme domain descriptors — core GNOME, authored by hand.
+#
+# Every row here is dispositioned surfaced(more) in coverage.toml.
+# Titles and subtitles are checked by the plain-language lint in
+# tests/unit/domains_jargon_test.py; synonyms deliberately are not, because they
+# exist to catch the words a person actually types into the search box.
+
+id = "privacy"
+title = "Privacy"
+
+[[rows]]
+schema_id = "org.gnome.desktop.privacy"
+key = "disable-camera"
+title = "Turn the camera off for every app"
+subtitle = "No app can use the camera while this is on."
+synonyms = ["webcam", "camera", "privacy"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.privacy"
+key = "disable-microphone"
+title = "Turn the microphone off for every app"
+subtitle = "No app can listen through the microphone while this is on."
+synonyms = ["mic", "microphone", "privacy"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.privacy"
+key = "disable-sound-output"
+title = "Turn sound output off for every app"
+subtitle = "Nothing can play through your speakers or headphones while this is on."
+synonyms = ["mute", "speakers", "privacy"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.privacy"
+key = "privacy-screen"
+title = "Narrow the viewing angle"
+subtitle = "On laptops that support it, makes the screen hard to read from the side."
+synonyms = ["privacy screen", "shoulder surfing"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.privacy"
+key = "remember-recent-files"
+title = "Remember recently used files"
+subtitle = "Keeps a list of files you opened, so apps can offer them again."
+synonyms = ["recent files", "history", "privacy"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.privacy"
+key = "recent-files-max-age"
+title = "How long to remember them"
+subtitle = "How far back the list of recently opened files goes."
+synonyms = ["recent files", "history"]
+kind = "choice"
+
+[[rows.choices]]
+value = "-1"
+label = "Forever"
+
+[[rows.choices]]
+value = "1"
+label = "One day"
+
+[[rows.choices]]
+value = "7"
+label = "One week"
+
+[[rows.choices]]
+value = "30"
+label = "One month"
+
+[[rows.choices]]
+value = "365"
+label = "One year"
+
+[[rows]]
+schema_id = "org.gnome.desktop.privacy"
+key = "remember-app-usage"
+title = "Remember which apps you use"
+subtitle = "Keeps a count of how often you open each app, which is what sorts your app list."
+synonyms = ["usage", "history", "privacy"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.privacy"
+key = "remove-old-temp-files"
+title = "Delete leftover working files automatically"
+subtitle = "Clears out the scratch files apps leave behind once they are old enough."
+synonyms = ["temp files", "cleanup", "disk space"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.privacy"
+key = "remove-old-trash-files"
+title = "Empty the wastebasket automatically"
+subtitle = "Throws away things in the wastebasket once they are old enough."
+synonyms = ["trash", "wastebasket", "cleanup"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.privacy"
+key = "old-files-age"
+title = "How old is old enough"
+subtitle = "How many days something waits before the two settings above clear it away."
+synonyms = ["trash age", "cleanup", "days"]
+kind = "slider"
+clamp_min = 1
+clamp_max = 365
+step = 1
+
+[[rows]]
+schema_id = "org.gnome.desktop.privacy"
+key = "report-technical-problems"
+title = "Send problem reports"
+subtitle = "Lets your desktop send a report when a program stops working, so it can be fixed."
+synonyms = ["crash reports", "telemetry", "privacy"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.privacy"
+key = "send-software-usage-stats"
+title = "Send anonymous usage figures"
+subtitle = "Shares counts of which apps get used, with nothing that identifies you."
+synonyms = ["telemetry", "statistics", "privacy"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.privacy"
+key = "hide-identity"
+title = "Hide your name from apps"
+subtitle = "Stops apps from being told your real name."
+synonyms = ["anonymous", "name", "privacy"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.privacy"
+key = "usb-protection"
+title = "Block unknown devices plugged in while locked"
+subtitle = "Refuses new plugged-in devices when the screen is locked, so nobody can attach one while you are away."
+synonyms = ["usb", "usbguard", "security", "thunderbolt"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.privacy"
+key = "usb-protection-level"
+title = "When to block them"
+subtitle = "Whether new plugged-in devices are refused only while locked, or at all times."
+synonyms = ["usb", "security"]
+kind = "choice"
+advanced = true
+
+[[rows.choices]]
+value = "'lockscreen'"
+label = "Only while the screen is locked"
+
+[[rows.choices]]
+value = "'always'"
+label = "Always"

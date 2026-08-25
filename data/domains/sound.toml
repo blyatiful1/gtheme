@@ -1,0 +1,80 @@
+# gtheme domain descriptors — core GNOME, authored by hand.
+#
+# Every row here is dispositioned surfaced(sound) in coverage.toml.
+# Titles and subtitles are checked by the plain-language lint in
+# tests/unit/domains_jargon_test.py; synonyms deliberately are not, because they
+# exist to catch the words a person actually types into the search box.
+
+id = "sound"
+title = "Sound"
+
+[[rows]]
+schema_id = "org.gnome.desktop.sound"
+key = "theme-name"
+title = "Sound set"
+subtitle = "The collection of short sounds your desktop plays for alerts and clicks."
+synonyms = ["sound theme", "alert sounds", "sounds"]
+kind = "picker"
+
+[[rows]]
+schema_id = "org.gnome.desktop.sound"
+key = "event-sounds"
+title = "Play sounds for things that happen"
+subtitle = "Short sounds when something finishes, goes wrong or needs your attention."
+synonyms = ["event sounds", "system sounds", "alerts", "beep"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.sound"
+key = "input-feedback-sounds"
+title = "Play a sound when you press a button"
+subtitle = "Adds a small click when you press things on screen."
+synonyms = ["click sounds", "feedback", "keypress"]
+kind = "toggle"
+
+[[rows.requires_first]]
+schema_id = "org.gnome.desktop.sound"
+key = "event-sounds"
+value = "true"
+explain = "This only makes a difference while your desktop is allowed to play sounds at all, so gtheme will turn that back on."
+
+[[rows]]
+schema_id = "org.gnome.desktop.sound"
+key = "allow-volume-above-100-percent"
+title = "Allow the volume to go above full"
+subtitle = "Lets you push the volume past its normal top, at the cost of some crackle."
+synonyms = ["overamplify", "loud", "volume boost", "150%"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.preferences"
+key = "audible-bell"
+title = "Play a sound for alerts"
+subtitle = "The short sound an app makes when it wants your attention."
+synonyms = ["bell", "beep", "alert sound"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.preferences"
+key = "visual-bell"
+title = "Flash the screen for alerts"
+subtitle = "Shows a flash instead of, or as well as, the alert sound. Useful if you cannot hear the sound."
+synonyms = ["visual bell", "flash", "deaf", "silent alert"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.preferences"
+key = "visual-bell-type"
+title = "What flashes"
+subtitle = "Whether the whole screen flashes, or only the window that wants your attention."
+synonyms = ["visual bell", "flash"]
+kind = "choice"
+advanced = true
+
+[[rows.choices]]
+value = "'fullscreen-flash'"
+label = "The whole screen"
+
+[[rows.choices]]
+value = "'frame-flash'"
+label = "Only that window"

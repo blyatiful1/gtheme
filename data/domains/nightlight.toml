@@ -1,0 +1,58 @@
+# gtheme domain descriptors — core GNOME, authored by hand.
+#
+# Every row here is dispositioned surfaced(nightlight) in coverage.toml.
+# Titles and subtitles are checked by the plain-language lint in
+# tests/unit/domains_jargon_test.py; synonyms deliberately are not, because they
+# exist to catch the words a person actually types into the search box.
+
+id = "nightlight"
+title = "Night Light"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.color"
+key = "night-light-enabled"
+title = "Warmer colours in the evening"
+subtitle = "Shifts the screen towards orange after dark, which some people find easier on the eyes."
+synonyms = ["night light", "blue light", "night shift", "warm", "f.lux"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.color"
+key = "night-light-schedule-automatic"
+title = "Follow sunset and sunrise"
+subtitle = "Turns the warmer colours on and off with the sun where you are, instead of at set times."
+synonyms = ["sunset", "sunrise", "automatic", "night light"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.color"
+key = "night-light-schedule-from"
+title = "Turn warm colours on at"
+subtitle = "The time of day the screen starts getting warmer, when you are not following the sun."
+synonyms = ["night light start", "schedule", "evening"]
+kind = "slider"
+clamp_min = 0.0
+clamp_max = 23.75
+step = 0.25
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.color"
+key = "night-light-schedule-to"
+title = "Turn warm colours off at"
+subtitle = "The time of day the screen goes back to normal, when you are not following the sun."
+synonyms = ["night light end", "schedule", "morning"]
+kind = "slider"
+clamp_min = 0.0
+clamp_max = 23.75
+step = 0.25
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.color"
+key = "night-light-temperature"
+title = "How warm"
+subtitle = "How far towards orange the screen goes. Lower is warmer and gentler; higher is closer to normal."
+synonyms = ["temperature", "kelvin", "warmth", "orange"]
+kind = "slider"
+clamp_min = 1700
+clamp_max = 4700
+step = 100

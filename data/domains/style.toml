@@ -1,0 +1,102 @@
+# gtheme domain descriptors — core GNOME, authored by hand.
+#
+# Every row here is dispositioned surfaced(colors) in coverage.toml.
+# Titles and subtitles are checked by the plain-language lint in
+# tests/unit/domains_jargon_test.py; synonyms deliberately are not, because they
+# exist to catch the words a person actually types into the search box.
+
+id = "style"
+title = "Colours & Style"
+
+[[rows]]
+schema_id = "org.gnome.desktop.interface"
+key = "gtk-theme"
+title = "App style"
+subtitle = "Sets how buttons, menus and the insides of older apps look."
+synonyms = ["theme", "gtk", "app colors", "app colours", "window style", "skin"]
+kind = "picker"
+
+[[rows]]
+schema_id = "org.gnome.desktop.interface"
+key = "accent-color"
+title = "Highlight colour"
+subtitle = "The colour used for selected items, switches and the main button in a window."
+synonyms = ["accent", "accent color", "theme color", "highlight"]
+kind = "choice"
+
+[[rows.choices]]
+value = "'blue'"
+label = "Blue"
+
+[[rows.choices]]
+value = "'teal'"
+label = "Teal"
+
+[[rows.choices]]
+value = "'green'"
+label = "Green"
+
+[[rows.choices]]
+value = "'yellow'"
+label = "Yellow"
+
+[[rows.choices]]
+value = "'orange'"
+label = "Orange"
+
+[[rows.choices]]
+value = "'red'"
+label = "Red"
+
+[[rows.choices]]
+value = "'pink'"
+label = "Pink"
+
+[[rows.choices]]
+value = "'purple'"
+label = "Purple"
+
+[[rows.choices]]
+value = "'slate'"
+label = "Grey"
+
+[[rows]]
+schema_id = "org.gnome.desktop.a11y.interface"
+key = "high-contrast"
+title = "Stronger colours for readability"
+subtitle = "Increases the difference between text and what is behind it, so it is easier to read."
+synonyms = ["high contrast", "contrast", "accessibility", "readability"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.a11y.interface"
+key = "reduced-motion"
+title = "Less movement"
+subtitle = "Cuts down sliding and fading, which helps if movement on screen makes you uncomfortable."
+synonyms = ["reduce motion", "animations", "motion sickness", "vestibular"]
+kind = "choice"
+
+[[rows.choices]]
+value = "'no-preference'"
+label = "Normal movement"
+
+[[rows.choices]]
+value = "'reduce'"
+label = "Less movement"
+
+[[rows]]
+schema_id = "org.gnome.desktop.a11y.interface"
+key = "show-status-shapes"
+title = "Show shapes as well as colours"
+subtitle = "Adds a small mark to on/off switches so they can be told apart without relying on colour."
+synonyms = ["colorblind", "colour blind", "switch shapes"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.interface"
+key = "overlay-scrolling"
+title = "Slim scroll bars"
+subtitle = "Keeps the scroll bar thin until you point at it, instead of always showing a wide one."
+synonyms = ["scrollbar", "scrolling", "overlay scrollbars"]
+kind = "toggle"
+advanced = true
