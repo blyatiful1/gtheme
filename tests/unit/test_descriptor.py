@@ -204,3 +204,150 @@ def test_a_domain_descriptor_holds_rows_too():
         }
     )
     assert domain.descriptor_ids == ["org.gnome.desktop.background:picture-uri"]
+
+
+# -- one panel, two add-ons, two schema ids --------------------------------
+
+
+def _two_addon_panel(**target_overrides) -> PanelDescriptor:
+    target = {
+        "uuids": ["ding@rastersoft.com", "gtk4-ding@smedius.gitlab.com"],
+        "schema_id": "org.gnome.shell.extensions.ding",
+        "schema_by_uuid": {
+            "ding@rastersoft.com": "org.gnome.shell.extensions.ding",
+            "gtk4-ding@smedius.gitlab.com": "org.gnome.shell.extensions.gtk4-ding",
+        },
+        "category": "layout",
+        "summary": "Puts your files back onto the desktop background.",
+        **target_overrides,
+    }
+    return PanelDescriptor.model_validate(
+        {
+            "id": "desktop-icons",
+            "target": target,
+            "rows": [
+                {
+                    "schema_id": "org.gnome.shell.extensions.ding",
+                    "key": "show-home",
+                    "title": "Home folder",
+                    "subtitle": "Shows your own folder on the desktop background.",
+                    "kind": "toggle",
+                }
+            ],
+        }
+    )
+
+
+def test_rows_are_addressed_at_whichever_add_on_is_installed():
+    panel = _two_addon_panel()
+    ding = panel.rows_for("ding@rastersoft.com")
+    gtk4 = panel.rows_for("gtk4-ding@smedius.gitlab.com")
+    assert ding[0].schema_id == "org.gnome.shell.extensions.ding"
+    assert gtk4[0].schema_id == "org.gnome.shell.extensions.gtk4-ding"
+    assert gtk4[0].key == ding[0].key
+    assert gtk4[0].id == "org.gnome.shell.extensions.gtk4-ding:show-home"
+
+
+def test_an_unlisted_uuid_falls_back_to_the_panels_own_schema():
+    panel = _two_addon_panel()
+    assert panel.target.schema_for("something@else") == "org.gnome.shell.extensions.ding"
+
+
+def test_both_schemas_count_as_declared():
+    """Which is what lets the corpus check pass without lying in child_schemas."""
+    assert _two_addon_panel().target.declared_schemas == {
+        "org.gnome.shell.extensions.ding",
+        "org.gnome.shell.extensions.gtk4-ding",
+    }
+
+
+def test_schema_by_uuid_may_only_name_this_panels_own_add_ons():
+    with pytest.raises(ValidationError, match="this panel is not for"):
+        _two_addon_panel(
+            schema_by_uuid={"someone@else": "org.gnome.shell.extensions.elsewhere"}
+        )
+
+
+def test_the_committed_desktop_icons_panel_declares_both_honestly(repo_root):
+    from gtheme.panels.loader import load_panels
+
+    panels, problems = load_panels(repo_root / "data" / "panels")
+    assert problems == []
+    panel = next(p for p in panels if p.id == "desktop-icons")
+    assert panel.target.child_schemas == [], (
+        "a rival add-on's schema is not a child schema of this one"
+    )
+    assert set(panel.target.schema_by_uuid) == set(panel.target.uuids)
+    for uuid in panel.target.uuids:
+        prefix = panel.target.schema_for(uuid)
+        assert all(row.schema_id == prefix for row in panel.rows_for(uuid))
+
+
+# -- link rows -------------------------------------------------------------
+
+
+def _link(**overrides):
+    base = {
+        "title": "Open the add-on's own settings",
+        "subtitle": "The rest of this add-on's settings open in its own window.",
+        "kind": "link",
+        "link_target": "extension-prefs:dash-to-panel@jderose9.github.com",
+    }
+    return Row.model_validate({**base, **overrides})
+
+
+def test_a_link_row_needs_no_setting_behind_it():
+    row = _link()
+    assert row.schema_id is None and row.key is None
+    assert row.id == "link:extension-prefs:dash-to-panel@jderose9.github.com"
+
+
+def test_a_link_row_must_say_where_it_goes():
+    with pytest.raises(ValidationError, match="needs link_target"):
+        _link(link_target=None)
+
+
+def test_a_link_row_may_only_go_somewhere_the_app_knows():
+    with pytest.raises(ValidationError, match="extension-prefs"):
+        _link(link_target="https://example.invalid/settings")
+
+
+def test_a_link_row_may_not_also_claim_a_setting():
+    with pytest.raises(ValidationError, match="it does not read a setting"):
+        _link(schema_id="org.gnome.shell", key="favorite-apps")
+
+
+def test_only_a_link_row_may_carry_a_link_target():
+    with pytest.raises(ValidationError, match="only makes sense on a 'link' row"):
+        _row(link_target="page:addons")
+
+
+def test_every_other_kind_still_needs_a_setting():
+    with pytest.raises(ValidationError, match="needs schema_id and key"):
+        Row.model_validate(
+            {"title": "Nowhere", "subtitle": "Reads nothing at all.", "kind": "toggle"}
+        )
+
+
+def test_the_committed_deep_links_point_at_their_own_add_ons(repo_root):
+    """A link row that names a uuid the panel is not for goes nowhere."""
+    from gtheme.panels.loader import load_panels
+
+    panels, problems = load_panels(repo_root / "data" / "panels")
+    assert problems == []
+    links = {
+        panel.id: [row for row in panel.rows if row.kind is WidgetKind.LINK] for panel in panels
+    }
+    assert sorted(name for name, rows in links.items() if rows) == [
+        "dash-to-panel",
+        "gsconnect",
+        "rounded-window-corners",
+    ]
+    by_id = {panel.id: panel for panel in panels}
+    for name, rows in links.items():
+        for row in rows:
+            assert row.link_target is not None
+            uuid = row.link_target.split(":", 1)[1]
+            assert uuid in by_id[name].target.uuids, (
+                f"{name}: link row points at {uuid}, which is not this panel's add-on"
+            )

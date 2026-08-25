@@ -40,8 +40,10 @@ from ...panels.descriptor import Row, WidgetKind  # noqa: E402
 __all__ = [
     "RowBuildError",
     "UnsupportedRowKind",
+    "attach_reset",
     "build_row",
     "key_for",
+    "register_kind",
     "warn_banner",
 ]
 
@@ -66,9 +68,12 @@ class UnsupportedRowKind(RowBuildError, NotImplementedError):
 def key_for(row: Row) -> str:
     """The backend key string for a descriptor row.
 
-    Relocatable schemas take the three-part form; everything else the two-part
-    one. Rows never build key strings themselves.
+    A row whose value lives in the add-on's own settings file takes the
+    four-part ``keyfile:`` form; relocatable schemas take the three-part form;
+    everything else the two-part one. Rows never build key strings themselves.
     """
+    if row.keyfile:
+        return f"keyfile:{row.keyfile}:{row.schema_id}:{row.path} {row.key}"
     if row.path:
         return f"gsettings-path:{row.schema_id}:{row.path} {row.key}"
     return f"gsettings:{row.schema_id} {row.key}"
@@ -312,13 +317,48 @@ def _unquote(variant_text: str) -> str:
     return text
 
 
-_BUILDERS: dict[WidgetKind, Callable[..., tuple[Adw.PreferencesRow, Callable[[], None]]]] = {
+RowBuilder = Callable[..., tuple[Adw.PreferencesRow, Callable[[], None]]]
+
+_BUILDERS: dict[WidgetKind, RowBuilder] = {
     WidgetKind.TOGGLE: _build_toggle,
     WidgetKind.SLIDER: _build_slider,
     WidgetKind.CHOICE: _build_choice,
     WidgetKind.TEXT: _build_text,
     WidgetKind.COLOR: _build_color,
 }
+
+
+def register_kind(kind: WidgetKind, builder: RowBuilder) -> None:
+    """Teach :func:`build_row` how to draw one more kind of row.
+
+    The five kinds above are the ones every page needs. The rest — a dictionary
+    slider for one add-on's ``a{sv}`` blob, a keyboard-shortcut capture, an
+    add-on's own one-of-N effect picker — are specialised enough that building
+    them here would drag their domain into the base library. They register
+    instead, from the module that owns the domain (see
+    :mod:`gtheme.panels.widgets`).
+
+    A registered kind gets everything a built-in kind gets, the reset button
+    included: :func:`build_row` is the only entry point either way.
+
+    Args:
+        kind: which row kind this builder answers for.
+        builder: ``(backend, row) -> (widget, refresh)``, the same contract the
+            built-in builders honour. ``refresh`` re-reads the value and
+            updates the widget without firing a write.
+
+    Raises:
+        ValueError: something already answers for this kind. Two builders for
+            one kind means whichever module imported last wins, which is not a
+            thing to discover at runtime.
+    """
+    existing = _BUILDERS.get(kind)
+    if existing is not None and existing is not builder:
+        raise ValueError(
+            f"row kind {kind.value!r} already has a builder ({existing.__name__}); "
+            "registering a second one would make the result depend on import order"
+        )
+    _BUILDERS[kind] = builder
 
 
 def build_row(
@@ -354,20 +394,28 @@ def build_row(
             return unavailable, lambda: None
         raise
 
-    if row.reset:
-        refresh = _attach_reset(backend, row, widget, refresh)
+    # A row with no setting behind it — a link through to somewhere else —
+    # has nothing to put back, so it gets no reset button however the
+    # descriptor is written.
+    if row.reset and row.key is not None:
+        refresh = attach_reset(backend, row, widget, refresh)
     if row.warn:
         widget.set_tooltip_text(row.warn)
     return widget, refresh
 
 
-def _attach_reset(
+def attach_reset(
     backend: SettingsBackend,
     row: Row,
     widget: Adw.PreferencesRow,
     refresh: Callable[[], None],
 ) -> Callable[[], None]:
     """Add the per-row "put this back" button, sensitive only when changed.
+
+    Public, because rows registered through :func:`register_kind` want it too
+    and there is no second correct way to write it. :func:`build_row` calls
+    this for every ``reset`` row itself, so a builder only needs it directly
+    when it is composing something :func:`build_row` does not drive.
 
     Returns a refresh callable that also updates the button, so the caller has
     one function that keeps the whole row consistent.

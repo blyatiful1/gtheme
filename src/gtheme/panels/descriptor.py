@@ -76,6 +76,31 @@ class WidgetKind(enum.StrEnum):
     DICT_SLIDER = "dict_slider"
     #: A key combination, captured from a real key press.
     SHORTCUT = "shortcut"
+    #: One of N booleans, exactly one of which may be true. burn-my-windows is
+    #: the reason: it has 26 separate on/off settings, one per animation, and
+    #: the add-on plays whichever is on. Six on/off rows in the app meant six
+    #: switches that fight each other and a person left wondering why turning
+    #: one on turned another off. One picker sets the chosen effect and clears
+    #: the rest in a single action.
+    #:
+    #: ``choices`` are MANDATORY, and unlike every other kind their ``value``
+    #: is the NAME of the sibling key, not a stored value: ``fire-enable-effect``,
+    #: not ``true``.
+    EFFECT_PICKER = "effect-picker"
+    #: A number belonging to whichever of those effects is currently chosen.
+    #: burn-my-windows has one duration setting per effect; twenty-six sliders
+    #: of which twenty-five do nothing is not a control panel. This row reads
+    #: and writes ``<chosen effect>-animation-time``, following the picker.
+    #: Needs ``clamp_min`` and ``clamp_max`` like any other number.
+    EFFECT_SPEED = "effect-speed"
+    #: Not a setting at all: a way through to somewhere else. Some add-ons keep
+    #: a whole world behind their own preferences window — dash-to-panel's
+    #: per-monitor layout, GSConnect's per-phone pages, rounded-window-corners'
+    #: per-app list. Rebuilding those here would mean shipping a worse copy of
+    #: a window that already exists, and pretending they are not there would
+    #: mean quietly hiding half the add-on. A link row says where the rest is
+    #: and takes you there. It has a ``link_target`` and no key.
+    LINK = "link"
 
 
 class _Strict(BaseModel):
@@ -120,8 +145,11 @@ class RequireFirst(_Strict):
 class Row(_Strict):
     """One control. The unit both ``data/panels/`` and ``data/domains/`` use."""
 
-    schema_id: str
-    key: str
+    #: The settings group this row reads and writes. ``None`` only for
+    #: :attr:`WidgetKind.LINK` rows, which read and write nothing.
+    schema_id: str | None = None
+    #: The key inside that group. ``None`` only for link rows.
+    key: str | None = None
     title: str
     #: MANDATORY. Says what the setting does, in the words of someone who has
     #: never used Linux. "Blurs the bar at the top of the screen", not
@@ -131,8 +159,17 @@ class Row(_Strict):
     #: "start menu" finds the overview.
     synonyms: list[str] = Field(default_factory=list)
     kind: WidgetKind
-    #: Instance path for a relocatable schema. Starts and ends with "/".
+    #: Instance path for a relocatable schema, or — with :attr:`keyfile` — the
+    #: root the settings file is mounted at. Starts and ends with "/".
     path: str | None = None
+    #: Absolute location of the settings FILE this row's value really lives
+    #: in, for the add-ons that keep their own rather than using the desktop's
+    #: settings store. burn-my-windows is the one case.
+    #:
+    #: Never written in a ``.toml`` — a committed descriptor cannot know which
+    #: profile file is in use, and a test asserts none tries. It is filled in
+    #: at runtime by :func:`gtheme.panels.schema_probe.resolve_row`.
+    keyfile: str | None = None
 
     clamp_min: float | None = None
     clamp_max: float | None = None
@@ -151,16 +188,56 @@ class Row(_Strict):
     reset: bool = True
     #: The key inside the ``a{sv}`` dictionary, for DICT_SLIDER rows.
     dict_key: str | None = None
+    #: Where a :attr:`WidgetKind.LINK` row goes. Two forms:
+    #: ``extension-prefs:<uuid>`` opens that add-on's own preferences window,
+    #: and ``page:<page-id>`` moves to another page of this app.
+    link_target: str | None = None
 
     @property
     def id(self) -> str:
-        """This row's :func:`descriptor_id`."""
+        """This row's :func:`descriptor_id`.
+
+        A link row has no setting behind it, so its id is its destination.
+        The prefix keeps it out of the ``schema:key`` namespace that
+        ``coverage.toml`` and the row index are keyed by.
+        """
+        if self.kind is WidgetKind.LINK:
+            return f"link:{self.link_target}"
+        assert self.schema_id is not None and self.key is not None  # enforced below
         return descriptor_id(self.schema_id, self.key)
 
     @model_validator(mode="after")
     def _kind_requirements(self) -> Row:
+        if self.kind is WidgetKind.LINK:
+            if not self.link_target:
+                raise ValueError(f"{self.title!r}: a 'link' row needs link_target")
+            if not self.link_target.startswith(("extension-prefs:", "page:")):
+                raise ValueError(
+                    f"{self.title!r}: link_target must be 'extension-prefs:<uuid>' "
+                    f"or 'page:<page-id>', not {self.link_target!r}"
+                )
+            if self.schema_id is not None or self.key is not None:
+                raise ValueError(
+                    f"{self.title!r}: a 'link' row goes somewhere, it does not read a "
+                    "setting — drop schema_id and key"
+                )
+            return self
+        if self.link_target is not None:
+            raise ValueError(f"{self.title!r}: link_target only makes sense on a 'link' row")
+        if self.schema_id is None or self.key is None:
+            raise ValueError(
+                f"{self.title!r}: a {self.kind.value!r} row needs schema_id and key"
+            )
         if self.kind is WidgetKind.CHOICE and not self.choices:
             raise ValueError(f"{self.id}: a 'choice' row needs choices")
+        if self.kind is WidgetKind.EFFECT_PICKER and len(self.choices) < 2:
+            raise ValueError(
+                f"{self.id}: an 'effect-picker' row needs at least two effects to pick between"
+            )
+        if self.kind is WidgetKind.EFFECT_SPEED and (
+            self.clamp_min is None or self.clamp_max is None
+        ):
+            raise ValueError(f"{self.id}: an 'effect-speed' row needs clamp_min and clamp_max")
         if self.kind is WidgetKind.SLIDER and (self.clamp_min is None or self.clamp_max is None):
             raise ValueError(
                 f"{self.id}: a 'slider' row needs clamp_min and clamp_max — several GNOME "
@@ -168,10 +245,17 @@ class Row(_Strict):
             )
         if self.kind is WidgetKind.DICT_SLIDER and not self.dict_key:
             raise ValueError(f"{self.id}: a 'dict_slider' row needs dict_key")
-        if self.choices and self.kind is not WidgetKind.CHOICE:
+        if self.choices and self.kind not in (WidgetKind.CHOICE, WidgetKind.EFFECT_PICKER):
             raise ValueError(f"{self.id}: choices only make sense on a 'choice' row")
         if self.path is not None and not (self.path.startswith("/") and self.path.endswith("/")):
             raise ValueError(f"{self.id}: a relocatable path must start and end with '/'")
+        if self.keyfile is not None:
+            if not self.keyfile.startswith("/"):
+                raise ValueError(f"{self.id}: a settings file must be a full location")
+            if self.path is None:
+                raise ValueError(
+                    f"{self.id}: a settings file also needs the root it is mounted at"
+                )
         return self
 
 
@@ -189,6 +273,20 @@ class PanelTarget(_Strict):
     #: already has a ``schema`` attribute and shadowing it warns at import.
     schema_id: str
     child_schemas: list[str] = Field(default_factory=list)
+    #: For a panel shared by add-ons that do the same job under DIFFERENT
+    #: schema ids: ``{uuid: schema_id}``. Desktop Icons is the case — DING and
+    #: Gtk4-DING have the same keys under
+    #: ``org.gnome.shell.extensions.ding`` and
+    #: ``org.gnome.shell.extensions.gtk4-ding``, and a row written against one
+    #: addresses nothing on a machine running the other.
+    #:
+    #: This used to be smuggled through ``child_schemas``, which says something
+    #: different and untrue: a child schema is a *sub-group of the same
+    #: add-on's* settings, and listing a rival add-on's schema there told the
+    #: corpus checks that rows may reach into it — the opposite of the truth.
+    #: Declared honestly, the engine can rewrite each row for whichever of the
+    #: two is actually installed.
+    schema_by_uuid: dict[str, str] = Field(default_factory=dict)
     #: For add-ons whose settings live in relocatable per-instance schemas,
     #: a path template such as
     #: ``/org/gnome/shell/extensions/burn-my-windows/profiles/{profile}/``.
@@ -203,6 +301,25 @@ class PanelTarget(_Strict):
     #: A machine- or combination-specific hazard, phrased as a consequence.
     warn: str | None = None
 
+    @property
+    def declared_schemas(self) -> set[str]:
+        """Every settings group this panel says the add-on family owns."""
+        return {self.schema_id, *self.child_schemas, *self.schema_by_uuid.values()}
+
+    def schema_for(self, uuid: str) -> str:
+        """The main schema id to use when ``uuid`` is the installed add-on."""
+        return self.schema_by_uuid.get(uuid, self.schema_id)
+
+    @model_validator(mode="after")
+    def _schema_by_uuid_is_about_this_panel(self) -> PanelTarget:
+        strangers = sorted(set(self.schema_by_uuid) - set(self.uuids))
+        if strangers:
+            raise ValueError(
+                f"schema_by_uuid names {strangers}, which this panel is not for — "
+                "the keys have to be uuids from this panel's own list"
+            )
+        return self
+
 
 class PanelDescriptor(_Strict):
     """One curated add-on panel: ``data/panels/<id>.toml``."""
@@ -214,6 +331,24 @@ class PanelDescriptor(_Strict):
     @property
     def descriptor_ids(self) -> list[str]:
         return [row.id for row in self.rows]
+
+    def rows_for(self, uuid: str) -> list[Row]:
+        """This panel's rows, addressed at whichever add-on is installed.
+
+        For every panel but one this is just :attr:`rows`. For Desktop Icons it
+        is what makes the panel work at all: the rows are written once, against
+        DING's schema, and rewritten here against Gtk4-DING's when that is the
+        one on the machine.
+        """
+        schema = self.target.schema_for(uuid)
+        if schema == self.target.schema_id:
+            return list(self.rows)
+        return [
+            row.model_copy(update={"schema_id": schema})
+            if row.schema_id == self.target.schema_id
+            else row
+            for row in self.rows
+        ]
 
 
 class DomainDescriptor(_Strict):

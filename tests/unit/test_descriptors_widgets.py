@@ -377,3 +377,277 @@ def test_a_picker_is_still_an_honest_gap(rwc_backend: MemoryBackend):
     )
     with pytest.raises(UnsupportedRowKind):
         build_row(rwc_backend, row)
+
+
+# -- link rows -------------------------------------------------------------
+
+
+def _link_row() -> Row:
+    return Row.model_validate(
+        {
+            "title": "Open the add-on's own settings",
+            "subtitle": "The rest of the taskbar's settings open in the add-on's own window.",
+            "kind": "link",
+            "link_target": "extension-prefs:dash-to-panel@jderose9.github.com",
+        }
+    )
+
+
+@pytest.mark.gtk
+def test_a_link_row_is_a_row_with_an_arrow(rwc_backend: MemoryBackend):
+    widget, refresh = build_row(rwc_backend, _link_row())
+    assert isinstance(widget, Adw.ActionRow)
+    assert widget.get_activatable()
+    refresh()  # a link has no value to re-read; this must not blow up
+
+
+@pytest.mark.gtk
+def test_a_link_row_gets_no_reset_button(rwc_backend: MemoryBackend):
+    """There is nothing to put back: the row does not hold a setting."""
+    widget, _refresh = build_row(rwc_backend, _link_row())
+    buttons = []
+    child = widget.get_first_child()
+    while child is not None:
+        buttons.extend(_descend_for_buttons(child))
+        child = child.get_next_sibling()
+    assert not [b for b in buttons if b.get_icon_name() == "edit-undo-symbolic"]
+
+
+def _descend_for_buttons(widget) -> list:
+    found = []
+    if isinstance(widget, Gtk.Button):
+        found.append(widget)
+    child = widget.get_first_child()
+    while child is not None:
+        found.extend(_descend_for_buttons(child))
+        child = child.get_next_sibling()
+    return found
+
+
+@pytest.mark.gtk
+def test_activating_a_link_row_hands_over_its_destination(rwc_backend: MemoryBackend):
+    """Opening the destination is Wave 2's job; carrying it is this row's."""
+    from gtheme.panels.widgets import set_link_handler
+
+    row = _link_row()
+    widget, _refresh = build_row(rwc_backend, row)
+    widget.emit("activated")  # nothing wired yet: must be a no-op, not a crash
+
+    seen: list[str | None] = []
+    set_link_handler(widget, row, seen.append)
+    widget.emit("activated")
+    assert seen == ["extension-prefs:dash-to-panel@jderose9.github.com"]
+
+
+@pytest.mark.gtk
+def test_a_link_row_is_never_greyed_by_the_probe(corpus_probe: SchemaProbe):
+    """It reads no setting, so no setting can be missing."""
+    assert corpus_probe.availability(_link_row()).ok
+
+
+# -- burn-my-windows: one picker instead of twenty-six switches -------------
+
+BMW_UUID = "burn-my-windows@schneegans.github.com"
+BMW_PROFILE = "org.gnome.shell.extensions.burn-my-windows-profile"
+CORPUS = Path(__file__).resolve().parents[1] / "fixtures" / "schemas"
+
+
+@pytest.fixture
+def bmw_backend():
+    """A memory backend over the committed burn-my-windows profile schema."""
+    from gi.repository import Gio
+
+    source = Gio.SettingsSchemaSource.new_from_directory(
+        str(CORPUS / BMW_UUID / "schemas"), Gio.SettingsSchemaSource.get_default(), False
+    )
+    return MemoryBackend(schema_source=source)
+
+
+@pytest.fixture
+def bmw_panel(repo_root):
+    from gtheme.panels.loader import load_panels
+
+    panels, problems = load_panels(repo_root / "data" / "panels")
+    assert problems == []
+    return next(p for p in panels if p.id == "burn-my-windows")
+
+
+def _effect_key(name: str) -> str:
+    return f"gsettings:{BMW_PROFILE} {name}-enable-effect"
+
+
+@pytest.mark.gtk
+def test_the_effect_picker_offers_every_effect_the_add_on_has(bmw_backend, bmw_panel):
+    from gtheme.panels.descriptor import WidgetKind
+
+    row = next(r for r in bmw_panel.rows if r.kind is WidgetKind.EFFECT_PICKER)
+    widget, _refresh = build_row(bmw_backend, row)
+    assert isinstance(widget, Adw.ComboRow)
+    model = widget.get_model()
+    assert model.get_n_items() == 27, "26 effects in the corpus, plus 'Nothing'"
+    assert model.get_string(0) == "Nothing"
+
+
+@pytest.mark.gtk
+def test_the_picker_shows_whichever_effect_is_switched_on(bmw_backend, bmw_panel):
+    from gtheme.panels.descriptor import WidgetKind
+
+    row = next(r for r in bmw_panel.rows if r.kind is WidgetKind.EFFECT_PICKER)
+    bmw_backend.set(_effect_key("fire"), "false")
+    bmw_backend.set(_effect_key("hexagon"), "true")
+    widget, _refresh = build_row(bmw_backend, row)
+    labels = widget.get_model()
+    assert labels.get_string(widget.get_selected()) == "Dissolve into hexagons"
+
+
+@pytest.mark.gtk
+def test_choosing_an_effect_turns_every_other_one_off(bmw_backend, bmw_panel):
+    """The whole point: one action, one effect on, the rest off."""
+    from gtheme.panels.descriptor import WidgetKind
+
+    row = next(r for r in bmw_panel.rows if r.kind is WidgetKind.EFFECT_PICKER)
+    widget, _refresh = build_row(bmw_backend, row)
+
+    labels = widget.get_model()
+    target = next(
+        i for i in range(labels.get_n_items()) if labels.get_string(i) == "Rain of green letters"
+    )
+    widget.set_selected(target)
+
+    on = [
+        choice.value
+        for choice in row.choices
+        if bmw_backend.get(f"gsettings:{BMW_PROFILE} {choice.value}").strip() == "true"
+    ]
+    assert on == ["matrix-enable-effect"]
+
+
+@pytest.mark.gtk
+def test_nothing_switched_on_shows_as_nothing_chosen(bmw_backend, bmw_panel):
+    """With every effect off the add-on plays nothing, and the row says so.
+
+    Adw.ComboRow has no empty selection: without a "Nothing" option it would
+    fall back to showing the first effect as though it were in use.
+    """
+    from gtheme.panels.descriptor import WidgetKind
+
+    row = next(r for r in bmw_panel.rows if r.kind is WidgetKind.EFFECT_PICKER)
+    bmw_backend.set(_effect_key("fire"), "false")
+    widget, _refresh = build_row(bmw_backend, row)
+    assert widget.get_model().get_string(widget.get_selected()) == "Nothing"
+
+
+@pytest.mark.gtk
+def test_choosing_nothing_turns_every_effect_off(bmw_backend, bmw_panel):
+    from gtheme.panels.descriptor import WidgetKind
+
+    row = next(r for r in bmw_panel.rows if r.kind is WidgetKind.EFFECT_PICKER)
+    widget, _refresh = build_row(bmw_backend, row)
+    widget.set_selected(0)
+    assert not [
+        choice.value
+        for choice in row.choices
+        if bmw_backend.get(f"gsettings:{BMW_PROFILE} {choice.value}").strip() == "true"
+    ]
+
+
+@pytest.mark.gtk
+def test_the_speed_row_follows_the_chosen_effect(bmw_backend, bmw_panel):
+    """One speed control, not twenty-six of which twenty-five do nothing."""
+    from gtheme.panels.descriptor import WidgetKind
+
+    row = next(r for r in bmw_panel.rows if r.kind is WidgetKind.EFFECT_SPEED)
+    bmw_backend.set(_effect_key("fire"), "false")
+    bmw_backend.set(_effect_key("tv"), "true")
+    bmw_backend.set(f"gsettings:{BMW_PROFILE} tv-animation-time", "1500")
+
+    widget, refresh = build_row(bmw_backend, row)
+    assert widget.get_sensitive()
+    assert widget.get_value() == 1500
+
+    widget.set_value(900)
+    assert bmw_backend.get(f"gsettings:{BMW_PROFILE} tv-animation-time") == "900"
+    # ... and the fire duration was not touched.
+    assert bmw_backend.get(f"gsettings:{BMW_PROFILE} fire-animation-time") != "900"
+
+    # Switch effect; the same row now addresses the other duration.
+    bmw_backend.set(_effect_key("tv"), "false")
+    bmw_backend.set(_effect_key("matrix"), "true")
+    bmw_backend.set(f"gsettings:{BMW_PROFILE} matrix-animation-time", "2000")
+    refresh()
+    assert widget.get_value() == 2000
+
+
+@pytest.mark.gtk
+def test_the_speed_row_greys_when_no_effect_is_chosen(bmw_backend, bmw_panel):
+    from gtheme.panels.descriptor import WidgetKind
+
+    row = next(r for r in bmw_panel.rows if r.kind is WidgetKind.EFFECT_SPEED)
+    bmw_backend.set(_effect_key("fire"), "false")
+    widget, _refresh = build_row(bmw_backend, row)
+    assert not widget.get_sensitive()
+
+
+@pytest.mark.gtk
+@pytest.mark.mutating
+def test_the_picker_writes_into_the_add_ons_own_file(bmw_panel, tmp_path, tmp_dest_root):
+    """End to end: the picker, through the keyfile form, into a real file.
+
+    The builder is called directly rather than through ``panels.build_row``.
+    That entry point resolves the row against the LIVE ``active-profile``
+    setting, which on a real desktop names a real profile — going through it
+    here writes into the machine's own burn-my-windows configuration. (It did,
+    once, while this was being written. Hence :func:`resolve_row` leaving an
+    already-addressed row alone, and hence this note.)
+    """
+    from gi.repository import Gio
+
+    from gtheme.core.settings_backend import GioBackend
+    from gtheme.panels.descriptor import WidgetKind
+    from gtheme.panels.widgets import build_effect_picker
+
+    source = Gio.SettingsSchemaSource.new_from_directory(
+        str(CORPUS / BMW_UUID / "schemas"), Gio.SettingsSchemaSource.get_default(), False
+    )
+    backend = GioBackend(schema_source=source)
+    profile = tmp_path / "1787167433969725.conf"
+    row = next(r for r in bmw_panel.rows if r.kind is WidgetKind.EFFECT_PICKER)
+    resolved = row.model_copy(
+        update={"keyfile": str(profile), "path": "/org/gnome/shell/extensions/"}
+    )
+    widget, _refresh = build_effect_picker(backend, resolved)
+
+    labels = widget.get_model()
+    target = next(
+        i for i in range(labels.get_n_items()) if labels.get_string(i) == "Shatter like glass"
+    )
+    widget.set_selected(target)
+
+    written = profile.read_text(encoding="utf-8")
+    assert "[burn-my-windows-profile]" in written
+    assert "broken-glass-enable-effect=true" in written
+    assert "fire-enable-effect=false" in written
+
+
+@pytest.mark.gtk
+def test_an_already_addressed_row_is_never_redirected(bmw_backend, tmp_path):
+    """The guard that stops a test writing into the real desktop.
+
+    ``resolve_row`` points a burn-my-windows row at whichever profile file the
+    machine is using. A row that already names a file must be left alone, or an
+    explicit address silently becomes the live one.
+    """
+    from gtheme.panels.schema_probe import resolve_row
+
+    row = Row.model_validate(
+        {
+            "schema_id": BMW_PROFILE,
+            "key": "fire-enable-effect",
+            "title": "Burn away",
+            "subtitle": "The window goes up in flames when it closes.",
+            "kind": "toggle",
+            "keyfile": str(tmp_path / "explicit.conf"),
+            "path": "/org/gnome/shell/extensions/",
+        }
+    )
+    assert resolve_row(row, bmw_backend) is row

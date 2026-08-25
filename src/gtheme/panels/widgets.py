@@ -19,7 +19,11 @@ this module is where they land:
   the enumeration modules, so it stays a base-library gap rather than a
   half-answer here.
 
-The entry point is :func:`build_row`, which is the frozen builder plus these.
+The entry point is :func:`build_row`, which is the frozen builder plus the
+schema probe. The kinds themselves are handed to the frozen builder through
+:func:`~gtheme.ui.widgets.rows.register_kind` at import time, so a registered
+kind is a first-class row: same entry point, same reset button, same warning
+tooltip, same greying.
 Pages call this one and get every kind.
 
 **Clamps.** Several GNOME keys have no bounds in their own settings: the night
@@ -44,10 +48,10 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
 
 from ..core.settings_backend import BackendError, SettingsBackend  # noqa: E402
-from ..ui.widgets.rows import RowBuildError, key_for  # noqa: E402
+from ..ui.widgets.rows import RowBuildError, key_for, register_kind  # noqa: E402
 from ..ui.widgets.rows import build_row as build_base_row  # noqa: E402
 from .descriptor import Row, WidgetKind  # noqa: E402
-from .schema_probe import Availability, SchemaProbe  # noqa: E402
+from .schema_probe import Availability, SchemaProbe, resolve_row  # noqa: E402
 
 __all__ = [
     "CLEARED",
@@ -55,6 +59,10 @@ __all__ = [
     "CaptureAction",
     "Clamp",
     "KNOWN_CLAMPS",
+    "NO_EFFECT_LABEL",
+    "build_effect_picker",
+    "build_effect_speed",
+    "build_link_row",
     "build_row",
     "capture_for_key",
     "clamp_violations",
@@ -62,6 +70,7 @@ __all__ = [
     "dict_number",
     "dict_with_number",
     "encode_accelerator",
+    "set_link_handler",
     "unavailable_row",
 ]
 
@@ -362,6 +371,228 @@ def _build_dict_slider(
     return widget, refresh
 
 
+def build_effect_picker(
+    backend: SettingsBackend, row: Row
+) -> tuple[Adw.PreferencesRow, Callable[[], None]]:
+    """One-of-N over a run of separate on/off settings.
+
+    burn-my-windows keeps 26 animations as 26 independent booleans and plays
+    whichever is on. Shown as switches, that is six controls in the app that
+    silently fight each other: turning one on leaves the previous one on too,
+    and the add-on picks between them by rules nobody can see. Shown as a
+    picker, choosing an effect turns that one on and every other one off, in
+    one action, which is what the person meant.
+
+    ``row.choices`` carry the sibling key names, not values. The key strings
+    are built from the row itself, so a profile row resolved to the add-on's
+    own settings file writes into that file — see
+    :func:`gtheme.panels.schema_probe.resolve_row`.
+    """
+    known = set(_effect_names(backend, row))
+    # "None" first, and it is a real answer rather than a placeholder: with
+    # every effect switched off the add-on plays nothing, which is a thing
+    # people choose. Without it, a profile with nothing on would show the first
+    # effect as though it were in use — Adw.ComboRow has no empty selection.
+    options: list[tuple[str | None, str, str | None]] = [
+        (None, NO_EFFECT_LABEL, "Windows just open and close, with no animation.")
+    ]
+    options += [
+        (choice.value, choice.label, choice.subtitle)
+        for choice in row.choices
+        # An effect this version of the add-on does not have would be an option
+        # that does nothing. When the schema cannot be read at all, offer
+        # everything rather than nothing.
+        if not known or choice.value.removesuffix(_EFFECT_ENABLE_SUFFIX) in known
+    ]
+    widget = Adw.ComboRow(title=row.title, subtitle=row.subtitle)
+    widget.set_model(Gtk.StringList.new([label for _key, label, _sub in options]))
+    guard = {"busy": False}
+
+    def key_of(name: str) -> str:
+        return key_for(row.model_copy(update={"key": name}))
+
+    def refresh() -> None:
+        guard["busy"] = True
+        try:
+            for index, (name, _label, _sub) in enumerate(options):
+                if name is None:
+                    continue
+                try:
+                    if backend.get(key_of(name)).strip() == "true":
+                        widget.set_selected(index)
+                        return
+                except BackendError:
+                    continue
+            widget.set_selected(0)  # "None"
+        finally:
+            guard["busy"] = False
+
+    def on_selected(*_args: Any) -> None:
+        if guard["busy"]:
+            return
+        index = widget.get_selected()
+        if index == Gtk.INVALID_LIST_POSITION or index >= len(options):
+            return
+        chosen = options[index][0]
+        for name, _label, _sub in options:
+            if name is None:
+                continue
+            try:
+                backend.set(key_of(name), "true" if name == chosen else "false")
+            except BackendError:
+                # An effect this version of the add-on does not have is not a
+                # reason to abandon the rest of the change.
+                continue
+
+    refresh()
+    widget.connect("notify::selected", on_selected)
+    return widget, refresh
+
+
+#: What the effect picker calls "play no animation at all".
+NO_EFFECT_LABEL = "Nothing"
+
+#: How an effect's on/off setting is named, and how its duration is named.
+_EFFECT_ENABLE_SUFFIX = "-enable-effect"
+_EFFECT_TIME_SUFFIX = "-animation-time"
+
+
+def _effect_names(backend: SettingsBackend, row: Row) -> list[str]:
+    """Every effect the installed add-on knows about, read from its schema.
+
+    Read rather than listed, so a new effect in a newer version of the add-on
+    is picked up without a data change here — and so an effect that a version
+    does NOT have cannot be offered.
+    """
+    try:
+        from gi.repository import Gio
+
+        source = backend.schema_source or Gio.SettingsSchemaSource.get_default()
+        schema = source.lookup(row.schema_id, True) if source is not None else None
+        if schema is None:
+            return []
+        return sorted(
+            key.removesuffix(_EFFECT_ENABLE_SUFFIX)
+            for key in schema.list_keys()
+            if key.endswith(_EFFECT_ENABLE_SUFFIX)
+        )
+    except Exception:  # pragma: no cover - defensive; never fatal
+        return []
+
+
+def _chosen_effect(backend: SettingsBackend, row: Row, names: Iterable[str]) -> str | None:
+    """Which effect is switched on, if any."""
+    for name in names:
+        key = key_for(row.model_copy(update={"key": name + _EFFECT_ENABLE_SUFFIX}))
+        try:
+            if backend.get(key).strip() == "true":
+                return name
+        except BackendError:
+            continue
+    return None
+
+
+def build_effect_speed(
+    backend: SettingsBackend, row: Row
+) -> tuple[Adw.PreferencesRow, Callable[[], None]]:
+    """The duration of whichever effect is currently chosen.
+
+    burn-my-windows gives every effect its own duration setting. Rendering all
+    of them means twenty-six sliders of which twenty-five do nothing; picking
+    one at authoring time means the slider is wrong as soon as the person
+    changes the effect. So the row follows the picker: it reads and writes
+    ``<chosen>-animation-time``, and greys itself when nothing is chosen.
+    """
+    if row.clamp_min is None or row.clamp_max is None:
+        raise RowBuildError(f"{row.id}: an effect speed still needs clamp_min and clamp_max")
+    widget = Adw.SpinRow.new_with_range(row.clamp_min, row.clamp_max, row.step or 50)
+    widget.set_title(row.title)
+    widget.set_subtitle(row.subtitle)
+    guard = {"busy": False}
+    state: dict[str, str | None] = {"key": None}
+
+    def refresh() -> None:
+        guard["busy"] = True
+        try:
+            chosen = _chosen_effect(backend, row, _effect_names(backend, row))
+            if chosen is None:
+                state["key"] = None
+                widget.set_sensitive(False)
+                return
+            key = key_for(row.model_copy(update={"key": chosen + _EFFECT_TIME_SUFFIX}))
+            state["key"] = key
+            try:
+                value = float(backend.get(key).strip())
+            except (BackendError, ValueError):
+                widget.set_sensitive(False)
+                return
+            widget.set_sensitive(True)
+            widget.set_value(min(max(value, row.clamp_min), row.clamp_max))
+        finally:
+            guard["busy"] = False
+
+    def on_changed(*_args: Any) -> None:
+        if guard["busy"] or state["key"] is None:
+            return
+        value = int(min(max(widget.get_value(), row.clamp_min), row.clamp_max))
+        try:
+            backend.set(state["key"], str(value))
+        except BackendError:
+            return
+
+    refresh()
+    widget.connect("notify::value", on_changed)
+    return widget, refresh
+
+
+def build_link_row(
+    _backend: SettingsBackend, row: Row
+) -> tuple[Adw.PreferencesRow, Callable[[], None]]:
+    """A way through to somewhere else: a row with an arrow, and nothing else.
+
+    Where it goes is :attr:`Row.link_target`. *Opening* the destination is not
+    this library's business — an add-on's own preferences window is opened by
+    the Add-ons page, which owns the D-Bus call, and another page of this app
+    is reached through the window. So the widget carries an activatable
+    callback slot instead, set with :func:`set_link_handler`, and does nothing
+    until something fills it in.
+
+    Deliberately not greyed when unset: a row that looks broken because the
+    page that wires it up has not been written yet would be a lie about the
+    add-on rather than about us.
+    """
+    widget = Adw.ActionRow(title=row.title, subtitle=row.subtitle)
+    widget.add_suffix(Gtk.Image(icon_name="go-next-symbolic"))
+    widget.set_activatable(True)
+    widget.connect("activated", _on_link_activated)
+    return widget, (lambda: None)
+
+
+#: Set on a link row's widget by :func:`set_link_handler`.
+_LINK_HANDLER = "_gtheme_link_handler"
+_LINK_TARGET = "_gtheme_link_target"
+
+
+def _on_link_activated(widget: Adw.ActionRow) -> None:
+    handler = getattr(widget, _LINK_HANDLER, None)
+    if handler is not None:
+        handler(getattr(widget, _LINK_TARGET, None))
+
+
+def set_link_handler(
+    widget: Adw.PreferencesRow, row: Row, handler: Callable[[str | None], None]
+) -> None:
+    """Say what activating a link row should do.
+
+    Args:
+        widget: the row built by :func:`build_link_row`.
+        row: the descriptor it came from.
+        handler: called with :attr:`Row.link_target` when the row is clicked.
+    """
+    setattr(widget, _LINK_TARGET, row.link_target)
+    setattr(widget, _LINK_HANDLER, handler)
+
+
 def _build_shortcut(
     backend: SettingsBackend, row: Row
 ) -> tuple[Adw.PreferencesRow, Callable[[], None]]:
@@ -428,10 +659,15 @@ def present_capture_dialog(
     return dialog
 
 
-_ADVANCED: dict[WidgetKind, Callable[..., tuple[Adw.PreferencesRow, Callable[[], None]]]] = {
-    WidgetKind.DICT_SLIDER: _build_dict_slider,
-    WidgetKind.SHORTCUT: _build_shortcut,
-}
+# Register the two hard kinds with the base library rather than dispatching
+# around it. Going around it is how they ended up as the only rows in the app
+# with no "put this back" button: that button is attached by the base
+# ``build_row``, and a builder it never sees never gets one.
+register_kind(WidgetKind.DICT_SLIDER, _build_dict_slider)
+register_kind(WidgetKind.SHORTCUT, _build_shortcut)
+register_kind(WidgetKind.LINK, build_link_row)
+register_kind(WidgetKind.EFFECT_PICKER, build_effect_picker)
+register_kind(WidgetKind.EFFECT_SPEED, build_effect_speed)
 
 
 def build_row(
@@ -456,12 +692,12 @@ def build_row(
         UnsupportedRowKind: ``picker`` rows, whose content comes from scanning
             the system rather than from a setting.
     """
+    # Some add-ons keep their settings in a file of their own rather than in
+    # the desktop's settings store. Resolving the row first is what makes those
+    # rows live rather than a control that reports success and changes nothing.
+    row = resolve_row(row, backend)
     if probe is not None:
-        availability = probe.availability(row)
+        availability = probe.availability(row, backend)
         if not availability.ok:
             return unavailable_row(row, availability), (lambda: None)
-
-    builder = _ADVANCED.get(row.kind)
-    if builder is not None:
-        return builder(backend, row)
     return build_base_row(backend, row)

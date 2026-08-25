@@ -147,3 +147,14 @@ subtitle = "The taskbar lists what is open here, not everything open everywhere.
 synonyms = ["workspaces", "desktops"]
 kind = "toggle"
 advanced = true
+
+# The rest of this add-on. Per-monitor layout, the position of every element in
+# the bar, and the fine grain of its animations are a whole window's worth of
+# settings that dash-to-panel already draws well. Rebuilding it here would ship
+# a worse copy; leaving it out silently would hide most of the add-on.
+[[rows]]
+title = "Open the add-on's own settings"
+subtitle = "The rest of the taskbar's settings — where each part sits, and one screen at a time — open in the add-on's own window."
+synonyms = ["advanced", "more", "per monitor", "layout", "position"]
+kind = "link"
+link_target = "extension-prefs:dash-to-panel@jderose9.github.com"

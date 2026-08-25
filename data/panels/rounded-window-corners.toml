@@ -58,3 +58,13 @@ title = "Work around one stubborn terminal"
 subtitle = "Fixes the corners of the Kitty terminal, which needs a nudge the others do not."
 kind = "toggle"
 advanced = true
+
+# The per-app list is a table of exceptions keyed by application id, added to as
+# you meet a window that needs one. That is a list editor, not a row, and the
+# add-on already has one.
+[[rows]]
+title = "Exceptions for particular apps"
+subtitle = "The list of apps that should keep their square corners opens in the add-on's own window."
+synonyms = ["exceptions", "per app", "blacklist", "ignore"]
+kind = "link"
+link_target = "extension-prefs:rounded-window-corners@fxgn"

@@ -10,10 +10,18 @@ uuids = ["ding@rastersoft.com", "gtk4-ding@smedius.gitlab.com"]
 alternates = ["gtk4-ding@smedius.gitlab.com", "ding@rastersoft.com"]
 ego_pk = 2087
 schema_id = "org.gnome.shell.extensions.ding"
-child_schemas = ["org.gnome.shell.extensions.gtk4-ding"]
 conflicts = ["ding@rastersoft.com", "gtk4-ding@smedius.gitlab.com"]
 category = "layout"
 summary = "Puts your files, folders and the wastebasket back onto the desktop background, where you can drop things on them."
+
+# The two add-ons keep the same keys under two different names. The rows below
+# are written against DING; the engine rewrites them against Gtk4-DING's names
+# when that is the one installed. (This was a child_schemas entry, which said
+# something untrue: a child schema is another group of the SAME add-on's
+# settings, not a rival add-on's.)
+[target.schema_by_uuid]
+"ding@rastersoft.com" = "org.gnome.shell.extensions.ding"
+"gtk4-ding@smedius.gitlab.com" = "org.gnome.shell.extensions.gtk4-ding"
 
 [[rows]]
 schema_id = "org.gnome.shell.extensions.ding"

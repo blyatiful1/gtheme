@@ -18,7 +18,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk  # noqa: E402
 
 from gtheme.core.settings_backend import MemoryBackend  # noqa: E402
-from gtheme.panels.descriptor import Row  # noqa: E402
+from gtheme.panels.descriptor import Row, WidgetKind  # noqa: E402
 from gtheme.ui.widgets.rows import (  # noqa: E402
     FOREIGN_CHOICE_SUFFIX,
     UnsupportedRowKind,
@@ -37,6 +37,7 @@ SCHEMA_XML = """<?xml version="1.0" encoding="UTF-8"?>
     <key name="a-count" type="i"><default>3</default></key>
     <key name="a-mode" type="s"><default>'default'</default></key>
     <key name="needs-manual" type="s"><default>'automatic'</default></key>
+    <key name="a-dict" type="a{sv}"><default>{'radius': &lt;8&gt;}</default></key>
   </schema>
 </schemalist>
 """
@@ -322,12 +323,43 @@ def test_a_row_warning_becomes_a_tooltip(backend):
     assert widget.get_tooltip_text() == "This can slow older computers down."
 
 
-@pytest.mark.parametrize(
-    ("kind", "extra"),
-    [("dict_slider", {"dict_key": "radius"}), ("shortcut", {}), ("picker", {})],
-)
+@pytest.mark.parametrize(("kind", "extra"), [("picker", {})])
 def test_unbuilt_kinds_name_themselves(backend, kind, extra):
+    """``picker`` is the last kind with no builder: its content comes from
+    scanning the machine, not from reading a setting.
+
+    ``dict_slider`` and ``shortcut`` used to be here. They are built now, by
+    :mod:`gtheme.panels.widgets`, which hands them to this library through
+    :func:`register_kind` — so this library builds them like anything else and
+    they get the reset button they were missing.
+    """
     with pytest.raises(UnsupportedRowKind) as caught:
         build_row(backend, _row(kind=kind, **extra))
     assert kind in str(caught.value)
     assert isinstance(caught.value, NotImplementedError)
+
+
+def test_a_registered_kind_becomes_a_first_class_row(backend):
+    """The point of the registry: a registered builder is not a second path."""
+    from gtheme.panels.widgets import _build_dict_slider
+    from gtheme.ui.widgets.rows import _BUILDERS, register_kind
+
+    assert _BUILDERS[WidgetKind.DICT_SLIDER] is _build_dict_slider
+
+    row = _row(
+        key="a-dict",
+        kind="dict_slider",
+        dict_key="radius",
+        clamp_min=0,
+        clamp_max=32,
+        reset=True,
+    )
+    widget, _refresh = build_row(backend, row)
+    assert _find_reset_button(widget) is not None, (
+        "a registered kind must get the reset button too"
+    )
+
+    # Registering the same builder twice is a no-op; a different one is a bug.
+    register_kind(WidgetKind.DICT_SLIDER, _build_dict_slider)
+    with pytest.raises(ValueError, match="already has a builder"):
+        register_kind(WidgetKind.DICT_SLIDER, lambda _b, _r: (None, lambda: None))

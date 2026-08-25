@@ -104,3 +104,13 @@ title = "Open the phone's storage automatically"
 subtitle = "Makes the phone's files appear in your file manager as soon as it connects."
 kind = "toggle"
 advanced = true
+
+# Each paired phone has its own page: which of its features are on, what it may
+# share, what it may see. Those pages are per-device and are drawn by the add-on
+# itself from what the phone reports, so there is nothing to copy here.
+[[rows]]
+title = "Settings for each phone"
+subtitle = "What each linked phone is allowed to do opens in the add-on's own window, one phone at a time."
+synonyms = ["phone", "device", "pairing", "per device", "android"]
+kind = "link"
+link_target = "extension-prefs:gsconnect@andyholmes.github.io"

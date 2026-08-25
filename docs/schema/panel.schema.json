@@ -86,6 +86,13 @@
           "default": null,
           "title": "Relocatable Path Template"
         },
+        "schema_by_uuid": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Schema By Uuid",
+          "type": "object"
+        },
         "schema_id": {
           "title": "Schema Id",
           "type": "string"
@@ -207,11 +214,43 @@
           "title": "Dict Key"
         },
         "key": {
-          "title": "Key",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Key"
+        },
+        "keyfile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Keyfile"
         },
         "kind": {
           "$ref": "#/$defs/WidgetKind"
+        },
+        "link_target": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Link Target"
         },
         "path": {
           "anyOf": [
@@ -238,8 +277,16 @@
           "type": "boolean"
         },
         "schema_id": {
-          "title": "Schema Id",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schema Id"
         },
         "step": {
           "anyOf": [
@@ -282,8 +329,6 @@
         }
       },
       "required": [
-        "schema_id",
-        "key",
         "title",
         "subtitle",
         "kind"
@@ -301,7 +346,10 @@
         "color",
         "picker",
         "dict_slider",
-        "shortcut"
+        "shortcut",
+        "effect-picker",
+        "effect-speed",
+        "link"
       ],
       "title": "WidgetKind",
       "type": "string"

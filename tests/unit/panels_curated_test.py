@@ -92,6 +92,8 @@ def test_every_row_resolves_against_the_corpus(panels: list[LoadedPanel]) -> Non
     problems = []
     for panel in panels:
         for row in panel.descriptor.rows:
+            if row.kind is WidgetKind.LINK:
+                continue  # a way through to the add-on's own window, not a setting
             if row.schema_id not in known:
                 problems.append(f"{panel.descriptor.id}: unknown settings group {row.schema_id}")
             elif row.key not in known[row.schema_id]:
@@ -121,8 +123,10 @@ def test_panel_settings_groups_are_declared(panels: list[LoadedPanel]) -> None:
     problems = []
     for panel in panels:
         target = panel.descriptor.target
-        declared = {target.schema_id, *target.child_schemas}
+        declared = target.declared_schemas
         for row in panel.descriptor.rows:
+            if row.kind is WidgetKind.LINK:
+                continue
             if row.schema_id not in declared:
                 problems.append(
                     f"{panel.descriptor.id}: row {row.key!r} reaches into "
@@ -135,7 +139,7 @@ def test_declared_settings_groups_exist(panels: list[LoadedPanel]) -> None:
     known = corpus_keys()
     for panel in panels:
         target = panel.descriptor.target
-        for schema_id in (target.schema_id, *target.child_schemas):
+        for schema_id in sorted(target.declared_schemas):
             assert schema_id in known, f"{panel.descriptor.id}: {schema_id} is not in the corpus"
 
 
