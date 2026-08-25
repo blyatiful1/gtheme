@@ -1,0 +1,994 @@
+# gtheme domain descriptors — core GNOME, authored by hand.
+#
+# Every row here is dispositioned surfaced(windows) in coverage.toml.
+# Titles and subtitles are checked by the plain-language lint in
+# tests/unit/domains_jargon_test.py; synonyms deliberately are not, because they
+# exist to catch the words a person actually types into the search box.
+
+# Every key combination the desktop itself watches for.
+id = "shortcuts"
+title = "Keyboard Shortcuts"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "activate-window-menu"
+title = "Open the window menu"
+subtitle = "Opens the small menu of things you can do to the window you are using."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "always-on-top"
+title = "Keep the window in front"
+subtitle = "Pins the window you are using above all the others."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "begin-move"
+title = "Move the window with the arrow keys"
+subtitle = "Starts moving the window you are using without the mouse."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "begin-resize"
+title = "Resize the window with the arrow keys"
+subtitle = "Starts resizing the window you are using without the mouse."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "close"
+title = "Close the window"
+subtitle = "Closes the window you are using."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "cycle-group"
+title = "Go to the next window of the same app"
+subtitle = "Steps through the windows belonging to the app you are using."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "cycle-group-backward"
+title = "Go to the previous window of the same app"
+subtitle = "Steps backwards through the windows belonging to the app you are using."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "cycle-panels"
+title = "Move on to the top bar and back"
+subtitle = "Steps between your windows and the bar across the top of the screen."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "cycle-panels-backward"
+title = "Move back to the top bar"
+subtitle = "Steps the other way between your windows and the bar across the top of the screen."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "cycle-windows"
+title = "Go to the next window"
+subtitle = "Steps through your open windows one at a time."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "cycle-windows-backward"
+title = "Go to the previous window"
+subtitle = "Steps backwards through your open windows one at a time."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "lower"
+title = "Put the window behind the others"
+subtitle = "Sends the window you are using to the back."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "maximize"
+title = "Make the window fill the screen"
+subtitle = "Grows the window you are using to the whole screen."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "maximize-horizontally"
+title = "Make the window as wide as the screen"
+subtitle = "Grows the window you are using sideways only."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "maximize-vertically"
+title = "Make the window as tall as the screen"
+subtitle = "Grows the window you are using up and down only."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "minimize"
+title = "Hide the window away"
+subtitle = "Tucks the window you are using out of sight."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-center"
+title = "Move the window to the middle"
+subtitle = "Puts the window you are using in the centre of the screen."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "panel-main-menu"
+title = "Open the main menu"
+subtitle = "Opens the menu in the bar across the top of the screen."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "panel-run-dialog"
+title = "Open the run box"
+subtitle = "Opens the small box where you can type the name of something to start."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "raise"
+title = "Bring the window to the front"
+subtitle = "Puts the window you are using in front of the others."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "raise-or-lower"
+title = "Send the window front or back"
+subtitle = "Swaps the window you are using between front and back."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "show-desktop"
+title = "Show the desktop"
+subtitle = "Hides every window so you can see the background picture."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-applications"
+title = "Switch between apps"
+subtitle = "Holds up the list of open apps so you can pick one."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-applications-backward"
+title = "Switch between apps, backwards"
+subtitle = "Holds up the list of open apps and steps the other way."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-group"
+title = "Switch between windows of one app"
+subtitle = "Holds up the windows of the app you are using so you can pick one."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-group-backward"
+title = "Switch between windows of one app, backwards"
+subtitle = "Holds up the windows of the app you are using and steps the other way."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-input-source"
+title = "Switch to the next keyboard layout"
+subtitle = "Changes which language your keyboard types in."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-input-source-backward"
+title = "Switch to the previous keyboard layout"
+subtitle = "Changes back to the keyboard language you had before."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-panels"
+title = "Switch to the top bar"
+subtitle = "Moves what you are typing in over to the bar across the top of the screen."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-panels-backward"
+title = "Switch back from the top bar"
+subtitle = "Moves what you are typing in back the other way."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-windows"
+title = "Switch between windows"
+subtitle = "Holds up every open window so you can pick one."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-windows-backward"
+title = "Switch between windows, backwards"
+subtitle = "Holds up every open window and steps the other way."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "toggle-above"
+title = "Keep the window in front, on or off"
+subtitle = "Turns keeping the window you are using above the others on or off."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "toggle-fullscreen"
+title = "Fill the whole screen"
+subtitle = "Lets the window you are using take over the screen completely."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "toggle-maximized"
+title = "Fill the screen, or put it back"
+subtitle = "Swaps the window you are using between filling the screen and its old size."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "toggle-on-all-workspaces"
+title = "Show the window on every desktop"
+subtitle = "Keeps the window you are using visible whichever desktop you switch to."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "unmaximize"
+title = "Put the window back to its old size"
+subtitle = "Shrinks a window that fills the screen back to how it was."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-corner-ne"
+title = "Move the window to the top-right corner"
+subtitle = "Puts the window you are using in the top-right corner of the screen."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-corner-nw"
+title = "Move the window to the top-left corner"
+subtitle = "Puts the window you are using in the top-left corner of the screen."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-corner-se"
+title = "Move the window to the bottom-right corner"
+subtitle = "Puts the window you are using in the bottom-right corner of the screen."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-corner-sw"
+title = "Move the window to the bottom-left corner"
+subtitle = "Puts the window you are using in the bottom-left corner of the screen."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-side-n"
+title = "Move the window to the top"
+subtitle = "Puts the window you are using against the top of the screen."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-side-s"
+title = "Move the window to the bottom"
+subtitle = "Puts the window you are using against the bottom of the screen."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-side-e"
+title = "Move the window to the right"
+subtitle = "Puts the window you are using against the right of the screen."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-side-w"
+title = "Move the window to the left"
+subtitle = "Puts the window you are using against the left of the screen."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-monitor-up"
+title = "Move the window to the screen up"
+subtitle = "Sends the window you are using to the screen up of this one."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-workspace-up"
+title = "Take the window to the desktop up"
+subtitle = "Moves the window you are using onto the desktop up of this one, and follows it."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-to-workspace-up"
+title = "Go to the desktop up"
+subtitle = "Switches to the desktop up of the one you are on."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-monitor-down"
+title = "Move the window to the screen down"
+subtitle = "Sends the window you are using to the screen down of this one."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-workspace-down"
+title = "Take the window to the desktop down"
+subtitle = "Moves the window you are using onto the desktop down of this one, and follows it."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-to-workspace-down"
+title = "Go to the desktop down"
+subtitle = "Switches to the desktop down of the one you are on."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-monitor-left"
+title = "Move the window to the screen left"
+subtitle = "Sends the window you are using to the screen left of this one."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-workspace-left"
+title = "Take the window to the desktop left"
+subtitle = "Moves the window you are using onto the desktop left of this one, and follows it."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-to-workspace-left"
+title = "Go to the desktop left"
+subtitle = "Switches to the desktop left of the one you are on."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-monitor-right"
+title = "Move the window to the screen right"
+subtitle = "Sends the window you are using to the screen right of this one."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-workspace-right"
+title = "Take the window to the desktop right"
+subtitle = "Moves the window you are using onto the desktop right of this one, and follows it."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-to-workspace-right"
+title = "Go to the desktop right"
+subtitle = "Switches to the desktop right of the one you are on."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-workspace-1"
+title = "Take the window to desktop 1"
+subtitle = "Moves the window you are using onto desktop number 1."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-to-workspace-1"
+title = "Go to desktop 1"
+subtitle = "Switches straight to desktop number 1."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-workspace-2"
+title = "Take the window to desktop 2"
+subtitle = "Moves the window you are using onto desktop number 2."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-to-workspace-2"
+title = "Go to desktop 2"
+subtitle = "Switches straight to desktop number 2."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-workspace-3"
+title = "Take the window to desktop 3"
+subtitle = "Moves the window you are using onto desktop number 3."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-to-workspace-3"
+title = "Go to desktop 3"
+subtitle = "Switches straight to desktop number 3."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-workspace-4"
+title = "Take the window to desktop 4"
+subtitle = "Moves the window you are using onto desktop number 4."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-to-workspace-4"
+title = "Go to desktop 4"
+subtitle = "Switches straight to desktop number 4."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-workspace-5"
+title = "Take the window to desktop 5"
+subtitle = "Moves the window you are using onto desktop number 5."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-to-workspace-5"
+title = "Go to desktop 5"
+subtitle = "Switches straight to desktop number 5."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-workspace-6"
+title = "Take the window to desktop 6"
+subtitle = "Moves the window you are using onto desktop number 6."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-to-workspace-6"
+title = "Go to desktop 6"
+subtitle = "Switches straight to desktop number 6."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-workspace-7"
+title = "Take the window to desktop 7"
+subtitle = "Moves the window you are using onto desktop number 7."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-to-workspace-7"
+title = "Go to desktop 7"
+subtitle = "Switches straight to desktop number 7."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-workspace-8"
+title = "Take the window to desktop 8"
+subtitle = "Moves the window you are using onto desktop number 8."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-to-workspace-8"
+title = "Go to desktop 8"
+subtitle = "Switches straight to desktop number 8."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-workspace-9"
+title = "Take the window to desktop 9"
+subtitle = "Moves the window you are using onto desktop number 9."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-to-workspace-9"
+title = "Go to desktop 9"
+subtitle = "Switches straight to desktop number 9."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-workspace-10"
+title = "Take the window to desktop 10"
+subtitle = "Moves the window you are using onto desktop number 10."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-to-workspace-10"
+title = "Go to desktop 10"
+subtitle = "Switches straight to desktop number 10."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-workspace-11"
+title = "Take the window to desktop 11"
+subtitle = "Moves the window you are using onto desktop number 11."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-to-workspace-11"
+title = "Go to desktop 11"
+subtitle = "Switches straight to desktop number 11."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-workspace-12"
+title = "Take the window to desktop 12"
+subtitle = "Moves the window you are using onto desktop number 12."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-to-workspace-12"
+title = "Go to desktop 12"
+subtitle = "Switches straight to desktop number 12."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "move-to-workspace-last"
+title = "Take the window to the last desktop"
+subtitle = "Moves the window you are using onto the desktop furthest along."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.keybindings"
+key = "switch-to-workspace-last"
+title = "Go to the last desktop"
+subtitle = "Switches to the desktop furthest along."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.mutter.keybindings"
+key = "rotate-monitor"
+title = "Turn the screen picture around"
+subtitle = "Rotates what is on the screen a quarter turn."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "screens"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.mutter.keybindings"
+key = "switch-monitor"
+title = "Change how the screens are used"
+subtitle = "Steps through joining, mirroring and single-screen setups."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "screens"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.mutter.keybindings"
+key = "toggle-tiled-left"
+title = "Snap the window to the left half"
+subtitle = "Makes the window you are using fill the left half of the screen."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "screens"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.mutter.keybindings"
+key = "toggle-tiled-right"
+title = "Snap the window to the right half"
+subtitle = "Makes the window you are using fill the right half of the screen."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "screens"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.mutter.keybindings"
+key = "cancel-input-capture"
+title = "Stop sending your mouse and keys to another computer"
+subtitle = "Brings control back to this computer when it is being shared with another one."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "screens"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "toggle-overview"
+title = "Show all your windows and apps"
+subtitle = "Opens the view with every open window and the app search box."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "toggle-application-view"
+title = "Show all your apps"
+subtitle = "Opens the grid of everything you can start."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "toggle-message-tray"
+title = "Show your messages"
+subtitle = "Opens the list of messages and the calendar."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "toggle-quick-settings"
+title = "Open the quick settings menu"
+subtitle = "Opens the menu in the top-right corner with sound, network and power."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "focus-active-notification"
+title = "Jump to the newest message"
+subtitle = "Moves your typing over to the message that just arrived."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "screenshot"
+title = "Take a picture of the whole screen"
+subtitle = "Saves a picture of everything on screen straight away."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "screenshot-window"
+title = "Take a picture of one window"
+subtitle = "Saves a picture of the window you are using straight away."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "show-screenshot-ui"
+title = "Open the screen picture tool"
+subtitle = "Opens the tool for picking what to capture."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "show-screen-recording-ui"
+title = "Open the screen recording tool"
+subtitle = "Opens the tool for recording what happens on screen."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "shift-overview-up"
+title = "Show more of the desktop grid"
+subtitle = "Zooms out of the view of your desktops."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "shift-overview-down"
+title = "Show less of the desktop grid"
+subtitle = "Zooms back into the view of your desktops."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "screen-brightness-up"
+title = "Make the screen brighter"
+subtitle = "Raises the brightness of your screen."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "screen-brightness-down"
+title = "Make the screen dimmer"
+subtitle = "Lowers the brightness of your screen."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "screen-brightness-cycle"
+title = "Step through brightness levels"
+subtitle = "Jumps between a few set brightness levels."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "screen-brightness-up-monitor"
+title = "Make one screen brighter"
+subtitle = "Raises the brightness of the screen the mouse is on."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "screen-brightness-down-monitor"
+title = "Make one screen dimmer"
+subtitle = "Lowers the brightness of the screen the mouse is on."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "screen-brightness-cycle-monitor"
+title = "Step through brightness on one screen"
+subtitle = "Jumps between set brightness levels on the screen the mouse is on."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "switch-to-application-1"
+title = "Go to the app in place 1 of the app row"
+subtitle = "Switches to the app sitting in position 1 of your favourites."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "open-new-window-application-1"
+title = "Open a new window of app 1"
+subtitle = "Opens another window of the app sitting in position 1 of your favourites."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "switch-to-application-2"
+title = "Go to the app in place 2 of the app row"
+subtitle = "Switches to the app sitting in position 2 of your favourites."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "open-new-window-application-2"
+title = "Open a new window of app 2"
+subtitle = "Opens another window of the app sitting in position 2 of your favourites."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "switch-to-application-3"
+title = "Go to the app in place 3 of the app row"
+subtitle = "Switches to the app sitting in position 3 of your favourites."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "open-new-window-application-3"
+title = "Open a new window of app 3"
+subtitle = "Opens another window of the app sitting in position 3 of your favourites."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "switch-to-application-4"
+title = "Go to the app in place 4 of the app row"
+subtitle = "Switches to the app sitting in position 4 of your favourites."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "open-new-window-application-4"
+title = "Open a new window of app 4"
+subtitle = "Opens another window of the app sitting in position 4 of your favourites."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "switch-to-application-5"
+title = "Go to the app in place 5 of the app row"
+subtitle = "Switches to the app sitting in position 5 of your favourites."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "open-new-window-application-5"
+title = "Open a new window of app 5"
+subtitle = "Opens another window of the app sitting in position 5 of your favourites."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "switch-to-application-6"
+title = "Go to the app in place 6 of the app row"
+subtitle = "Switches to the app sitting in position 6 of your favourites."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "open-new-window-application-6"
+title = "Open a new window of app 6"
+subtitle = "Opens another window of the app sitting in position 6 of your favourites."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "switch-to-application-7"
+title = "Go to the app in place 7 of the app row"
+subtitle = "Switches to the app sitting in position 7 of your favourites."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "open-new-window-application-7"
+title = "Open a new window of app 7"
+subtitle = "Opens another window of the app sitting in position 7 of your favourites."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "switch-to-application-8"
+title = "Go to the app in place 8 of the app row"
+subtitle = "Switches to the app sitting in position 8 of your favourites."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "open-new-window-application-8"
+title = "Open a new window of app 8"
+subtitle = "Opens another window of the app sitting in position 8 of your favourites."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "switch-to-application-9"
+title = "Go to the app in place 9 of the app row"
+subtitle = "Switches to the app sitting in position 9 of your favourites."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.shell.keybindings"
+key = "open-new-window-application-9"
+title = "Open a new window of app 9"
+subtitle = "Opens another window of the app sitting in position 9 of your favourites."
+synonyms = ["shortcut", "keyboard shortcut", "hotkey", "keys"]
+kind = "shortcut"

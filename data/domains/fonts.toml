@@ -1,0 +1,150 @@
+# gtheme domain descriptors — core GNOME, authored by hand.
+#
+# Every row here is dispositioned surfaced(fonts) in coverage.toml.
+# Titles and subtitles are checked by the plain-language lint in
+# tests/unit/domains_jargon_test.py; synonyms deliberately are not, because they
+# exist to catch the words a person actually types into the search box.
+
+id = "fonts"
+title = "Fonts & Text"
+
+[[rows]]
+schema_id = "org.gnome.desktop.interface"
+key = "font-name"
+title = "Text style"
+subtitle = "The lettering used across the desktop, in menus and in buttons."
+synonyms = ["font", "typeface", "system font", "letters"]
+kind = "picker"
+
+[[rows]]
+schema_id = "org.gnome.desktop.interface"
+key = "document-font-name"
+title = "Text style for documents"
+subtitle = "The lettering apps use for long pieces of writing you read inside them."
+synonyms = ["document font", "reading font"]
+kind = "picker"
+
+[[rows]]
+schema_id = "org.gnome.desktop.interface"
+key = "monospace-font-name"
+title = "Fixed-width text style"
+subtitle = "The lettering used where every letter takes the same width, such as in a command window."
+synonyms = ["monospace", "code font", "terminal font", "programming font"]
+kind = "picker"
+
+[[rows]]
+schema_id = "org.gnome.desktop.interface"
+key = "text-scaling-factor"
+title = "Text size"
+subtitle = "Makes every piece of writing on the desktop bigger or smaller at once."
+synonyms = ["bigger text", "font size", "zoom", "make text bigger", "scaling"]
+kind = "slider"
+clamp_min = 0.5
+clamp_max = 3.0
+step = 0.05
+
+[[rows]]
+schema_id = "org.gnome.desktop.interface"
+key = "font-hinting"
+title = "Text sharpness"
+subtitle = "How firmly letters are pushed onto the dots of your screen. Most people leave this alone."
+synonyms = ["hinting", "sharpness", "blurry text", "crisp text"]
+kind = "choice"
+
+[[rows.choices]]
+value = "'none'"
+label = "Softest"
+
+[[rows.choices]]
+value = "'slight'"
+label = "Balanced"
+
+[[rows.choices]]
+value = "'medium'"
+label = "Sharper"
+
+[[rows.choices]]
+value = "'full'"
+label = "Sharpest"
+
+[[rows.requires_first]]
+schema_id = "org.gnome.desktop.interface"
+key = "font-rendering"
+value = "'manual'"
+explain = "To change this, gtheme also has to stop letting the system decide how text is drawn."
+
+[[rows]]
+schema_id = "org.gnome.desktop.interface"
+key = "font-antialiasing"
+title = "Text smoothing"
+subtitle = "How the edges of letters are softened so they do not look jagged."
+synonyms = ["antialiasing", "smoothing", "jagged text"]
+kind = "choice"
+
+[[rows.choices]]
+value = "'none'"
+label = "Off"
+
+[[rows.choices]]
+value = "'grayscale'"
+label = "Smooth"
+
+[[rows.choices]]
+value = "'rgba'"
+label = "Smooth using screen colours"
+
+[[rows.requires_first]]
+schema_id = "org.gnome.desktop.interface"
+key = "font-rendering"
+value = "'manual'"
+explain = "To change this, gtheme also has to stop letting the system decide how text is drawn."
+
+[[rows]]
+schema_id = "org.gnome.desktop.interface"
+key = "font-rgba-order"
+title = "Colour order for smoothing"
+subtitle = "Matches smoothing to the order your screen arranges its coloured dots in. Only change this if text looks fringed."
+synonyms = ["subpixel", "rgba order", "color fringing"]
+kind = "choice"
+advanced = true
+
+[[rows.choices]]
+value = "'rgb'"
+label = "Red, green, blue"
+
+[[rows.choices]]
+value = "'bgr'"
+label = "Blue, green, red"
+
+[[rows.choices]]
+value = "'vrgb'"
+label = "Red, green, blue, stacked"
+
+[[rows.choices]]
+value = "'vbgr'"
+label = "Blue, green, red, stacked"
+
+[[rows.choices]]
+value = "'rgba'"
+label = "Let the system choose"
+
+[[rows.requires_first]]
+schema_id = "org.gnome.desktop.interface"
+key = "font-rendering"
+value = "'manual'"
+explain = "To change this, gtheme also has to stop letting the system decide how text is drawn."
+
+[[rows]]
+schema_id = "org.gnome.desktop.wm.preferences"
+key = "titlebar-font"
+title = "Text style for window headings"
+subtitle = "The lettering in the strip along the top of each window."
+synonyms = ["title font", "window title", "header font"]
+kind = "picker"
+advanced = true
+
+[[rows.requires_first]]
+schema_id = "org.gnome.desktop.wm.preferences"
+key = "titlebar-uses-system-font"
+value = "false"
+explain = "To do this, gtheme also has to stop window headings from following the main text style."

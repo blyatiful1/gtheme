@@ -1,0 +1,17 @@
+# gtheme domain descriptors — core GNOME, authored by hand.
+#
+# Every row here is dispositioned surfaced(more) in coverage.toml.
+# Titles and subtitles are checked by the plain-language lint in
+# tests/unit/domains_jargon_test.py; synonyms deliberately are not, because they
+# exist to catch the words a person actually types into the search box.
+
+id = "searchproviders"
+title = "Search"
+
+[[rows]]
+schema_id = "org.gnome.desktop.search-providers"
+key = "disable-external"
+title = "Only search things on this computer"
+subtitle = "Stops the search box in the app view from asking apps that look things up online."
+synonyms = ["search", "online search", "providers", "privacy"]
+kind = "toggle"

@@ -1,0 +1,112 @@
+# gtheme domain descriptors — core GNOME, authored by hand.
+#
+# Every row here is dispositioned surfaced(more) in coverage.toml.
+# Titles and subtitles are checked by the plain-language lint in
+# tests/unit/domains_jargon_test.py; synonyms deliberately are not, because they
+# exist to catch the words a person actually types into the search box.
+
+# Switches that take things away on purpose. Everything here is off on a normal desktop.
+id = "lockdown"
+title = "Restrictions"
+
+[[rows]]
+schema_id = "org.gnome.desktop.lockdown"
+key = "disable-lock-screen"
+title = "Do not allow locking the screen"
+subtitle = "Removes the option to lock the screen from the menu and its keys."
+synonyms = ["lockdown", "restrict", "kiosk", "parental"]
+kind = "toggle"
+advanced = true
+warn = "You will not be able to lock the screen when you step away."
+
+[[rows]]
+schema_id = "org.gnome.desktop.lockdown"
+key = "disable-log-out"
+title = "Do not allow signing out"
+subtitle = "Removes signing out from the menu."
+synonyms = ["lockdown", "restrict", "kiosk", "parental"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.lockdown"
+key = "disable-user-switching"
+title = "Do not allow switching to another person"
+subtitle = "Removes the option to leave your session running and let somebody else sign in."
+synonyms = ["lockdown", "restrict", "kiosk", "parental"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.lockdown"
+key = "disable-command-line"
+title = "Do not allow a command window"
+subtitle = "Blocks the command window and the run box for this person."
+synonyms = ["lockdown", "restrict", "kiosk", "parental"]
+kind = "toggle"
+advanced = true
+warn = "gtheme's own repair tool works from a command window, so it will not be reachable."
+
+[[rows]]
+schema_id = "org.gnome.desktop.lockdown"
+key = "disable-save-to-disk"
+title = "Do not allow saving files"
+subtitle = "Apps cannot write documents to this computer."
+synonyms = ["lockdown", "restrict", "kiosk", "parental"]
+kind = "toggle"
+advanced = true
+warn = "Work in open apps cannot be saved while this is on."
+
+[[rows]]
+schema_id = "org.gnome.desktop.lockdown"
+key = "disable-printing"
+title = "Do not allow printing"
+subtitle = "Removes printing from every app."
+synonyms = ["lockdown", "restrict", "kiosk", "parental"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.lockdown"
+key = "disable-print-setup"
+title = "Do not allow changing printer settings"
+subtitle = "Printing still works, but the printer options cannot be opened."
+synonyms = ["lockdown", "restrict", "kiosk", "parental"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.lockdown"
+key = "disable-application-handlers"
+title = "Do not allow apps to open other apps"
+subtitle = "Blocks apps from handing a file or a link over to another app."
+synonyms = ["lockdown", "restrict", "kiosk", "parental"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.lockdown"
+key = "disable-show-password"
+title = "Do not allow showing a typed password"
+subtitle = "Removes the small eye button that reveals what you typed into a password box."
+synonyms = ["lockdown", "restrict", "kiosk", "parental"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.lockdown"
+key = "mount-removable-storage-devices-as-read-only"
+title = "Plugged-in drives can be read but not written"
+subtitle = "You can copy files off a memory stick, but not onto it."
+synonyms = ["lockdown", "restrict", "kiosk", "parental"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.lockdown"
+key = "user-administration-disabled"
+title = "Do not allow managing who can sign in"
+subtitle = "Removes the settings for adding and removing the people who use this computer."
+synonyms = ["lockdown", "restrict", "kiosk", "parental"]
+kind = "toggle"
+advanced = true

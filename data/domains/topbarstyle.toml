@@ -1,0 +1,18 @@
+# gtheme domain descriptors — core GNOME, authored by hand.
+#
+# Every row here is dispositioned surfaced(topbar) in coverage.toml.
+# Titles and subtitles are checked by the plain-language lint in
+# tests/unit/domains_jargon_test.py; synonyms deliberately are not, because they
+# exist to catch the words a person actually types into the search box.
+
+id = "topbarstyle"
+title = "Top Bar Style"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.user-theme"
+key = "name"
+title = "Top bar style"
+subtitle = "Changes how the bar across the top of the screen, its menus and the app view look."
+synonyms = ["shell theme", "top bar theme", "panel theme", "overview style"]
+kind = "picker"
+warn = "A top bar style is a single design: unlike the rest of the desktop it will not switch between light and dark on its own."

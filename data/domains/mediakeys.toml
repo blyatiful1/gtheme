@@ -1,0 +1,426 @@
+# gtheme domain descriptors — core GNOME, authored by hand.
+#
+# Every row here is dispositioned surfaced(windows) in coverage.toml.
+# Titles and subtitles are checked by the plain-language lint in
+# tests/unit/domains_jargon_test.py; synonyms deliberately are not, because they
+# exist to catch the words a person actually types into the search box.
+
+# The keys on your keyboard marked with sound, screen and power symbols.
+id = "mediakeys"
+title = "Sound & Media Keys"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "volume-up"
+title = "Turn the volume up"
+subtitle = "Raises the sound coming out of your speakers or headphones."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "volume-down"
+title = "Turn the volume down"
+subtitle = "Lowers the sound coming out of your speakers or headphones."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "volume-mute"
+title = "Silence the sound"
+subtitle = "Turns the sound off and back on again."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "volume-up-quiet"
+title = "Turn the volume up a little"
+subtitle = "Raises the sound by a smaller step than usual."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "volume-down-quiet"
+title = "Turn the volume down a little"
+subtitle = "Lowers the sound by a smaller step than usual."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "volume-mute-quiet"
+title = "Silence the sound quietly"
+subtitle = "Turns the sound off without playing the click that normally goes with it."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "volume-up-precise"
+title = "Turn the volume up by one notch"
+subtitle = "Raises the sound by the smallest step there is."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "volume-down-precise"
+title = "Turn the volume down by one notch"
+subtitle = "Lowers the sound by the smallest step there is."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "mic-mute"
+title = "Silence the microphone"
+subtitle = "Stops the microphone from picking anything up, and turns it back on."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "play"
+title = "Play or pause"
+subtitle = "Starts and stops whatever is playing."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "pause"
+title = "Pause"
+subtitle = "Stops whatever is playing."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "stop"
+title = "Stop playing"
+subtitle = "Stops the music or video and goes back to the start."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "next"
+title = "Next track"
+subtitle = "Skips to the next song or video."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "previous"
+title = "Previous track"
+subtitle = "Goes back to the song or video before this one."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "playback-forward"
+title = "Skip forwards"
+subtitle = "Jumps ahead inside the song or video you are playing."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "playback-rewind"
+title = "Skip backwards"
+subtitle = "Jumps back inside the song or video you are playing."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "playback-repeat"
+title = "Repeat"
+subtitle = "Turns repeating the song or list on and off."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "playback-random"
+title = "Shuffle"
+subtitle = "Turns playing in a random order on and off."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "media"
+title = "Open your music app"
+subtitle = "Starts the app you use for music."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "www"
+title = "Open your web browser"
+subtitle = "Starts the app you use for the web."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "email"
+title = "Open your mail app"
+subtitle = "Starts the app you use for mail."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "calculator"
+title = "Open the calculator"
+subtitle = "Starts the calculator that comes with your desktop."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "home"
+title = "Open your home folder"
+subtitle = "Opens the folder where your own files live."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "search"
+title = "Search"
+subtitle = "Opens the search box so you can look for apps and files."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "help"
+title = "Open help"
+subtitle = "Opens the help pages for your desktop."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "control-center"
+title = "Open the system settings"
+subtitle = "Starts your desktop's own settings app."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "screensaver"
+title = "Lock the screen"
+subtitle = "Locks the computer straight away."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "logout"
+title = "Sign out"
+subtitle = "Signs you out of your desktop."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "shutdown"
+title = "Switch the computer off"
+subtitle = "Starts shutting the computer down."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "reboot"
+title = "Restart the computer"
+subtitle = "Starts the computer again."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "suspend"
+title = "Put the computer to sleep"
+subtitle = "Sends the computer to sleep so it wakes up quickly."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "hibernate"
+title = "Save everything and switch off"
+subtitle = "Writes what you are doing to the drive, then switches off."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "power"
+title = "What the power key does"
+subtitle = "The key on your keyboard marked with the power symbol."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "eject"
+title = "Eject the disc"
+subtitle = "Opens the disc tray or unmounts the disc."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "battery-status"
+title = "Show the battery level"
+subtitle = "Shows how much charge is left."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "rfkill"
+title = "Turn wireless on or off"
+subtitle = "Switches every wireless connection off and back on."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "rfkill-bluetooth"
+title = "Turn Bluetooth on or off"
+subtitle = "Switches Bluetooth off and back on."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "touchpad-toggle"
+title = "Turn the touchpad on or off"
+subtitle = "Switches the touchpad off and back on."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "touchpad-on"
+title = "Turn the touchpad on"
+subtitle = "Switches the touchpad on."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "touchpad-off"
+title = "Turn the touchpad off"
+subtitle = "Switches the touchpad off."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "keyboard-brightness-up"
+title = "Light the keyboard more brightly"
+subtitle = "Raises the light behind the keys."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "keyboard-brightness-down"
+title = "Dim the keyboard light"
+subtitle = "Lowers the light behind the keys."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "keyboard-brightness-toggle"
+title = "Turn the keyboard light on or off"
+subtitle = "Switches the light behind the keys off and back on."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "increase-text-size"
+title = "Make all text bigger"
+subtitle = "Grows the writing everywhere on the desktop."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "decrease-text-size"
+title = "Make all text smaller"
+subtitle = "Shrinks the writing everywhere on the desktop."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "magnifier"
+title = "Turn the screen magnifier on or off"
+subtitle = "Switches the tool that enlarges part of the screen."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "magnifier-zoom-in"
+title = "Magnify further"
+subtitle = "Enlarges the magnified part of the screen more."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "magnifier-zoom-out"
+title = "Magnify less"
+subtitle = "Enlarges the magnified part of the screen less."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "screenreader"
+title = "Turn the screen reader on or off"
+subtitle = "Switches the tool that reads the screen out loud."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "on-screen-keyboard"
+title = "Show the keyboard on screen"
+subtitle = "Brings up a keyboard you can tap with the mouse or a finger."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "toggle-contrast"
+title = "Turn stronger colours on or off"
+subtitle = "Switches the easier-to-read colours on and off."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.media-keys"
+key = "rotate-video-lock"
+title = "Lock which way up the screen is"
+subtitle = "Stops the picture from turning when you tilt the computer."
+synonyms = ["shortcut", "media key", "hotkey", "keyboard shortcut"]
+kind = "shortcut"

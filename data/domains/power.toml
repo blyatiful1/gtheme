@@ -1,0 +1,282 @@
+# gtheme domain descriptors — core GNOME, authored by hand.
+#
+# Every row here is dispositioned surfaced(power) in coverage.toml.
+# Titles and subtitles are checked by the plain-language lint in
+# tests/unit/domains_jargon_test.py; synonyms deliberately are not, because they
+# exist to catch the words a person actually types into the search box.
+
+id = "power"
+title = "Power & Screen"
+
+[[rows]]
+schema_id = "org.gnome.desktop.session"
+key = "idle-delay"
+title = "Turn the screen off when unused"
+subtitle = "How long the computer waits, with nobody touching it, before the screen goes dark."
+synonyms = ["blank screen", "screen timeout", "idle", "sleep"]
+kind = "choice"
+
+[[rows.choices]]
+value = "0"
+label = "Never"
+
+[[rows.choices]]
+value = "60"
+label = "After 1 minute"
+
+[[rows.choices]]
+value = "120"
+label = "After 2 minutes"
+
+[[rows.choices]]
+value = "300"
+label = "After 5 minutes"
+
+[[rows.choices]]
+value = "600"
+label = "After 10 minutes"
+
+[[rows.choices]]
+value = "900"
+label = "After 15 minutes"
+
+[[rows.choices]]
+value = "1800"
+label = "After 30 minutes"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.power"
+key = "sleep-inactive-ac-type"
+title = "When plugged in and unused"
+subtitle = "What the computer does after a long spell of nobody touching it, while it is on mains power."
+synonyms = ["suspend", "sleep", "auto suspend", "plugged in"]
+kind = "choice"
+
+[[rows.choices]]
+value = "'nothing'"
+label = "Stay awake"
+
+[[rows.choices]]
+value = "'suspend'"
+label = "Go to sleep"
+
+[[rows.choices]]
+value = "'hibernate'"
+label = "Save everything and switch off"
+
+[[rows.choices]]
+value = "'shutdown'"
+label = "Switch off"
+
+[[rows.choices]]
+value = "'logout'"
+label = "Sign out"
+
+[[rows.choices]]
+value = "'blank'"
+label = "Only turn the screen off"
+
+[[rows.choices]]
+value = "'interactive'"
+label = "Ask me"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.power"
+key = "sleep-inactive-ac-timeout"
+title = "How long to wait when plugged in"
+subtitle = "How much quiet time passes before the choice above happens."
+synonyms = ["suspend timeout", "sleep after"]
+kind = "choice"
+
+[[rows.choices]]
+value = "900"
+label = "After 15 minutes"
+
+[[rows.choices]]
+value = "1800"
+label = "After 30 minutes"
+
+[[rows.choices]]
+value = "2700"
+label = "After 45 minutes"
+
+[[rows.choices]]
+value = "3600"
+label = "After 1 hour"
+
+[[rows.choices]]
+value = "7200"
+label = "After 2 hours"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.power"
+key = "sleep-inactive-battery-type"
+title = "When on battery and unused"
+subtitle = "What the computer does after a long spell of nobody touching it, while it runs on its battery."
+synonyms = ["suspend", "sleep", "battery"]
+kind = "choice"
+
+[[rows.choices]]
+value = "'nothing'"
+label = "Stay awake"
+
+[[rows.choices]]
+value = "'suspend'"
+label = "Go to sleep"
+
+[[rows.choices]]
+value = "'hibernate'"
+label = "Save everything and switch off"
+
+[[rows.choices]]
+value = "'shutdown'"
+label = "Switch off"
+
+[[rows.choices]]
+value = "'logout'"
+label = "Sign out"
+
+[[rows.choices]]
+value = "'blank'"
+label = "Only turn the screen off"
+
+[[rows.choices]]
+value = "'interactive'"
+label = "Ask me"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.power"
+key = "sleep-inactive-battery-timeout"
+title = "How long to wait on battery"
+subtitle = "How much quiet time passes before the choice above happens."
+synonyms = ["suspend timeout", "battery"]
+kind = "choice"
+
+[[rows.choices]]
+value = "900"
+label = "After 15 minutes"
+
+[[rows.choices]]
+value = "1800"
+label = "After 30 minutes"
+
+[[rows.choices]]
+value = "2700"
+label = "After 45 minutes"
+
+[[rows.choices]]
+value = "3600"
+label = "After 1 hour"
+
+[[rows.choices]]
+value = "7200"
+label = "After 2 hours"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.power"
+key = "power-button-action"
+title = "What the power button does"
+subtitle = "What happens when you press the physical power button once."
+synonyms = ["power button", "shutdown"]
+kind = "choice"
+
+[[rows.choices]]
+value = "'suspend'"
+label = "Go to sleep"
+
+[[rows.choices]]
+value = "'hibernate'"
+label = "Save everything and switch off"
+
+[[rows.choices]]
+value = "'interactive'"
+label = "Ask me"
+
+[[rows.choices]]
+value = "'nothing'"
+label = "Nothing"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.power"
+key = "idle-dim"
+title = "Dim the screen when you stop using it"
+subtitle = "The screen fades down before it turns off, as a warning and to save power."
+synonyms = ["dim", "brightness", "idle"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.power"
+key = "idle-brightness"
+title = "How dim it goes"
+subtitle = "How bright the screen stays while dimmed, as a share of full brightness."
+synonyms = ["dim level", "brightness"]
+kind = "slider"
+clamp_min = 5
+clamp_max = 100
+step = 5
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.power"
+key = "ambient-enabled"
+title = "Match brightness to the light in the room"
+subtitle = "Uses the light sensor, if your computer has one, to brighten and dim the screen for you."
+synonyms = ["auto brightness", "ambient light sensor"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.settings-daemon.plugins.power"
+key = "power-saver-profile-on-low-battery"
+title = "Switch to power saving when the battery is low"
+subtitle = "Turns the power-saving mode on for you once the charge runs down."
+synonyms = ["battery saver", "power saving", "low battery"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.screensaver"
+key = "lock-enabled"
+title = "Lock the screen when it turns off"
+subtitle = "Ask for your password again once the screen has gone dark."
+synonyms = ["lock screen", "password", "security"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.screensaver"
+key = "lock-delay"
+title = "Wait before locking"
+subtitle = "A grace period after the screen goes dark, so a quick return does not need your password."
+synonyms = ["lock delay", "grace period"]
+kind = "choice"
+
+[[rows.choices]]
+value = "0"
+label = "Lock straight away"
+
+[[rows.choices]]
+value = "30"
+label = "After 30 seconds"
+
+[[rows.choices]]
+value = "60"
+label = "After 1 minute"
+
+[[rows.choices]]
+value = "120"
+label = "After 2 minutes"
+
+[[rows.choices]]
+value = "300"
+label = "After 5 minutes"
+
+[[rows.choices]]
+value = "1800"
+label = "After 30 minutes"
+
+[[rows]]
+schema_id = "org.gnome.desktop.screensaver"
+key = "idle-activation-enabled"
+title = "Show the lock screen when unused"
+subtitle = "Bring up the lock screen after a spell of nobody touching the computer."
+synonyms = ["screensaver", "idle", "lock"]
+kind = "toggle"
+advanced = true

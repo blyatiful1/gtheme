@@ -1,0 +1,25 @@
+# gtheme domain descriptors — core GNOME, authored by hand.
+#
+# Every row here is dispositioned surfaced(more) in coverage.toml.
+# Titles and subtitles are checked by the plain-language lint in
+# tests/unit/domains_jargon_test.py; synonyms deliberately are not, because they
+# exist to catch the words a person actually types into the search box.
+
+id = "notifications"
+title = "Messages"
+
+[[rows]]
+schema_id = "org.gnome.desktop.notifications"
+key = "show-banners"
+title = "Show pop-up messages"
+subtitle = "Messages from apps slide in at the top of the screen as they arrive."
+synonyms = ["notifications", "banners", "popups", "alerts"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.notifications"
+key = "show-in-lock-screen"
+title = "Show messages on the lock screen"
+subtitle = "Anyone who can see your screen can read these while the computer is locked."
+synonyms = ["notifications", "lock screen", "privacy"]
+kind = "toggle"

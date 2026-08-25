@@ -1,0 +1,137 @@
+# gtheme domain descriptors — core GNOME, authored by hand.
+#
+# Every row here is dispositioned surfaced(topbar) in coverage.toml.
+# Titles and subtitles are checked by the plain-language lint in
+# tests/unit/domains_jargon_test.py; synonyms deliberately are not, because they
+# exist to catch the words a person actually types into the search box.
+
+id = "topbar"
+title = "Top Bar & Clock"
+
+[[rows]]
+schema_id = "org.gnome.desktop.interface"
+key = "clock-format"
+title = "Clock format"
+subtitle = "Whether the time is shown as 14:30 or as 2:30 PM."
+synonyms = ["24 hour", "12 hour", "am pm", "time format"]
+kind = "choice"
+
+[[rows.choices]]
+value = "'24h'"
+label = "24-hour (14:30)"
+
+[[rows.choices]]
+value = "'12h'"
+label = "12-hour (2:30 PM)"
+
+[[rows]]
+schema_id = "org.gnome.desktop.interface"
+key = "clock-show-date"
+title = "Show the date"
+subtitle = "Puts today's date next to the time in the bar at the top of the screen."
+synonyms = ["date", "calendar", "clock"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.interface"
+key = "clock-show-weekday"
+title = "Show the day of the week"
+subtitle = "Puts the weekday next to the time in the bar at the top of the screen."
+synonyms = ["weekday", "monday", "day name"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.interface"
+key = "clock-show-seconds"
+title = "Show seconds"
+subtitle = "Counts seconds in the clock. It updates every second, which uses a little more power."
+synonyms = ["seconds", "clock"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.interface"
+key = "show-battery-percentage"
+title = "Show battery percentage"
+subtitle = "Shows the exact charge left as a number, not just a battery picture."
+synonyms = ["battery", "percent", "charge"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.interface"
+key = "enable-hot-corners"
+title = "Open the app view by touching the top-left corner"
+subtitle = "Moving the mouse into the very top-left corner opens the view with all your windows and apps."
+synonyms = ["hot corner", "activities corner", "top left"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.calendar"
+key = "show-weekdate"
+title = "Show week numbers"
+subtitle = "Adds the number of each week down the side of the calendar in the top bar."
+synonyms = ["week number", "iso week", "calendar"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.calendar"
+key = "week-start-day"
+title = "First day of the week"
+subtitle = "Which day the calendar starts on. 'Follow my region' uses the usual choice for your country."
+synonyms = ["week start", "monday", "sunday", "calendar"]
+kind = "choice"
+
+[[rows.choices]]
+value = "'default'"
+label = "Follow my region"
+
+[[rows.choices]]
+value = "'monday'"
+label = "Monday"
+
+[[rows.choices]]
+value = "'tuesday'"
+label = "Tuesday"
+
+[[rows.choices]]
+value = "'wednesday'"
+label = "Wednesday"
+
+[[rows.choices]]
+value = "'thursday'"
+label = "Thursday"
+
+[[rows.choices]]
+value = "'friday'"
+label = "Friday"
+
+[[rows.choices]]
+value = "'saturday'"
+label = "Saturday"
+
+[[rows.choices]]
+value = "'sunday'"
+label = "Sunday"
+
+[[rows]]
+schema_id = "org.gnome.desktop.datetime"
+key = "automatic-timezone"
+title = "Set the time zone automatically"
+subtitle = "Lets the desktop work out which time zone you are in and change the clock for you."
+synonyms = ["timezone", "travel", "clock"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.privacy"
+key = "show-full-name-in-top-bar"
+title = "Show your full name in the top bar"
+subtitle = "Puts your name next to the menu in the top-right corner."
+synonyms = ["name", "user name", "top right"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.desktop.screensaver"
+key = "show-full-name-in-top-bar"
+title = "Show your full name on the lock screen"
+subtitle = "Puts your name in the bar at the top of the lock screen. This is a separate choice from the one above."
+synonyms = ["name", "lock screen", "user name"]
+kind = "toggle"

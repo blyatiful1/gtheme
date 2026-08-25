@@ -1,0 +1,99 @@
+# gtheme domain descriptors — core GNOME, authored by hand.
+#
+# Every row here is dispositioned surfaced(wallpaper) in coverage.toml.
+# Titles and subtitles are checked by the plain-language lint in
+# tests/unit/domains_jargon_test.py; synonyms deliberately are not, because they
+# exist to catch the words a person actually types into the search box.
+
+id = "wallpaper"
+title = "Wallpaper"
+
+[[rows]]
+schema_id = "org.gnome.desktop.background"
+key = "picture-uri"
+title = "Background picture"
+subtitle = "The picture shown behind your windows."
+synonyms = ["wallpaper", "background", "desktop picture", "photo"]
+kind = "picker"
+
+[[rows]]
+schema_id = "org.gnome.desktop.background"
+key = "picture-uri-dark"
+title = "Background picture when dark"
+subtitle = "Shown instead of the usual picture while your desktop is set to dark."
+synonyms = ["dark wallpaper", "night wallpaper", "dark background"]
+kind = "picker"
+
+[[rows]]
+schema_id = "org.gnome.desktop.background"
+key = "picture-options"
+title = "How the picture fills the screen"
+subtitle = "Whether the picture is stretched, zoomed, centred or repeated to cover the screen."
+synonyms = ["fit", "stretch", "zoom", "fill", "tile"]
+kind = "choice"
+
+[[rows.choices]]
+value = "'zoom'"
+label = "Fill the screen, cropping the edges"
+
+[[rows.choices]]
+value = "'scaled'"
+label = "Fit the whole picture on screen"
+
+[[rows.choices]]
+value = "'stretched'"
+label = "Stretch to fit, even if it distorts"
+
+[[rows.choices]]
+value = "'centered'"
+label = "Show at its own size, in the middle"
+
+[[rows.choices]]
+value = "'wallpaper'"
+label = "Repeat it like tiles"
+
+[[rows.choices]]
+value = "'spanned'"
+label = "Spread it across all screens"
+
+[[rows.choices]]
+value = "'none'"
+label = "No picture, just a colour"
+
+[[rows]]
+schema_id = "org.gnome.desktop.background"
+key = "primary-color"
+title = "Background colour"
+subtitle = "Used wherever the picture does not cover the screen, and on its own when no picture is set."
+synonyms = ["solid color", "background colour", "plain background"]
+kind = "color"
+
+[[rows]]
+schema_id = "org.gnome.desktop.background"
+key = "secondary-color"
+title = "Second background colour"
+subtitle = "The colour the first one fades into, when fading is switched on below."
+synonyms = ["gradient", "second colour", "fade colour"]
+kind = "color"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.desktop.background"
+key = "color-shading-type"
+title = "Colour fade"
+subtitle = "Whether the background colour is flat, or fades from one colour into another."
+synonyms = ["gradient", "fade", "shading"]
+kind = "choice"
+advanced = true
+
+[[rows.choices]]
+value = "'solid'"
+label = "One flat colour"
+
+[[rows.choices]]
+value = "'vertical'"
+label = "Fade from top to bottom"
+
+[[rows.choices]]
+value = "'horizontal'"
+label = "Fade from left to right"
