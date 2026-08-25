@@ -106,10 +106,10 @@ class RestorePoint:
     def keys_to_unset(self) -> list[str]:
         """Settings that had no value at all when this moment was saved.
 
-        Restoring one means *unsetting* it, and there is no operation for that:
-        the frozen set is FileWrite, SettingWrite, ExtensionEnable and
-        ExtensionInstall, and a write cannot say "there should be nothing
-        here". :func:`apply_point` handles these separately — see its note.
+        Restoring one means *unsetting* it, which is a
+        :class:`~gtheme.core.transaction.SettingReset` — so these travel
+        through the same transaction as everything else and get the same
+        preflight, restore point and rollback.
 
         This is not a corner case. The "Before gtheme" point imported from v1
         on this machine has 46 settings, and 33 of them are these: keys that
@@ -122,8 +122,9 @@ class RestorePoint:
     def files_to_remove(self) -> list[str]:
         """Files that did not exist when this moment was saved.
 
-        Restoring means deleting whatever was put there. Same story as
-        :attr:`keys_to_unset`: no operation expresses it.
+        Restoring means deleting whatever was put there — a
+        :class:`~gtheme.core.transaction.FileRemove`, and the other half of the
+        same story as :attr:`keys_to_unset`.
         """
         return sorted(dest for dest, blob in self.files.items() if blob is None)
 
@@ -139,22 +140,28 @@ class RestorePoint:
         baseline, the all-or-nothing rollback — is therefore true of an undo as
         well, without a second implementation to keep in step.
 
-        Settings that had no value at all are not expressible as a write, so
-        they are left out here; the pristine baseline is what resets those, and
-        ``gtheme rescue`` is what runs it.
+        Absence is expressed too, and that is the whole point of this being one
+        transaction. Two thirds of a pristine restore point is things that were
+        NOT there: settings with no value, and files that did not exist. Those
+        become :class:`~gtheme.core.transaction.SettingReset` and
+        :class:`~gtheme.core.transaction.FileRemove` ops, so undoing them is
+        covered by the confinement preflight, the pristine recording and the
+        all-or-nothing rollback exactly like everything else.
         """
-        from .transaction import FileWrite, SettingWrite, Transaction
+        from .transaction import FileRemove, FileWrite, SettingReset, SettingWrite, Transaction
 
-        ops: list[FileWrite | SettingWrite] = []
+        ops: list[FileWrite | FileRemove | SettingWrite | SettingReset] = []
         base = (self.path or Path()) / _FILES_DIRNAME
         for dest, blob in sorted(self.files.items()):
             if blob is None:
-                continue
-            ops.append(FileWrite(src=str(base / blob), dest=dest))
+                ops.append(FileRemove(dest=dest))
+            else:
+                ops.append(FileWrite(src=str(base / blob), dest=dest))
         for key, value in sorted(self.settings.items()):
             if value is None:
-                continue
-            ops.append(SettingWrite(key=key, value=value))
+                ops.append(SettingReset(key=key))
+            else:
+                ops.append(SettingWrite(key=key, value=value))
         return Transaction(ops, label=self.label)
 
 
@@ -344,18 +351,30 @@ def capture_from_diff(
             was on a moment ago, which is not what anybody pressing it means.
         extra_dests: the same, for files.
     """
-    from .transaction import ENABLED_EXTENSIONS_KEY, ExtensionEnable, FileWrite, SettingWrite
+    from .transaction import (
+        ENABLED_EXTENSIONS_KEY,
+        ExtensionEnable,
+        FileRemove,
+        FileWrite,
+        SettingReset,
+        SettingWrite,
+    )
 
     mapping = resolved_dests or {}
     keys: list[str] = []
     dests: list[str] = []
     for entry in diff.changes:
         op = entry.op
-        if isinstance(op, SettingWrite):
+        # A reset and a removal need covering exactly like a write and a copy:
+        # what is about to be cleared, or deleted, is what has to be saved
+        # first. Leaving them out is what would make undoing an undo
+        # impossible — and the commonest undo of all, restoring "Before
+        # gtheme", is mostly resets and removals.
+        if isinstance(op, SettingWrite | SettingReset):
             keys.append(op.key)
         elif isinstance(op, ExtensionEnable):
             keys.append(ENABLED_EXTENSIONS_KEY)
-        elif isinstance(op, FileWrite):
+        elif isinstance(op, FileWrite | FileRemove):
             dests.append(mapping.get(op.dest, op.dest))
     keys.extend(extra_keys or ())
     dests.extend(extra_dests or ())
@@ -408,22 +427,19 @@ def apply_point(
 ) -> RestoreResult:
     """Put the desktop back to a saved moment.
 
-    The writes go through an ordinary :class:`Transaction`, so the confinement
-    preflight, the pristine recording and the all-or-nothing rollback all apply
-    to them exactly as they do to applying a Look.
+    One transaction, for all of it. The values to write back, the files to copy
+    back, the settings that had no value and the files that were not there all
+    go through :class:`~gtheme.core.transaction.Transaction`, which means the
+    confinement preflight, the pristine recording, the ownership ledger and the
+    all-or-nothing rollback cover the whole restore rather than two thirds of
+    it.
 
-    The rest does not, and this is worth being explicit about rather than
-    hiding. Two thirds of a pristine restore point is *absence*: settings that
-    had no value, and files that were not there. The frozen operation set has
-    no way to say either — ``SettingWrite`` writes a value and ``FileWrite``
-    writes a file — so those are carried out here, after the transaction, each
-    one recorded in the pristine baseline first so it is itself undoable.
-
-    That split is a gap in the contract, not a design: a first-class "unset"
-    and "remove" operation would fold this back into the one apply path where
-    DESIGN.md A8 wants it. Until that is decided, this function is the whole
-    truth about restoring a moment, and it reports the three parts separately
-    so the Undo page can say what it actually did.
+    (They did not always. Absence used to be carried out here, after the
+    transaction, because the frozen operation set had no way to say "there
+    should be nothing here" — which left the 33 unset settings and the 20
+    absent files of this machine's own "Before gtheme" point outside every
+    guarantee the engine makes. ``SettingReset`` and ``FileRemove`` are what
+    closed that.)
 
     Args:
         point_id: which saved moment.
@@ -433,14 +449,14 @@ def apply_point(
         dest_root: destination root for the file writes.
 
     Returns:
-        A :class:`RestoreResult`. An unknown id comes back as a result whose
-        warnings say so, rather than as an exception — the caller is a page
-        showing a list that may be out of date.
+        A :class:`RestoreResult`. The three parts are still reported
+        separately, because the Undo page says what it did in those terms —
+        but they are now three readings of one outcome, not three code paths.
+        An unknown id comes back as a result whose warnings say so, rather than
+        as an exception: the caller is a page showing a list that may be out of
+        date.
     """
-    from .backends import get_backend
-    from .baseline import Baseline
-    from .lock import process_lock
-    from .transaction import TransactionError
+    from .transaction import FileRemove, SettingReset, TransactionError
 
     result = RestoreResult()
     point = load(point_id, root=root)
@@ -451,43 +467,21 @@ def apply_point(
     transaction = point.to_transaction()
     if dest_root is not None:
         transaction.dest_root = str(dest_root)
-    if transaction.ops:
-        try:
-            result.transaction = transaction.apply(progress_cb)
-        except TransactionError as exc:
-            result.warnings.append(str(exc))
-            return result
-
-    writer = backend if backend is not None else get_backend()
-    keys = point.keys_to_unset
-    files = point.files_to_remove
-    if not keys and not files:
+    if backend is not None:
+        transaction.backend = backend
+    if not transaction.ops:
         return result
 
-    with process_lock():
-        baseline = Baseline(backend=writer).load()
-        for key in keys:
-            baseline.record_setting(key, "", point.label)
-            try:
-                writer.reset(key)
-            except BackendError as exc:
-                result.warnings.append(f"could not clear one setting: {exc}")
-                continue
-            result.unset.append(key)
-        for dest in files:
-            target = Path(dest)
-            if not target.exists() and not target.is_symlink():
-                continue
-            if not baseline.record_file(target, "", point.label):
-                result.warnings.append(f"left {dest} alone: it is not an ordinary file")
-                continue
-            try:
-                target.unlink()
-            except OSError as exc:
-                result.warnings.append(f"could not remove {dest}: {exc}")
-                continue
-            result.removed.append(dest)
-        baseline.save()
+    try:
+        outcome = transaction.apply(progress_cb)
+    except TransactionError as exc:
+        result.warnings.append(str(exc))
+        return result
+
+    result.transaction = outcome
+    result.unset = sorted(op.key for op in outcome.applied if isinstance(op, SettingReset))
+    result.removed = sorted(op.dest for op in outcome.applied if isinstance(op, FileRemove))
+    result.warnings.extend(reason for _op, reason in outcome.skipped)
     return result
 
 

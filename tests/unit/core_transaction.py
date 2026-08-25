@@ -25,8 +25,10 @@ from gtheme.core.transaction import (
     DiffEntry,
     ExtensionEnable,
     ExtensionInstall,
+    FileRemove,
     FileWrite,
     Progress,
+    SettingReset,
     SettingWrite,
     Transaction,
     TransactionError,
@@ -391,3 +393,142 @@ def test_a_change_made_from_a_page_does_not_tidy_up_after_a_look(bench):
     from gtheme.core.ledger import read_ledger
 
     assert "LOOK" in read_ledger()
+
+
+# -- absence: SettingReset and FileRemove ----------------------------------
+#
+# Two thirds of a pristine restore point is things that were NOT there. Before
+# these two ops existed, undoing that part happened outside the transaction —
+# no confinement preflight, no restore point, no rollback. These tests are the
+# proof that it happens inside now.
+
+
+def test_a_reset_puts_a_setting_back_to_having_no_value(bench):
+    bench.backend.set(WORD, "'meddled'")
+    result = _tx(bench, [SettingReset(key=WORD)]).apply(restore_point=False)
+    assert result.applied == [SettingReset(key=WORD)]
+    assert bench.backend.get(WORD) == "'default'"
+
+
+def test_a_reset_is_a_no_op_when_the_setting_is_already_where_it_would_land(bench):
+    """Already at the schema's own value is already right, and the preview says so."""
+    diff = _tx(bench, [SettingReset(key=WORD)]).plan()
+    assert diff.entries[0].no_op is True
+    assert diff.changes == []
+
+
+def test_a_reset_of_a_missing_setting_is_a_named_skip_not_a_crash(bench):
+    """AS8, from the other side: skipped with a sentence, alongside real work."""
+    bench.backend.set(WORD, "'meddled'")
+    result = _tx(
+        bench,
+        [SettingReset(key="gsettings:org.absent.thing a-key"), SettingReset(key=WORD)],
+    ).apply(restore_point=False)
+    assert result.applied == [SettingReset(key=WORD)]
+    assert [reason for _op, reason in result.skipped] == [
+        "that part of your desktop isn't installed here"
+    ]
+
+
+def test_a_reset_of_a_missing_setting_alone_is_the_AS4_refusal(bench):
+    """Nothing applied and something skipped is "nothing could be changed"."""
+    with pytest.raises(TransactionError, match="nothing could be changed"):
+        _tx(bench, [SettingReset(key="gsettings:org.absent.thing a-key")]).apply(
+            restore_point=False
+        )
+
+
+def test_a_removal_deletes_the_file(bench):
+    (bench.root / "gone.conf").write_text("x", encoding="utf-8")
+    result = _tx(bench, [FileRemove(dest="~/gone.conf")]).apply(restore_point=False)
+    assert result.applied == [FileRemove(dest="~/gone.conf")]
+    assert not (bench.root / "gone.conf").exists()
+
+
+def test_removing_something_that_is_already_gone_is_not_an_error(bench):
+    result = _tx(bench, [FileRemove(dest="~/never-there")]).apply(restore_point=False)
+    assert result.applied == [FileRemove(dest="~/never-there")]
+    assert result.skipped == []
+
+
+def test_a_removal_outside_the_destination_root_is_refused_before_anything_happens(bench):
+    """Deleting outside the root is a worse accident than writing outside it."""
+    outside = bench.look / "not-yours"
+    outside.write_text("someone else's file", encoding="utf-8")
+    victim = bench.root / "also-here"
+    victim.write_text("x", encoding="utf-8")
+    with pytest.raises(TransactionError):
+        _tx(bench, [FileRemove(dest=str(outside)), FileRemove(dest="~/also-here")]).apply(
+            restore_point=False
+        )
+    assert outside.is_file(), "the escaping removal happened anyway"
+    assert victim.is_file(), "the preflight let work start before checking every op"
+
+
+def test_a_removal_leaves_alone_anything_that_is_not_an_ordinary_file(bench):
+    """F1: what cannot be copied cannot be put back, so it is not deleted."""
+    import os
+
+    fifo = bench.root / "a-pipe"
+    os.mkfifo(fifo)
+    (bench.root / "ordinary.conf").write_text("x", encoding="utf-8")
+    result = _tx(
+        bench, [FileRemove(dest="~/a-pipe"), FileRemove(dest="~/ordinary.conf")]
+    ).apply(restore_point=False)
+    assert result.applied == [FileRemove(dest="~/ordinary.conf")]
+    assert "not an ordinary file" in result.skipped[0][1]
+    assert fifo.exists()
+    assert not (bench.root / "ordinary.conf").exists()
+
+
+def test_a_failure_after_a_removal_puts_the_file_back(bench):
+    """The rollback covers removals like every other operation."""
+    target = bench.root / "precious.conf"
+    target.write_text("the original contents", encoding="utf-8")
+    with pytest.raises(TransactionError):
+        _tx(
+            bench,
+            [
+                FileRemove(dest="~/precious.conf"),
+                FileWrite(src=str(bench.look / "missing-source"), dest="~/other"),
+            ],
+        ).apply(restore_point=False)
+    assert target.read_text(encoding="utf-8") == "the original contents"
+
+
+def test_a_failure_after_a_reset_puts_the_value_back(bench):
+    bench.backend.set(WORD, "'the value the user chose'")
+    with pytest.raises(TransactionError):
+        _tx(
+            bench,
+            [
+                SettingReset(key=WORD),
+                FileWrite(src=str(bench.look / "missing-source"), dest="~/other"),
+            ],
+        ).apply(restore_point=False)
+    assert bench.backend.get(WORD) == "'the value the user chose'"
+
+
+def test_the_preview_says_put_back_and_remove_in_plain_words(bench):
+    bench.backend.set(WORD, "'meddled'")
+    (bench.root / "leftover.conf").write_text("x", encoding="utf-8")
+    diff = _tx(
+        bench, [SettingReset(key=WORD), FileRemove(dest="~/leftover.conf")]
+    ).plan()
+    lines = diff.to_novice_lines()
+    assert "Put back to how the system had it" in lines
+    assert "Remove leftover.conf" in lines
+
+
+def test_several_removals_are_counted_rather_than_listed(bench):
+    for name in ("one.conf", "two.conf", "three.conf"):
+        (bench.root / name).write_text("x", encoding="utf-8")
+    diff = _tx(bench, [FileRemove(dest=f"~/{n}") for n in ("one.conf", "two.conf", "three.conf")]).plan()
+    assert diff.to_novice_lines() == ["Remove 3 files"]
+
+
+def test_the_new_ops_pass_the_jargon_rules(state_dir):
+    from gtheme.ui import jargon
+
+    for text in ("Put back to how the system had it", "Remove 3 files", "Remove a-file.conf"):
+        assert jargon.check(text) == []

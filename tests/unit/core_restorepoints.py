@@ -116,10 +116,19 @@ def test_a_restore_point_becomes_the_transaction_that_restores_it(points, backen
     assert setting_op.value == "'original'"
 
 
-def test_a_value_that_was_never_set_is_left_out_of_the_restoring_transaction(points, backend):
-    """A write cannot express "unset it again". The pristine recording can."""
+def test_a_value_that_was_never_set_becomes_a_reset_in_the_transaction(points, backend):
+    """A write cannot express "unset it again". SettingReset can.
+
+    It used to be left out of the transaction and carried out separately by
+    ``apply_point``, which put it outside the preflight, the restore point and
+    the rollback. On this machine's own "Before gtheme" point that was 33 of
+    46 settings.
+    """
+    from gtheme.core.transaction import SettingReset
+
     point = capture(["gsettings:org.absent.thing a-key"], label="Before", backend=backend, root=points)
-    assert load(point.id, root=points).to_transaction().ops == ()
+    ops = load(point.id, root=points).to_transaction().ops
+    assert ops == (SettingReset(key="gsettings:org.absent.thing a-key"),)
 
 
 # -- the list --------------------------------------------------------------
@@ -457,11 +466,12 @@ def test_applying_a_moment_writes_the_values_back(
 def test_applying_a_moment_also_clears_what_was_never_set(
     points, backend, tmp_dest_root, state_dir
 ):
-    """The other third, and the reason ``apply_point`` exists at all.
+    """The other third: settings that had no value when the moment was saved.
 
     A ``SettingWrite`` cannot say "there should be nothing here", and on this
     machine's imported "Before gtheme" point 33 of 46 settings are exactly
-    that. Reporting them as restored without clearing them would be a lie.
+    that. ``SettingReset`` says it, inside the same transaction as everything
+    else.
     """
     from gtheme.core import backends
 
@@ -515,3 +525,71 @@ def test_applying_a_moment_that_is_gone_says_so_rather_than_raising(points, stat
     """The Undo page shows a list that may be out of date by the time it is used."""
     result = restorepoints.apply_point("2026-01-01T00-00-00", root=points)
     assert result.warnings and "no longer there" in result.warnings[0]
+
+
+# -- one path ---------------------------------------------------------------
+
+
+def test_restoring_absence_goes_through_the_transaction(
+    points, backend, tmp_dest_root, state_dir
+):
+    """The whole restore is one transaction, not two thirds of one.
+
+    Proved by the thing only a transaction does: it takes a restore point of
+    its own before it starts, so undoing an undo is possible.
+    """
+    from gtheme.core import backends
+
+    installed = tmp_dest_root / "installed-by-a-look"
+    point = capture([WORD], [str(installed)], label="Before", backend=backend, root=points)
+    point.settings["gsettings:org.gtheme.test a-list"] = None
+    restorepoints._write(point)
+
+    installed.write_text("a look put this here", encoding="utf-8")
+    backend.set(LIST, "['a look added this']")
+    before = {p.id for p in restorepoints.list_restore_points(root=points)}
+
+    with backends.use_backend(backend):
+        result = restorepoints.apply_point(
+            point.id, root=points, backend=backend, dest_root=str(tmp_dest_root)
+        )
+
+    assert result.warnings == []
+    assert result.unset == [LIST]
+    assert result.removed == [str(installed)]
+    assert result.transaction is not None
+    # A transaction takes a restore point before it changes anything.
+    assert result.transaction.restore_point is not None
+    after = {p.id for p in restorepoints.list_restore_points()}
+    assert after, "the undo did not record a moment of its own"
+    del before
+
+
+def test_a_restore_that_fails_partway_puts_everything_back(
+    points, backend, tmp_dest_root, state_dir
+):
+    """All-or-nothing now covers absence too, because absence is in the batch."""
+    from gtheme.core import backends
+    from gtheme.core.transaction import TransactionError
+
+    doomed = tmp_dest_root / "doomed"
+    doomed.write_text("here before the undo", encoding="utf-8")
+    point = capture([WORD], [str(doomed)], label="Before", backend=backend, root=points)
+    # The saved copy of the file is deleted, so the FileWrite that restores it
+    # cannot find its source and the whole transaction has to unwind.
+    for saved in (point.path / "files").iterdir():
+        saved.unlink()
+    point.files[str(doomed)] = None  # and this one has to be removed
+    restorepoints._write(point)
+    point.files[str(doomed)] = "doomed"
+    restorepoints._write(point)
+
+    backend.set(WORD, "'changed since'")
+    with backends.use_backend(backend):
+        result = restorepoints.apply_point(
+            point.id, root=points, backend=backend, dest_root=str(tmp_dest_root)
+        )
+
+    assert result.warnings, "a restore that could not finish must say so"
+    assert doomed.read_text(encoding="utf-8") == "here before the undo"
+    assert TransactionError is not None

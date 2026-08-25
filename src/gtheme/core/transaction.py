@@ -56,10 +56,12 @@ __all__ = [
     "DiffEntry",
     "ExtensionEnable",
     "ExtensionInstall",
+    "FileRemove",
     "FileWrite",
     "MergeMode",
     "Op",
     "Progress",
+    "SettingReset",
     "SettingWrite",
     "Transaction",
     "TransactionError",
@@ -83,7 +85,10 @@ class FileWrite:
     """Write one file the Look owns.
 
     Args:
-        src: source path inside the Look's folder.
+        src: absolute path to the source file. The compiler resolves a Look's
+            relative ``src`` against the Look's folder before it gets here, so
+            by the time an op exists the path no longer depends on where the
+            Look happened to live.
         dest: destination path. Must resolve inside the destination root; the
             preflight refuses anything else, including via symlinks.
         mode: octal permission string (``"0644"``), or None to leave default.
@@ -120,6 +125,56 @@ class SettingWrite:
 
 
 @dataclass(frozen=True)
+class SettingReset:
+    """Put one desktop setting back to having no value of its own.
+
+    Not the same as writing the default: the desktop is then free to change
+    what the default *is*, and the setting follows. Writing today's default
+    freezes it forever, invisibly.
+
+    This exists because two thirds of a pristine restore point is absence. The
+    "Before gtheme" point imported from v1 on this machine records 46 settings,
+    and 33 of them had no value at all — keys belonging to add-ons the user had
+    never opened before a Look configured them. Without this op, undoing that
+    moment could only be done outside the transaction, which meant those 33
+    changes had no confinement preflight, no rollback and no restore point of
+    their own.
+
+    Args:
+        key: a key string in the grammar frozen in ``core.settings_backend``.
+        component: as :class:`SettingWrite`. Presentation only.
+    """
+
+    key: str
+    component: str | None = None
+
+
+@dataclass(frozen=True)
+class FileRemove:
+    """Delete one file that gtheme, or a Look, put there.
+
+    The counterpart of :class:`SettingReset`, for the other half of absence: a
+    restore point knows which files did not exist at the moment it was taken,
+    and putting that moment back means the files are not there again.
+
+    The same rules as :class:`FileWrite` apply and for the same reasons. The
+    destination is confined before anything is touched — deleting outside the
+    destination root is a worse accident than writing outside it — and what is
+    at the destination is recorded first, so the removal can be rolled back
+    like any other change. Anything that is not an ordinary file or a symlink
+    is left alone (the F1 case): it cannot be copied, so it cannot be put back,
+    so it does not get deleted.
+
+    Args:
+        dest: the file to delete. Must resolve inside the destination root.
+        component: as :class:`SettingWrite`. Presentation only.
+    """
+
+    dest: str
+    component: str | None = None
+
+
+@dataclass(frozen=True)
 class ExtensionEnable:
     """Turn on an add-on that is already installed.
 
@@ -151,7 +206,7 @@ class ExtensionInstall:
 
 
 #: Everything a transaction can be asked to do. The set is closed, deliberately.
-Op = FileWrite | SettingWrite | ExtensionEnable | ExtensionInstall
+Op = FileWrite | FileRemove | SettingWrite | SettingReset | ExtensionEnable | ExtensionInstall
 
 
 #: The one key that is shared global state. Every add-on the user turned on
@@ -188,7 +243,20 @@ _COMPONENT_PHRASES: dict[str, tuple[str, str]] = {
     "accessibility": ("Ease of use", "Ease of use"),
     "files": ("1 file", "{count} files"),
     "other": ("Other settings", "Other settings"),
+    # Undo's two phrases. They are not components of a Look — nothing writes
+    # them into a theme.toml — but they are what the preview has to say when
+    # the change is an absence rather than a value.
+    "reset": (
+        "Put back to how the system had it",
+        "Put back to how the system had it",
+    ),
+    "removed-files": ("Remove 1 file", "Remove {count} files"),
 }
+
+#: Components whose single-entry line names the thing instead of counting it.
+#: "Remove 1 file" tells a person nothing they can act on; "Remove
+#: nightbloom.conf" tells them exactly what is about to disappear.
+_NAMED_WHEN_SINGLE: frozenset[str] = frozenset({"removed-files"})
 
 _COMPONENT_ORDER: tuple[str, ...] = tuple(_COMPONENT_PHRASES)
 
@@ -311,16 +379,23 @@ class Diff:
         same way rather than in whatever order its author happened to write.
         """
         counted: dict[str, int] = {}
+        only: dict[str, DiffEntry] = {}
         for entry in self.changes:
             counted[entry.component] = counted.get(entry.component, 0) + 1
+            only[entry.component] = entry
+
+        def phrase(component: str, count: int) -> str:
+            if count == 1 and component in _NAMED_WHEN_SINGLE:
+                return only[component].summary
+            return _novice_phrase(component, count)
 
         lines: list[str] = []
         for component in _COMPONENT_ORDER:
             count = counted.pop(component, 0)
             if count:
-                lines.append(_novice_phrase(component, count))
+                lines.append(phrase(component, count))
         for component in sorted(counted):
-            lines.append(_novice_phrase(component, counted[component]))
+            lines.append(phrase(component, counted[component]))
         return lines
 
 
@@ -373,8 +448,14 @@ class Transaction:
     def _file_ops(self) -> list[FileWrite]:
         return [op for op in self.ops if isinstance(op, FileWrite)]
 
+    def _remove_ops(self) -> list[FileRemove]:
+        return [op for op in self.ops if isinstance(op, FileRemove)]
+
     def _setting_ops(self) -> list[SettingWrite]:
         return [op for op in self.ops if isinstance(op, SettingWrite)]
+
+    def _reset_ops(self) -> list[SettingReset]:
+        return [op for op in self.ops if isinstance(op, SettingReset)]
 
     def _enable_ops(self) -> list[ExtensionEnable]:
         return [op for op in self.ops if isinstance(op, ExtensionEnable)]
@@ -395,7 +476,7 @@ class Transaction:
                 itself is unusable.
         """
         resolved: dict[str, Path] = {}
-        for op in self._file_ops():
+        for op in (*self._file_ops(), *self._remove_ops()):
             try:
                 resolved[op.dest] = confine_dest(op.dest, root=self._root)
             except ConfinementError as exc:
@@ -442,6 +523,36 @@ class Transaction:
         try:
             return Path(op.src).stat().st_mode & 0o777
         except OSError:
+            return None
+
+    @staticmethod
+    def _schema_default(backend: SettingsBackend, key: str) -> str | None:
+        """The value this key would have if nobody had ever set it.
+
+        Used only to decide whether a :class:`SettingReset` would change
+        anything visible. A key explicitly set to its own default reads as "no
+        change here", which is the truth as far as the desktop is concerned —
+        the observable state before and after is identical — even though the
+        reset does still clear the stored value.
+
+        Never raises: an answer of None means "could not tell", and the caller
+        then treats the reset as a real change. Over-reporting a change in a
+        preview is a much smaller sin than hiding one.
+        """
+        try:
+            from gi.repository import Gio
+
+            from .settings_backend import KeyKind, parse_key
+
+            parsed = parse_key(key)
+            if parsed.kind is KeyKind.DCONF or not parsed.schema or not parsed.key:
+                return None
+            source = backend.schema_source or Gio.SettingsSchemaSource.get_default()
+            schema = source.lookup(parsed.schema, True) if source is not None else None
+            if schema is None or not schema.has_key(parsed.key):
+                return None
+            return schema.get_key(parsed.key).get_default_value().print_(True)
+        except Exception:  # pragma: no cover - defensive; never fatal
             return None
 
     def _current_setting(self, key: str) -> tuple[str | None, BackendError | None]:
@@ -511,6 +622,29 @@ class Transaction:
                 )
             )
 
+        for op in self._remove_ops():
+            dest = dests[op.dest]
+            before: str | None = None
+            if dest.is_symlink():
+                before = f"link:{dest.readlink()}"
+            elif dest.is_file():
+                try:
+                    before = _digest(dest.read_bytes())
+                except OSError:
+                    before = "file:unreadable"
+            component = op.component or "removed-files"
+            diff.entries.append(
+                DiffEntry(
+                    op=op,
+                    component=component,
+                    summary=f"Remove {Path(op.dest).name}",
+                    before=before,
+                    after=None,
+                    # Already gone is already right.
+                    no_op=before is None,
+                )
+            )
+
         for op in self._setting_ops():
             key, value, skip = self._planned_setting(op, context)
             component = op.component or "other"
@@ -529,6 +663,24 @@ class Transaction:
                     before=current,
                     after=wanted,
                     no_op=unavailable or values_equal(current, wanted),
+                )
+            )
+
+        for op in self._reset_ops():
+            key = placeholders.resolve(op.key, context)
+            component = op.component or "reset"
+            current, failure = self._current_setting(key)
+            unavailable = failure is not None and is_missing(failure)
+            default = self._schema_default(backend, key)
+            already = current is None or (default is not None and values_equal(current, default))
+            diff.entries.append(
+                DiffEntry(
+                    op=op,
+                    component=component,
+                    summary=_novice_phrase(component, 1),
+                    before=current,
+                    after=default,
+                    no_op=unavailable or already,
                 )
             )
 
@@ -637,22 +789,26 @@ class Transaction:
         fresh_settings: list[str] = []
 
         setting_ops = self._setting_ops()
+        reset_ops = self._reset_ops()
+        remove_ops = self._remove_ops()
         enables = self._enable_ops()
 
         # AS5. With no session to write into, every settings write fails the
         # same way. Reporting that forty times is noise; skipping the phase
         # with one sentence is the useful answer.
-        no_session = bool(setting_ops or enables) and not has_session_bus()
+        no_session = bool(setting_ops or reset_ops or enables) and not has_session_bus()
         if no_session:
             result.skipped.extend(
                 (op, "your desktop session wasn't running, so this was left alone")
-                for op in [*setting_ops, *enables]
+                for op in [*setting_ops, *reset_ops, *enables]
             )
 
-        planned_files = [str(dests[op.dest]) for op in self._file_ops()]
+        planned_files = [
+            str(dests[op.dest]) for op in (*self._file_ops(), *remove_ops)
+        ]
         planned_settings = [
             placeholders.resolve(op.key, context)
-            for op in setting_ops
+            for op in (*setting_ops, *reset_ops)
             if placeholders.key_ok(placeholders.resolve(op.key, context))
         ]
         if enables:
@@ -701,9 +857,15 @@ class Transaction:
 
         try:
             self._write_files(dests, context, baseline, journal, fresh_files, result, report)
+            # Removals ride with the files, for the same reason writes do: a
+            # setting that points at a file must never outlive the file.
+            self._remove_files(remove_ops, dests, baseline, journal, fresh_files, result, report)
             if not no_session:
                 self._write_settings(
                     setting_ops, context, backend, baseline, journal, fresh_settings, result, report
+                )
+                self._reset_settings(
+                    reset_ops, context, backend, baseline, journal, fresh_settings, result, report
                 )
                 self._write_extensions(
                     enables, backend, baseline, journal, fresh_settings, result, report
@@ -740,7 +902,11 @@ class Transaction:
         # Replace the claim made before the work with what the work actually
         # did. Anything skipped is no longer claimed, so nothing tries to undo
         # a change that never happened.
-        applied_files = [str(dests[op.dest]) for op in result.applied if isinstance(op, FileWrite)]
+        applied_files = [
+            str(dests[op.dest])
+            for op in result.applied
+            if isinstance(op, FileWrite | FileRemove)
+        ]
         ledger_store.write_entry(
             owner,
             prior_files | set(applied_files),
@@ -759,7 +925,7 @@ class Transaction:
         keys = [
             placeholders.resolve(op.key, context)
             for op in result.applied
-            if isinstance(op, SettingWrite)
+            if isinstance(op, SettingWrite | SettingReset)
         ]
         if any(isinstance(op, ExtensionEnable) for op in result.applied):
             keys.append(ENABLED_EXTENSIONS_KEY)
@@ -856,6 +1022,101 @@ class Transaction:
                 atomic_write_bytes(dest, data, self._file_mode(op))
             except OSError as exc:
                 raise TransactionError(f"could not write {dest}: {exc}", op=op) from exc
+            result.applied.append(op)
+
+    def _remove_files(
+        self,
+        ops: list[FileRemove],
+        dests: dict[str, Path],
+        baseline: Baseline,
+        journal: Baseline,
+        fresh_files: list[str],
+        result: TransactionResult,
+        report: Callable[[Progress, str], None],
+    ) -> None:
+        """Delete files that should not be there. Recorded first, so undoable.
+
+        The order relative to :meth:`_write_files` does not matter — a
+        transaction may not both write and remove the same destination, and
+        nothing checks that because nothing can produce it: a restore point
+        records each destination once, as either "this was here" or "this was
+        not".
+        """
+        if not ops:
+            return
+        report(Progress.WRITING_FILES, f"Removing {len(ops)} file(s)")
+        for op in ops:
+            dest = dests[op.dest]
+            if not dest.exists() and not dest.is_symlink():
+                # Already gone. Not a skip: the desired state is the state.
+                result.applied.append(op)
+                continue
+            key = str(dest)
+            newly = key not in baseline.files
+            if not baseline.record_file(dest, op.component or "files", self.label or ""):
+                # F1 again, from the other side: something that is not an
+                # ordinary file cannot be copied, so it cannot be put back, so
+                # it does not get deleted.
+                result.skipped.append(
+                    (op, f"something that is not an ordinary file is at {dest}, so it was left alone")
+                )
+                continue
+            if newly:
+                fresh_files.append(key)
+            journal.record_file(dest, op.component or "files", self.label or "")
+            try:
+                dest.unlink()
+            except OSError as exc:
+                raise TransactionError(f"could not remove {dest}: {exc}", op=op) from exc
+            result.applied.append(op)
+
+    def _reset_settings(
+        self,
+        ops: list[SettingReset],
+        context: dict[str, str],
+        backend: SettingsBackend,
+        baseline: Baseline,
+        journal: Baseline,
+        fresh_settings: list[str],
+        result: TransactionResult,
+        report: Callable[[Progress, str], None],
+    ) -> None:
+        """Put settings back to having no value of their own.
+
+        Same shape as :meth:`_write_settings`, and deliberately so: recorded
+        before it happens, an unreadable key is a named skip rather than a
+        failure (AS8), and the rollback journal has what it needs to put the
+        old value back if anything later in the transaction fails.
+        """
+        if not ops:
+            return
+        report(Progress.WRITING_SETTINGS, f"Putting {len(ops)} setting(s) back")
+        for op in ops:
+            key = placeholders.resolve(op.key, context)
+            if not placeholders.key_ok(key):
+                result.skipped.append(
+                    (op, "this setting's location came out incomplete on this computer")
+                )
+                continue
+            _current, failure = self._current_setting(key)
+            if failure is not None and is_missing(failure):
+                result.skipped.append((op, "that part of your desktop isn't installed here"))
+                continue
+            newly = key not in baseline.settings
+            baseline.record_setting(key, op.component or "other", self.label or "")
+            if key not in journal.settings:
+                journal.record_setting(key, op.component or "other", self.label or "")
+            try:
+                backend.reset(key)
+            except BackendError as exc:
+                if newly:
+                    baseline.forget_settings([key])
+                if is_missing(exc):
+                    result.skipped.append((op, "that part of your desktop isn't installed here"))
+                    continue
+                raise TransactionError(f"could not put {key} back: {exc}", op=op) from exc
+            if newly:
+                fresh_settings.append(key)
             result.applied.append(op)
 
     def _write_settings(
