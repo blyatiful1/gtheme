@@ -1,0 +1,23 @@
+{
+  "creator": "iHydroGen",
+  "creator_url": "/accounts/profile/iHydroGen",
+  "description": "Shows battery percentage of connected via ADB device",
+  "donation_urls": [],
+  "download_url": "/download-extension/adb_bp@gnome_extensions.github.com.shell-extension.zip?version_tag=22630",
+  "downloads": 244,
+  "icon": "/static/images/plugin.png",
+  "link": "/extension/4066/adb-battery-information/",
+  "name": "ADB battery information",
+  "pk": 4066,
+  "screenshot": "/extension-data/screenshots/screenshot_4066.png",
+  "shell_version_map": {
+    "3.36": {
+      "pk": 22630,
+      "version": 1
+    }
+  },
+  "url": "https://github.com/ilihydrogen/ADB-battery-information",
+  "uuid": "adb_bp@gnome_extensions.github.com",
+  "version": 1,
+  "version_tag": 22630
+}

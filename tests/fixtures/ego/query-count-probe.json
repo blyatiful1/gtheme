@@ -1,0 +1,44 @@
+{
+  "extensions": [
+    {
+      "creator": "nick_redwill",
+      "creator_url": "/accounts/profile/nick_redwill",
+      "description": "A GNOME Shell extension that lets you use any video/gif as your lock screen background.\n\nFeatures:\n\u2022 Video and gif playback with looping and optional audio\n\u2022 Multiple scaling modes\n\u2022 Blur and grayscale effects\n\u2022 Multi-monitor support\n\nNote: Requires MPV (recommended) or GStreamer plugins to be installed. See the README on GitHub for more information.\n\nIf you encounter bugs or issues, please report them on GitHub.",
+      "donation_urls": [
+        "https://www.buymeacoffee.com/nick_redwill"
+      ],
+      "downloads": 72372,
+      "icon": "/extension-data/icons/icon_9419_DbYCnQw.png",
+      "link": "/extension/9419/live-lock-screen/",
+      "name": "Live Lock Screen",
+      "pk": 9419,
+      "screenshot": "/extension-data/screenshots/screenshot_9419_CeFhqhE.webp",
+      "shell_version_map": {
+        "46": {
+          "pk": 74328,
+          "version": 10
+        },
+        "47": {
+          "pk": 74328,
+          "version": 10
+        },
+        "48": {
+          "pk": 74328,
+          "version": 10
+        },
+        "49": {
+          "pk": 74328,
+          "version": 10
+        },
+        "50": {
+          "pk": 74328,
+          "version": 10
+        }
+      },
+      "url": "https://github.com/nick-redwill/LiveLockScreen",
+      "uuid": "live-lockscreen@nick-redwill"
+    }
+  ],
+  "numpages": 1087,
+  "total": 1
+}

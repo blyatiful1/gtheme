@@ -1,0 +1,257 @@
+{
+  "extensions": [
+    {
+      "creator": "aunetx",
+      "creator_url": "/accounts/profile/aunetx",
+      "description": "Adds a blur look to different parts of the GNOME Shell, including the top panel, dash and overview.\n\nYou can support my work by sponsoring me on:\n- github: https://github.com/sponsors/aunetx\n- ko-fi: https://ko-fi.com/aunetx\n\nIf you use Ubuntu, you may want to change the radius of the corner effect for Dash-to-Dock in preferences, else you may see unpleasantly mixed radii in your dock.\n\nNote: if the extension shows an error after updating, please make sure to restart your session to see if it persists. This is due to a bug in gnome shell, which I can't fix by myself.",
+      "donation_urls": [
+        "https://github.com/sponsors/aunetx",
+        "https://ko-fi.com/aunetx"
+      ],
+      "downloads": 4990369,
+      "icon": "/extension-data/icons/icon_3193_QedHJZY.png",
+      "link": "/extension/3193/blur-my-shell/",
+      "name": "Blur my Shell",
+      "pk": 3193,
+      "screenshot": "/extension-data/screenshots/screenshot_3193_7GUGlUq.png",
+      "shell_version_map": {
+        "3.36": {
+          "pk": 25794,
+          "version": 22
+        },
+        "3.38": {
+          "pk": 25794,
+          "version": 22
+        },
+        "40": {
+          "pk": 30872,
+          "version": 29
+        },
+        "41": {
+          "pk": 30872,
+          "version": 29
+        },
+        "42": {
+          "pk": 42627,
+          "version": 47
+        },
+        "43": {
+          "pk": 42627,
+          "version": 47
+        },
+        "44": {
+          "pk": 42627,
+          "version": 47
+        },
+        "45": {
+          "pk": 52498,
+          "version": 58
+        },
+        "46": {
+          "pk": 69740,
+          "version": 72
+        },
+        "47": {
+          "pk": 69740,
+          "version": 72
+        },
+        "48": {
+          "pk": 69740,
+          "version": 72
+        },
+        "49": {
+          "pk": 69740,
+          "version": 72
+        },
+        "50": {
+          "pk": 69740,
+          "version": 72
+        }
+      },
+      "url": "https://github.com/aunetx/blur-my-shell",
+      "uuid": "blur-my-shell@aunetx"
+    },
+    {
+      "creator": "DotName",
+      "creator_url": "/accounts/profile/DotName",
+      "description": "Creates a static blurred copy of your current desktop wallpaper for better performance and artifact-free workspace switching. Set intensity from 0 to 300 and wait a moment. Note: ImageMagick (the `magick` command) must be installed.",
+      "donation_urls": [
+        "https://paypal.me/TomasMark"
+      ],
+      "downloads": 753,
+      "icon": "/static/images/plugin.png",
+      "link": "/extension/9556/blur-wallpaper-with-adjustable-intensity/",
+      "name": "Blur wallpaper with adjustable intensity.",
+      "pk": 9556,
+      "screenshot": "/extension-data/screenshots/screenshot_9556.png",
+      "shell_version_map": {
+        "46": {
+          "pk": 72550,
+          "version": 8
+        },
+        "47": {
+          "pk": 72550,
+          "version": 8
+        },
+        "48": {
+          "pk": 72550,
+          "version": 8
+        },
+        "49": {
+          "pk": 72550,
+          "version": 8
+        },
+        "50": {
+          "pk": 72550,
+          "version": 8
+        }
+      },
+      "url": "https://github.com/tomasmark79/blur-wallpaper",
+      "uuid": "blur-wall@digitalspace.name"
+    },
+    {
+      "creator": "obbteam",
+      "creator_url": "/accounts/profile/obbteam",
+      "description": "Make bluetooth panel show connected devices more visibly",
+      "donation_urls": [],
+      "downloads": 148,
+      "icon": "/static/images/plugin.png",
+      "link": "/extension/10689/better-bluetooth-panel/",
+      "name": "Better Bluetooth Panel",
+      "pk": 10689,
+      "screenshot": "/extension-data/screenshots/screenshot_10689.png",
+      "shell_version_map": {
+        "50": {
+          "pk": 73958,
+          "version": 1
+        }
+      },
+      "url": "https://github.com/obbteam/better-bluetooth-panel",
+      "uuid": "betterbluetoothpanel@obbteam.github.io"
+    },
+    {
+      "creator": "BlankParticle",
+      "creator_url": "/accounts/profile/blankparticle",
+      "description": "This extension allows paired Bluetooth devices to be connected and disconnected via the GNOME system menu, Shows battery status and more.",
+      "donation_urls": [
+        "https://github.com/sponsors/BlankParticle"
+      ],
+      "downloads": 708644,
+      "icon": "/static/images/plugin.png",
+      "link": "/extension/1401/bluetooth-quick-connect/",
+      "name": "Bluetooth Quick Connect",
+      "pk": 1401,
+      "screenshot": "/extension-data/screenshots/screenshot_1401.png",
+      "shell_version_map": {
+        "3.26.2": {
+          "pk": 11228,
+          "version": 10
+        },
+        "3.28": {
+          "pk": 11228,
+          "version": 10
+        },
+        "3.30": {
+          "pk": 11228,
+          "version": 10
+        },
+        "3.32": {
+          "pk": 11228,
+          "version": 10
+        },
+        "3.36": {
+          "pk": 17254,
+          "version": 13
+        },
+        "3.38": {
+          "pk": 18752,
+          "version": 16
+        },
+        "40": {
+          "pk": 39192,
+          "version": 34
+        },
+        "40.0": {
+          "pk": 24682,
+          "version": 20
+        },
+        "40.1": {
+          "pk": 24682,
+          "version": 20
+        },
+        "40.beta": {
+          "pk": 24682,
+          "version": 20
+        },
+        "40.rc": {
+          "pk": 24682,
+          "version": 20
+        },
+        "41": {
+          "pk": 39192,
+          "version": 34
+        },
+        "42": {
+          "pk": 39192,
+          "version": 34
+        },
+        "43": {
+          "pk": 39192,
+          "version": 34
+        },
+        "44": {
+          "pk": 41502,
+          "version": 37
+        },
+        "45": {
+          "pk": 70362,
+          "version": 55
+        },
+        "46": {
+          "pk": 70362,
+          "version": 55
+        },
+        "47": {
+          "pk": 70362,
+          "version": 55
+        },
+        "48": {
+          "pk": 70362,
+          "version": 55
+        },
+        "49": {
+          "pk": 70362,
+          "version": 55
+        },
+        "50": {
+          "pk": 70362,
+          "version": 55
+        }
+      },
+      "url": "https://github.com/Extensions-Valhalla/gnome-bluetooth-quick-connect",
+      "uuid": "bluetooth-quick-connect@bjarosze.gmail.com"
+    },
+    {
+      "creator": "Puffy Slippers Tech LLC",
+      "creator_url": "/accounts/profile/puffyslipperstech",
+      "description": "Connect to your most recently used Bluetooth device in one click, and choose a new default from your paired devices.",
+      "donation_urls": [],
+      "downloads": 20,
+      "icon": "/static/images/plugin.png",
+      "link": "/extension/10758/quick-last-bluetooth/",
+      "name": "Quick Last-Bluetooth",
+      "pk": 10758,
+      "screenshot": "/extension-data/screenshots/screenshot_10758_WyOMMWt.jpg",
+      "shell_version_map": {
+        "50": {
+          "pk": 74367,
+          "version": 3
+        }
+      },
+      "url": "https://github.com/Puffy-Slippers-Tech-LLC/quick-last-bluetooth",
+      "uuid": "quick-last-bluetooth@tech.puffyslippers.com"
+    }
+  ],
+  "numpages": 3,
+  "total": 5
+}

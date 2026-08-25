@@ -1,0 +1,3326 @@
+{
+  "extensions": [
+    {
+      "creator": "michele_g",
+      "creator_url": "/accounts/profile/michele_g",
+      "description": "A dock for the Gnome Shell. This extension moves the dash out of the overview transforming it in a dock for an easier launching of applications and a faster switching between windows and desktops. Side and bottom placement options are available.",
+      "donation_urls": [],
+      "downloads": 11657265,
+      "icon": "/extension-data/icons/icon_307_2.png",
+      "link": "/extension/307/dash-to-dock/",
+      "name": "Dash to Dock",
+      "pk": 307,
+      "screenshot": "/extension-data/screenshots/screenshot_307_90H8hVD.jpg",
+      "shell_version_map": {
+        "3.10": {
+          "pk": 3840,
+          "version": 30
+        },
+        "3.12": {
+          "pk": 4745,
+          "version": 41
+        },
+        "3.14": {
+          "pk": 5573,
+          "version": 51
+        },
+        "3.16": {
+          "pk": 5574,
+          "version": 52
+        },
+        "3.18": {
+          "pk": 9189,
+          "version": 65
+        },
+        "3.2": {
+          "pk": 1494,
+          "version": 7
+        },
+        "3.20": {
+          "pk": 9189,
+          "version": 65
+        },
+        "3.22": {
+          "pk": 9189,
+          "version": 65
+        },
+        "3.24": {
+          "pk": 9189,
+          "version": 65
+        },
+        "3.26": {
+          "pk": 9189,
+          "version": 65
+        },
+        "3.28": {
+          "pk": 9189,
+          "version": 65
+        },
+        "3.30": {
+          "pk": 9189,
+          "version": 65
+        },
+        "3.32": {
+          "pk": 9456,
+          "version": 66
+        },
+        "3.34": {
+          "pk": 12397,
+          "version": 67
+        },
+        "3.36": {
+          "pk": 19642,
+          "version": 69
+        },
+        "3.38": {
+          "pk": 19642,
+          "version": 69
+        },
+        "3.4": {
+          "pk": 2051,
+          "version": 16
+        },
+        "3.6": {
+          "pk": 2404,
+          "version": 19
+        },
+        "3.8": {
+          "pk": 3236,
+          "version": 22
+        },
+        "40": {
+          "pk": 42426,
+          "version": 84
+        },
+        "41": {
+          "pk": 42426,
+          "version": 84
+        },
+        "42": {
+          "pk": 42426,
+          "version": 84
+        },
+        "43": {
+          "pk": 42426,
+          "version": 84
+        },
+        "44": {
+          "pk": 42426,
+          "version": 84
+        },
+        "45": {
+          "pk": 69959,
+          "version": 105
+        },
+        "46": {
+          "pk": 69959,
+          "version": 105
+        },
+        "47": {
+          "pk": 69959,
+          "version": 105
+        },
+        "48": {
+          "pk": 69959,
+          "version": 105
+        },
+        "49": {
+          "pk": 69959,
+          "version": 105
+        },
+        "50": {
+          "pk": 69959,
+          "version": 105
+        }
+      },
+      "url": "https://micheleg.github.io/dash-to-dock/",
+      "uuid": "dash-to-dock@micxgx.gmail.com"
+    },
+    {
+      "creator": "fmuellner",
+      "creator_url": "/accounts/profile/fmuellner",
+      "description": "Load shell themes from user directory.",
+      "donation_urls": [],
+      "downloads": 7591189,
+      "icon": "/static/images/plugin.png",
+      "link": "/extension/19/user-themes/",
+      "name": "User Themes",
+      "pk": 19,
+      "screenshot": null,
+      "shell_version_map": {
+        "3.10": {
+          "pk": 3254,
+          "version": 19
+        },
+        "3.12": {
+          "pk": 3746,
+          "version": 20
+        },
+        "3.14": {
+          "pk": 4386,
+          "version": 22
+        },
+        "3.15.1": {
+          "pk": 4451,
+          "version": 23
+        },
+        "3.15.3": {
+          "pk": 4568,
+          "version": 24
+        },
+        "3.16": {
+          "pk": 4752,
+          "version": 25
+        },
+        "3.18": {
+          "pk": 5212,
+          "version": 26
+        },
+        "3.20": {
+          "pk": 5753,
+          "version": 27
+        },
+        "3.21.2": {
+          "pk": 5970,
+          "version": 28
+        },
+        "3.22": {
+          "pk": 6202,
+          "version": 29
+        },
+        "3.24": {
+          "pk": 7481,
+          "version": 33
+        },
+        "3.26": {
+          "pk": 7480,
+          "version": 32
+        },
+        "3.28": {
+          "pk": 8103,
+          "version": 34
+        },
+        "3.3.2": {
+          "pk": 41,
+          "version": 2
+        },
+        "3.3.3": {
+          "pk": 503,
+          "version": 3
+        },
+        "3.3.4": {
+          "pk": 646,
+          "version": 4
+        },
+        "3.3.90": {
+          "pk": 837,
+          "version": 5
+        },
+        "3.30": {
+          "pk": 8388,
+          "version": 35
+        },
+        "3.32": {
+          "pk": 10231,
+          "version": 37
+        },
+        "3.34": {
+          "pk": 13345,
+          "version": 39
+        },
+        "3.36": {
+          "pk": 14396,
+          "version": 40
+        },
+        "3.38": {
+          "pk": 21666,
+          "version": 42
+        },
+        "3.4": {
+          "pk": 1015,
+          "version": 6
+        },
+        "3.5.5": {
+          "pk": 1697,
+          "version": 7
+        },
+        "3.5.90": {
+          "pk": 1743,
+          "version": 8
+        },
+        "3.5.91": {
+          "pk": 1814,
+          "version": 9
+        },
+        "3.6": {
+          "pk": 2218,
+          "version": 11
+        },
+        "3.7.5": {
+          "pk": 2498,
+          "version": 13
+        },
+        "3.7.90": {
+          "pk": 2569,
+          "version": 14
+        },
+        "3.7.92": {
+          "pk": 2649,
+          "version": 15
+        },
+        "3.8": {
+          "pk": 3223,
+          "version": 18
+        },
+        "40": {
+          "pk": 24962,
+          "version": 46
+        },
+        "40.0": {
+          "pk": 22817,
+          "version": 44
+        },
+        "41": {
+          "pk": 28483,
+          "version": 48
+        },
+        "42": {
+          "pk": 29921,
+          "version": 49
+        },
+        "43": {
+          "pk": 34566,
+          "version": 50
+        },
+        "44": {
+          "pk": 40536,
+          "version": 51
+        },
+        "45": {
+          "pk": 48973,
+          "version": 54
+        },
+        "46": {
+          "pk": 61748,
+          "version": 60
+        },
+        "47": {
+          "pk": 63755,
+          "version": 65
+        },
+        "48": {
+          "pk": 63741,
+          "version": 64
+        },
+        "49": {
+          "pk": 65086,
+          "version": 69
+        },
+        "50": {
+          "pk": 73999,
+          "version": 76
+        },
+        "51": {
+          "pk": 72325,
+          "version": 75
+        }
+      },
+      "url": "https://gitlab.gnome.org/GNOME/gnome-shell-extensions",
+      "uuid": "user-theme@gnome-shell-extensions.gcampax.github.com"
+    },
+    {
+      "creator": "charlesg99",
+      "creator_url": "/accounts/profile/charlesg99",
+      "description": "An icon taskbar for the Gnome Shell. This extension moves the dash into the gnome main panel so that the application launchers and system tray are combined into a single panel, similar to that found in KDE Plasma and Windows 7+. A separate dock is no longer needed for easy access to running and favorited applications.\n\nFor a more traditional experience, you may also want to use Tweak Tool to enable Windows > Titlebar Buttons > Minimize & Maximize.\n\nFor the best support, please report any issues on Github. Dash-to-panel is developed and maintained by @jderose9 and @charlesg99.",
+      "donation_urls": [
+        "https://paypal.me/charlesg99"
+      ],
+      "downloads": 5146219,
+      "icon": "/extension-data/icons/icon_1160_AXIRYp2.png",
+      "link": "/extension/1160/dash-to-panel/",
+      "name": "Dash to Panel",
+      "pk": 1160,
+      "screenshot": "/extension-data/screenshots/screenshot_1160.png",
+      "shell_version_map": {
+        "3.18": {
+          "pk": 24447,
+          "version": 42
+        },
+        "3.20": {
+          "pk": 24447,
+          "version": 42
+        },
+        "3.22": {
+          "pk": 24447,
+          "version": 42
+        },
+        "3.24": {
+          "pk": 24447,
+          "version": 42
+        },
+        "3.26": {
+          "pk": 24447,
+          "version": 42
+        },
+        "3.28": {
+          "pk": 24447,
+          "version": 42
+        },
+        "3.30": {
+          "pk": 24447,
+          "version": 42
+        },
+        "3.32": {
+          "pk": 24447,
+          "version": 42
+        },
+        "3.34": {
+          "pk": 24447,
+          "version": 42
+        },
+        "3.36": {
+          "pk": 24447,
+          "version": 42
+        },
+        "3.38": {
+          "pk": 24447,
+          "version": 42
+        },
+        "40": {
+          "pk": 62736,
+          "version": 69
+        },
+        "41": {
+          "pk": 34816,
+          "version": 52
+        },
+        "42": {
+          "pk": 39597,
+          "version": 56
+        },
+        "43": {
+          "pk": 39597,
+          "version": 56
+        },
+        "44": {
+          "pk": 39597,
+          "version": 56
+        },
+        "45": {
+          "pk": 50155,
+          "version": 60
+        },
+        "46": {
+          "pk": 69173,
+          "version": 73
+        },
+        "47": {
+          "pk": 69173,
+          "version": 73
+        },
+        "48": {
+          "pk": 69173,
+          "version": 73
+        },
+        "49": {
+          "pk": 69173,
+          "version": 73
+        },
+        "50": {
+          "pk": 69173,
+          "version": 73
+        }
+      },
+      "url": "https://github.com/home-sweet-gnome/dash-to-panel",
+      "uuid": "dash-to-panel@jderose9.github.com"
+    },
+    {
+      "creator": "aunetx",
+      "creator_url": "/accounts/profile/aunetx",
+      "description": "Adds a blur look to different parts of the GNOME Shell, including the top panel, dash and overview.\n\nYou can support my work by sponsoring me on:\n- github: https://github.com/sponsors/aunetx\n- ko-fi: https://ko-fi.com/aunetx\n\nIf you use Ubuntu, you may want to change the radius of the corner effect for Dash-to-Dock in preferences, else you may see unpleasantly mixed radii in your dock.\n\nNote: if the extension shows an error after updating, please make sure to restart your session to see if it persists. This is due to a bug in gnome shell, which I can't fix by myself.",
+      "donation_urls": [
+        "https://github.com/sponsors/aunetx",
+        "https://ko-fi.com/aunetx"
+      ],
+      "downloads": 4990369,
+      "icon": "/extension-data/icons/icon_3193_QedHJZY.png",
+      "link": "/extension/3193/blur-my-shell/",
+      "name": "Blur my Shell",
+      "pk": 3193,
+      "screenshot": "/extension-data/screenshots/screenshot_3193_7GUGlUq.png",
+      "shell_version_map": {
+        "3.36": {
+          "pk": 25794,
+          "version": 22
+        },
+        "3.38": {
+          "pk": 25794,
+          "version": 22
+        },
+        "40": {
+          "pk": 30872,
+          "version": 29
+        },
+        "41": {
+          "pk": 30872,
+          "version": 29
+        },
+        "42": {
+          "pk": 42627,
+          "version": 47
+        },
+        "43": {
+          "pk": 42627,
+          "version": 47
+        },
+        "44": {
+          "pk": 42627,
+          "version": 47
+        },
+        "45": {
+          "pk": 52498,
+          "version": 58
+        },
+        "46": {
+          "pk": 69740,
+          "version": 72
+        },
+        "47": {
+          "pk": 69740,
+          "version": 72
+        },
+        "48": {
+          "pk": 69740,
+          "version": 72
+        },
+        "49": {
+          "pk": 69740,
+          "version": 72
+        },
+        "50": {
+          "pk": 69740,
+          "version": 72
+        }
+      },
+      "url": "https://github.com/aunetx/blur-my-shell",
+      "uuid": "blur-my-shell@aunetx"
+    },
+    {
+      "creator": "3v1n0",
+      "creator_url": "/accounts/profile/3v1n0",
+      "description": "Adds AppIndicator, KStatusNotifierItem and legacy Tray icons support to the Shell",
+      "donation_urls": [],
+      "downloads": 3051294,
+      "icon": "/static/images/plugin.png",
+      "link": "/extension/615/appindicator-support/",
+      "name": "AppIndicator and KStatusNotifierItem Support",
+      "pk": 615,
+      "screenshot": "/extension-data/screenshots/screenshot_615.png",
+      "shell_version_map": {
+        "3.10": {
+          "pk": 4670,
+          "version": 15
+        },
+        "3.12": {
+          "pk": 4670,
+          "version": 15
+        },
+        "3.14": {
+          "pk": 4670,
+          "version": 15
+        },
+        "3.16": {
+          "pk": 10006,
+          "version": 26
+        },
+        "3.17.91": {
+          "pk": 10006,
+          "version": 26
+        },
+        "3.18": {
+          "pk": 10006,
+          "version": 26
+        },
+        "3.20": {
+          "pk": 10006,
+          "version": 26
+        },
+        "3.22": {
+          "pk": 10006,
+          "version": 26
+        },
+        "3.24": {
+          "pk": 10006,
+          "version": 26
+        },
+        "3.26": {
+          "pk": 10006,
+          "version": 26
+        },
+        "3.28": {
+          "pk": 10006,
+          "version": 26
+        },
+        "3.30": {
+          "pk": 10006,
+          "version": 26
+        },
+        "3.32": {
+          "pk": 10318,
+          "version": 29
+        },
+        "3.34": {
+          "pk": 39198,
+          "version": 53
+        },
+        "3.36": {
+          "pk": 39198,
+          "version": 53
+        },
+        "3.38": {
+          "pk": 39198,
+          "version": 53
+        },
+        "3.6": {
+          "pk": 2779,
+          "version": 8
+        },
+        "3.7.92": {
+          "pk": 2779,
+          "version": 8
+        },
+        "3.8": {
+          "pk": 4670,
+          "version": 15
+        },
+        "40": {
+          "pk": 39198,
+          "version": 53
+        },
+        "40.beta": {
+          "pk": 23000,
+          "version": 36
+        },
+        "41": {
+          "pk": 39198,
+          "version": 53
+        },
+        "42": {
+          "pk": 39198,
+          "version": 53
+        },
+        "43": {
+          "pk": 39198,
+          "version": 53
+        },
+        "44": {
+          "pk": 39198,
+          "version": 53
+        },
+        "45": {
+          "pk": 69296,
+          "version": 64
+        },
+        "46": {
+          "pk": 69296,
+          "version": 64
+        },
+        "47": {
+          "pk": 69296,
+          "version": 64
+        },
+        "48": {
+          "pk": 69296,
+          "version": 64
+        },
+        "49": {
+          "pk": 69296,
+          "version": 64
+        },
+        "50": {
+          "pk": 69296,
+          "version": 64
+        }
+      },
+      "url": "https://github.com/ubuntu/gnome-shell-extension-appindicator",
+      "uuid": "appindicatorsupport@rgcjonas.gmail.com"
+    },
+    {
+      "creator": "eon",
+      "creator_url": "/accounts/profile/eon",
+      "description": "Disable the screensaver and auto suspend",
+      "donation_urls": [
+        "https://paypal.me/eonpatapon",
+        "https://paypal.me/stuartahayhurst",
+        "https://paypal.me/pakaoraki"
+      ],
+      "downloads": 3034432,
+      "icon": "/extension-data/icons/icon_517.png",
+      "link": "/extension/517/caffeine/",
+      "name": "Caffeine",
+      "pk": 517,
+      "screenshot": "/extension-data/screenshots/screenshot_517.png",
+      "shell_version_map": {
+        "3.10": {
+          "pk": 9961,
+          "version": 32
+        },
+        "3.12": {
+          "pk": 9961,
+          "version": 32
+        },
+        "3.14": {
+          "pk": 9961,
+          "version": 32
+        },
+        "3.16": {
+          "pk": 9961,
+          "version": 32
+        },
+        "3.18": {
+          "pk": 9961,
+          "version": 32
+        },
+        "3.20": {
+          "pk": 9961,
+          "version": 32
+        },
+        "3.22": {
+          "pk": 9961,
+          "version": 32
+        },
+        "3.24": {
+          "pk": 9961,
+          "version": 32
+        },
+        "3.26": {
+          "pk": 9961,
+          "version": 32
+        },
+        "3.28": {
+          "pk": 9961,
+          "version": 32
+        },
+        "3.30": {
+          "pk": 9961,
+          "version": 32
+        },
+        "3.32": {
+          "pk": 14066,
+          "version": 34
+        },
+        "3.34": {
+          "pk": 14066,
+          "version": 34
+        },
+        "3.36": {
+          "pk": 21413,
+          "version": 37
+        },
+        "3.38": {
+          "pk": 21413,
+          "version": 37
+        },
+        "3.4": {
+          "pk": 3601,
+          "version": 15
+        },
+        "3.5.91": {
+          "pk": 2450,
+          "version": 8
+        },
+        "3.6": {
+          "pk": 3601,
+          "version": 15
+        },
+        "3.7.1": {
+          "pk": 2450,
+          "version": 8
+        },
+        "3.8": {
+          "pk": 3601,
+          "version": 15
+        },
+        "40": {
+          "pk": 45250,
+          "version": 53
+        },
+        "40.0": {
+          "pk": 25137,
+          "version": 39
+        },
+        "40.1": {
+          "pk": 25137,
+          "version": 39
+        },
+        "41": {
+          "pk": 35373,
+          "version": 42
+        },
+        "42": {
+          "pk": 35373,
+          "version": 42
+        },
+        "43": {
+          "pk": 45237,
+          "version": 51
+        },
+        "44": {
+          "pk": 45237,
+          "version": 51
+        },
+        "45": {
+          "pk": 69851,
+          "version": 60
+        },
+        "46": {
+          "pk": 69851,
+          "version": 60
+        },
+        "47": {
+          "pk": 69851,
+          "version": 60
+        },
+        "48": {
+          "pk": 69851,
+          "version": 60
+        },
+        "49": {
+          "pk": 69851,
+          "version": 60
+        },
+        "50": {
+          "pk": 69851,
+          "version": 60
+        }
+      },
+      "url": "https://github.com/eonpatapon/gnome-shell-extension-caffeine",
+      "uuid": "caffeine@patapon.info"
+    },
+    {
+      "creator": "fmuellner",
+      "creator_url": "/accounts/profile/fmuellner",
+      "description": "Add a category-based menu for apps.\nThis extension is part of Classic Mode and is officially supported by GNOME. Please do not report bugs using the form below, use GNOME's GitLab instance instead.",
+      "donation_urls": [],
+      "downloads": 2974675,
+      "icon": "/extension-data/icons/icon_6.png",
+      "link": "/extension/6/applications-menu/",
+      "name": "Apps Menu",
+      "pk": 6,
+      "screenshot": "/extension-data/screenshots/screenshot_6_5MMPK4p.png",
+      "shell_version_map": {
+        "3.10": {
+          "pk": 3247,
+          "version": 22
+        },
+        "3.12": {
+          "pk": 3739,
+          "version": 23
+        },
+        "3.14": {
+          "pk": 4332,
+          "version": 24
+        },
+        "3.15.1": {
+          "pk": 4463,
+          "version": 25
+        },
+        "3.15.3": {
+          "pk": 4582,
+          "version": 26
+        },
+        "3.16": {
+          "pk": 4763,
+          "version": 27
+        },
+        "3.18": {
+          "pk": 5320,
+          "version": 29
+        },
+        "3.2": {
+          "pk": 284,
+          "version": 5
+        },
+        "3.2.0": {
+          "pk": 6,
+          "version": 1
+        },
+        "3.2.1": {
+          "pk": 52,
+          "version": 4
+        },
+        "3.2.3": {
+          "pk": 284,
+          "version": 5
+        },
+        "3.20": {
+          "pk": 5764,
+          "version": 30
+        },
+        "3.21.2": {
+          "pk": 5980,
+          "version": 31
+        },
+        "3.22": {
+          "pk": 6209,
+          "version": 32
+        },
+        "3.24": {
+          "pk": 6867,
+          "version": 34
+        },
+        "3.26": {
+          "pk": 7470,
+          "version": 36
+        },
+        "3.28": {
+          "pk": 8121,
+          "version": 38
+        },
+        "3.3.2": {
+          "pk": 33,
+          "version": 3
+        },
+        "3.3.4": {
+          "pk": 640,
+          "version": 7
+        },
+        "3.3.90": {
+          "pk": 831,
+          "version": 8
+        },
+        "3.30": {
+          "pk": 8381,
+          "version": 39
+        },
+        "3.32": {
+          "pk": 10201,
+          "version": 41
+        },
+        "3.34": {
+          "pk": 13363,
+          "version": 43
+        },
+        "3.36": {
+          "pk": 14372,
+          "version": 44
+        },
+        "3.38": {
+          "pk": 21648,
+          "version": 46
+        },
+        "3.4": {
+          "pk": 1008,
+          "version": 9
+        },
+        "3.5.5": {
+          "pk": 1690,
+          "version": 10
+        },
+        "3.5.90": {
+          "pk": 1736,
+          "version": 11
+        },
+        "3.5.91": {
+          "pk": 1807,
+          "version": 12
+        },
+        "3.6": {
+          "pk": 2213,
+          "version": 14
+        },
+        "3.7.5": {
+          "pk": 2489,
+          "version": 16
+        },
+        "3.7.90": {
+          "pk": 2560,
+          "version": 17
+        },
+        "3.7.92": {
+          "pk": 2640,
+          "version": 18
+        },
+        "3.8": {
+          "pk": 3216,
+          "version": 21
+        },
+        "40": {
+          "pk": 24975,
+          "version": 48
+        },
+        "40.0": {
+          "pk": 22834,
+          "version": 47
+        },
+        "41": {
+          "pk": 28466,
+          "version": 50
+        },
+        "42": {
+          "pk": 29906,
+          "version": 51
+        },
+        "43": {
+          "pk": 34582,
+          "version": 52
+        },
+        "44": {
+          "pk": 40512,
+          "version": 53
+        },
+        "45": {
+          "pk": 48949,
+          "version": 56
+        },
+        "46": {
+          "pk": 61739,
+          "version": 61
+        },
+        "47": {
+          "pk": 63745,
+          "version": 66
+        },
+        "48": {
+          "pk": 63731,
+          "version": 65
+        },
+        "49": {
+          "pk": 65076,
+          "version": 70
+        },
+        "50": {
+          "pk": 73989,
+          "version": 77
+        },
+        "51": {
+          "pk": 72315,
+          "version": 76
+        }
+      },
+      "url": "https://gitlab.gnome.org/GNOME/gnome-shell-extensions",
+      "uuid": "apps-menu@gnome-shell-extensions.gcampax.github.com"
+    },
+    {
+      "creator": "corecoding",
+      "creator_url": "/accounts/profile/corecoding",
+      "description": "A glimpse into your computer's temperature, voltage, fan speed, memory usage, processor load, system resources, network speed and storage stats. This is a one stop shop to monitor all of your vital sensors. Uses asynchronous polling to provide a smooth user experience. Feature requests or bugs? Please use GitHub.",
+      "donation_urls": [
+        "https://paypal.me/corecoding"
+      ],
+      "downloads": 2898499,
+      "icon": "/extension-data/icons/icon_1460.png",
+      "link": "/extension/1460/vitals/",
+      "name": "Vitals",
+      "pk": 1460,
+      "screenshot": "/extension-data/screenshots/screenshot_1460_QK8EEza.gif",
+      "shell_version_map": {
+        "3.18": {
+          "pk": 16714,
+          "version": 33
+        },
+        "3.20": {
+          "pk": 16714,
+          "version": 33
+        },
+        "3.22": {
+          "pk": 16714,
+          "version": 33
+        },
+        "3.24": {
+          "pk": 16714,
+          "version": 33
+        },
+        "3.26": {
+          "pk": 21617,
+          "version": 39
+        },
+        "3.28": {
+          "pk": 21617,
+          "version": 39
+        },
+        "3.30": {
+          "pk": 21617,
+          "version": 39
+        },
+        "3.32": {
+          "pk": 21617,
+          "version": 39
+        },
+        "3.34": {
+          "pk": 21617,
+          "version": 39
+        },
+        "3.36": {
+          "pk": 21617,
+          "version": 39
+        },
+        "3.38": {
+          "pk": 34007,
+          "version": 57
+        },
+        "40": {
+          "pk": 39255,
+          "version": 61
+        },
+        "41": {
+          "pk": 39255,
+          "version": 61
+        },
+        "42": {
+          "pk": 39255,
+          "version": 61
+        },
+        "43": {
+          "pk": 39255,
+          "version": 61
+        },
+        "44": {
+          "pk": 39255,
+          "version": 61
+        },
+        "45": {
+          "pk": 74111,
+          "version": 82
+        },
+        "46": {
+          "pk": 74111,
+          "version": 82
+        },
+        "47": {
+          "pk": 74111,
+          "version": 82
+        },
+        "48": {
+          "pk": 74111,
+          "version": 82
+        },
+        "49": {
+          "pk": 74111,
+          "version": 82
+        },
+        "50": {
+          "pk": 74111,
+          "version": 82
+        }
+      },
+      "url": "https://github.com/corecoding/Vitals",
+      "uuid": "Vitals@CoreCoding.com"
+    },
+    {
+      "creator": "andrew_z",
+      "creator_url": "/accounts/profile/andrew.zaech",
+      "description": "Application menu for GNOME Shell\n\nFeatures include: various menu layouts, built in GNOME search, quick access to system shortcuts, and much more!\n\nRequires GMenu package:\n- Debian / Ubuntu: libgnome-menu-3-0, gir1.2-gmenu-3.0\n- Fedora: gnome-menus\n- Arch / Manjaro: gnome-menus\n- openSUSE: libgnome-menu-3-0, typelib-1_0-GMenu-3_0\n\nGeneral Help:\n- Visit https://gitlab.com/arcmenu/ArcMenu/-/wikis/home\n\nPlease report all bugs or issues at https://gitlab.com/arcmenu/ArcMenu",
+      "donation_urls": [
+        "https://www.buymeacoffee.com/azaech",
+        "https://paypal.me/azaech"
+      ],
+      "downloads": 2806394,
+      "icon": "/extension-data/icons/icon_3628_57rtk3m.png",
+      "link": "/extension/3628/arcmenu/",
+      "name": "ArcMenu",
+      "pk": 3628,
+      "screenshot": "/extension-data/screenshots/screenshot_3628_lJQl1CJ.gif",
+      "shell_version_map": {
+        "3.36": {
+          "pk": 25797,
+          "version": 13
+        },
+        "3.38": {
+          "pk": 25797,
+          "version": 13
+        },
+        "40": {
+          "pk": 30165,
+          "version": 27
+        },
+        "41": {
+          "pk": 30165,
+          "version": 27
+        },
+        "42": {
+          "pk": 43944,
+          "version": 48
+        },
+        "43": {
+          "pk": 43944,
+          "version": 48
+        },
+        "44": {
+          "pk": 43944,
+          "version": 48
+        },
+        "45": {
+          "pk": 71319,
+          "version": 73
+        },
+        "46": {
+          "pk": 71319,
+          "version": 73
+        },
+        "47": {
+          "pk": 71319,
+          "version": 73
+        },
+        "48": {
+          "pk": 71319,
+          "version": 73
+        },
+        "49": {
+          "pk": 71319,
+          "version": 73
+        },
+        "50": {
+          "pk": 71319,
+          "version": 73
+        }
+      },
+      "url": "https://gitlab.com/arcmenu/ArcMenu",
+      "uuid": "arcmenu@arcmenu.com"
+    },
+    {
+      "creator": "dlandau",
+      "creator_url": "/accounts/profile/dlandau",
+      "description": "GSConnect is a complete implementation of KDE Connect especially for GNOME Shell with Nautilus, Chrome and Firefox integration. It does not rely on the KDE Connect desktop application and will not work with it installed.\n\nKDE Connect allows devices to securely share content like notifications or files and other features like SMS messaging and remote control. The KDE Connect team has applications for Linux, BSD, Android, Sailfish, iOS, macOS and Windows.\n\nPlease report issues on Github!",
+      "donation_urls": [],
+      "downloads": 2644148,
+      "icon": "/extension-data/icons/icon_1319_VlYFTP0.png",
+      "link": "/extension/1319/gsconnect/",
+      "name": "GSConnect",
+      "pk": 1319,
+      "screenshot": "/extension-data/screenshots/screenshot_1319_1NByhZ8.png",
+      "shell_version_map": {
+        "3.24": {
+          "pk": 8326,
+          "version": 12
+        },
+        "3.26": {
+          "pk": 8326,
+          "version": 12
+        },
+        "3.28": {
+          "pk": 12823,
+          "version": 28
+        },
+        "3.30": {
+          "pk": 12823,
+          "version": 28
+        },
+        "3.32": {
+          "pk": 12823,
+          "version": 28
+        },
+        "3.34": {
+          "pk": 14243,
+          "version": 33
+        },
+        "3.36": {
+          "pk": 30336,
+          "version": 53
+        },
+        "3.38": {
+          "pk": 30333,
+          "version": 51
+        },
+        "40": {
+          "pk": 25303,
+          "version": 47
+        },
+        "41": {
+          "pk": 30306,
+          "version": 49
+        },
+        "42": {
+          "pk": 66552,
+          "version": 68
+        },
+        "43": {
+          "pk": 66553,
+          "version": 69
+        },
+        "44": {
+          "pk": 39573,
+          "version": 55
+        },
+        "45": {
+          "pk": 66554,
+          "version": 70
+        },
+        "46": {
+          "pk": 70399,
+          "version": 72
+        },
+        "47": {
+          "pk": 70399,
+          "version": 72
+        },
+        "48": {
+          "pk": 70399,
+          "version": 72
+        },
+        "49": {
+          "pk": 70399,
+          "version": 72
+        },
+        "50": {
+          "pk": 70399,
+          "version": 72
+        }
+      },
+      "url": "https://github.com/GSConnect/gnome-shell-extension-gsconnect/wiki",
+      "uuid": "gsconnect@andyholmes.github.io"
+    },
+    {
+      "creator": "Tudmotu",
+      "creator_url": "/accounts/profile/Tudmotu",
+      "description": "The most popular clipboard manager for GNOME, with over 2M downloads",
+      "donation_urls": [],
+      "downloads": 2453510,
+      "icon": "/extension-data/icons/icon_779_cGrEoF7.png",
+      "link": "/extension/779/clipboard-indicator/",
+      "name": "Clipboard Indicator",
+      "pk": 779,
+      "screenshot": "/extension-data/screenshots/screenshot_779_XLhXZ0w.png",
+      "shell_version_map": {
+        "3.10": {
+          "pk": 12523,
+          "version": 32
+        },
+        "3.12": {
+          "pk": 12523,
+          "version": 32
+        },
+        "3.14": {
+          "pk": 12523,
+          "version": 32
+        },
+        "3.16": {
+          "pk": 12523,
+          "version": 32
+        },
+        "3.18": {
+          "pk": 12523,
+          "version": 32
+        },
+        "3.20": {
+          "pk": 12523,
+          "version": 32
+        },
+        "3.22": {
+          "pk": 12523,
+          "version": 32
+        },
+        "3.24": {
+          "pk": 16450,
+          "version": 34
+        },
+        "3.26": {
+          "pk": 16450,
+          "version": 34
+        },
+        "3.28": {
+          "pk": 16450,
+          "version": 34
+        },
+        "3.30": {
+          "pk": 16450,
+          "version": 34
+        },
+        "3.32": {
+          "pk": 16450,
+          "version": 34
+        },
+        "3.34": {
+          "pk": 16450,
+          "version": 34
+        },
+        "3.36": {
+          "pk": 16450,
+          "version": 34
+        },
+        "3.38": {
+          "pk": 20073,
+          "version": 37
+        },
+        "40": {
+          "pk": 23812,
+          "version": 38
+        },
+        "42": {
+          "pk": 43380,
+          "version": 47
+        },
+        "43": {
+          "pk": 43380,
+          "version": 47
+        },
+        "44": {
+          "pk": 43380,
+          "version": 47
+        },
+        "45": {
+          "pk": 49438,
+          "version": 57
+        },
+        "46": {
+          "pk": 70694,
+          "version": 71
+        },
+        "47": {
+          "pk": 70694,
+          "version": 71
+        },
+        "48": {
+          "pk": 70694,
+          "version": 71
+        },
+        "49": {
+          "pk": 70694,
+          "version": 71
+        },
+        "50": {
+          "pk": 70694,
+          "version": 71
+        }
+      },
+      "url": "https://github.com/Tudmotu/gnome-shell-extension-clipboard-indicator",
+      "uuid": "clipboard-indicator@tudmotu.com"
+    },
+    {
+      "creator": "JustPerfection",
+      "creator_url": "/accounts/profile/JustPerfection",
+      "description": "Tweak Tool to Customize GNOME Shell, Change the Behavior and Disable UI Elements\n\n- Accessibility Menu Visibility\n- Activities Button Icon (3.36-44)\n- Activities button Visibility\n- Alt Tab Icon Size\n- Alt Tab Window Preview Icon Size\n- Alt Tab Window Preview Size\n- Always Show Workspace Switcher on Dynamic Workspaces (40 and higher)\n- Animation Speed or Disable it\n- App Gesture (3.36, 3.38)\n- Applications Button Visibility\n- App Menu Icon Visibility (3.36-44)\n- App Menu Label Visibility (3.36-44)\n- App Menu Visibility (3.36-44)\n- Background Menu Visibility\n- Calendar Visibility\n- Clock Menu Position\n- Clock Menu Visibility\n- Dash Icon Size\n- Dash Separator Visibility (40 and higher)\n- Dash Visibility\n- Disable Overlay Key (40-42)\n- Disable Type to Search\n- Double Super Key to App Grid\n- Events in Clock Menu Visibility\n- GNOME Shell Theme Override\n- Hot Corner (3.36-40)\n- Keyboard Layout Visibility\n- Looking Glass Size\n- Notification Banner Position\n- OSD Position\n- OSD Visibility\n- Overview Spacing Size (40 and higher)\n- Panel Arrow Visibility (3.36, 3.38)\n- Panel Button Padding Size\n- Panel Height\n- Panel icon size \n- Panel Indicator Padding Size\n- Panel Notification icon Visibility\n- Panel Position\n- Panel Round Corner Size (3.36-41)\n- Panel Visibility\n- Panel Visibility in Overview\n- Power Icon Visibility\n- Quick Settings Airplane Mode Toggle Visibility (45 and higher)\n- Quick Settings Menu Visibility (43 and higher)\n- Quick Settings Dark Mode Toggle Visibility (45 and higher)\n- Quick Settings Night Light Toggle Visibility (45 and higher)\n- Ripple Box\n- Search Visibility\n- Startup Status (40-44)\n- Switcher Popup Delay\n- System Menu (Aggregate Menu) Visibility (3.36-42)\n- Take Screenshot Button in Window Menu Visibility\n- Weather Visibility\n- Window Demands Attention Focus\n- Window Maximized on Create (45 and higher)\n- Window Menu Visibility (45 and higher)\n- Window Picker Caption Visibility\n- Window Picker Close Button Visibility\n- Window Picker Icon (40-44)\n- Workspace Background Corner Size in Overview (40 and higher)\n- Workspace Peek (42-44)\n- Workspace Popup Visibility\n- Workspaces in app grid Visibility (40 and higher)\n- Workspace Switcher Click To Main View (45 and higher)\n- Workspace Switcher Size (40-44)\n- Workspace Switcher Visibility\n- Workspace Wraparound\n- World Clock Visibility\n\nThis extension uses the clipboard in the preferences window to allow you to copy the support address.",
+      "donation_urls": [
+        "https://www.buymeacoffee.com/justperfection"
+      ],
+      "downloads": 1985325,
+      "icon": "/extension-data/icons/icon_3843_fQsImoF.png",
+      "link": "/extension/3843/just-perfection/",
+      "name": "Just Perfection",
+      "pk": 3843,
+      "screenshot": "/extension-data/screenshots/screenshot_3843_DvVriIp.png",
+      "shell_version_map": {
+        "3.36": {
+          "pk": 38943,
+          "version": 24
+        },
+        "3.38": {
+          "pk": 38943,
+          "version": 24
+        },
+        "40": {
+          "pk": 38943,
+          "version": 24
+        },
+        "41": {
+          "pk": 38943,
+          "version": 24
+        },
+        "42": {
+          "pk": 43626,
+          "version": 26
+        },
+        "43": {
+          "pk": 43626,
+          "version": 26
+        },
+        "44": {
+          "pk": 43626,
+          "version": 26
+        },
+        "45": {
+          "pk": 68110,
+          "version": 36
+        },
+        "46": {
+          "pk": 68110,
+          "version": 36
+        },
+        "47": {
+          "pk": 68110,
+          "version": 36
+        },
+        "48": {
+          "pk": 68110,
+          "version": 36
+        },
+        "49": {
+          "pk": 68110,
+          "version": 36
+        },
+        "50": {
+          "pk": 68110,
+          "version": 36
+        }
+      },
+      "url": "https://gitlab.gnome.org/jrahmatzadeh/just-perfection",
+      "uuid": "just-perfection-desktop@just-perfection"
+    },
+    {
+      "creator": "fmuellner",
+      "creator_url": "/accounts/profile/fmuellner",
+      "description": "A status menu for accessing and unmounting removable devices.",
+      "donation_urls": [],
+      "downloads": 1946296,
+      "icon": "/extension-data/icons/icon_7.png",
+      "link": "/extension/7/removable-drive-menu/",
+      "name": "Removable Drive Menu",
+      "pk": 7,
+      "screenshot": "/extension-data/screenshots/screenshot_7_H2ZqrXt.png",
+      "shell_version_map": {
+        "3.10": {
+          "pk": 3249,
+          "version": 23
+        },
+        "3.12": {
+          "pk": 3741,
+          "version": 24
+        },
+        "3.14": {
+          "pk": 4333,
+          "version": 25
+        },
+        "3.15.1": {
+          "pk": 4458,
+          "version": 26
+        },
+        "3.15.3": {
+          "pk": 4575,
+          "version": 27
+        },
+        "3.16": {
+          "pk": 4758,
+          "version": 28
+        },
+        "3.18": {
+          "pk": 5207,
+          "version": 29
+        },
+        "3.2": {
+          "pk": 287,
+          "version": 6
+        },
+        "3.2.0": {
+          "pk": 7,
+          "version": 1
+        },
+        "3.2.1": {
+          "pk": 53,
+          "version": 4
+        },
+        "3.2.2": {
+          "pk": 58,
+          "version": 5
+        },
+        "3.2.3": {
+          "pk": 287,
+          "version": 6
+        },
+        "3.20": {
+          "pk": 5759,
+          "version": 30
+        },
+        "3.21.2": {
+          "pk": 5976,
+          "version": 31
+        },
+        "3.22": {
+          "pk": 6207,
+          "version": 32
+        },
+        "3.24": {
+          "pk": 6682,
+          "version": 33
+        },
+        "3.26": {
+          "pk": 7474,
+          "version": 35
+        },
+        "3.28": {
+          "pk": 8120,
+          "version": 37
+        },
+        "3.3.2": {
+          "pk": 36,
+          "version": 3
+        },
+        "3.3.3": {
+          "pk": 499,
+          "version": 7
+        },
+        "3.3.4": {
+          "pk": 643,
+          "version": 8
+        },
+        "3.3.90": {
+          "pk": 834,
+          "version": 9
+        },
+        "3.30": {
+          "pk": 8383,
+          "version": 38
+        },
+        "3.32": {
+          "pk": 10207,
+          "version": 40
+        },
+        "3.34": {
+          "pk": 13369,
+          "version": 42
+        },
+        "3.36": {
+          "pk": 14378,
+          "version": 43
+        },
+        "3.38": {
+          "pk": 21654,
+          "version": 45
+        },
+        "3.4": {
+          "pk": 1011,
+          "version": 10
+        },
+        "3.5.5": {
+          "pk": 1693,
+          "version": 11
+        },
+        "3.5.90": {
+          "pk": 1739,
+          "version": 12
+        },
+        "3.5.91": {
+          "pk": 1810,
+          "version": 13
+        },
+        "3.6": {
+          "pk": 2215,
+          "version": 15
+        },
+        "3.7.5": {
+          "pk": 2492,
+          "version": 17
+        },
+        "3.7.90": {
+          "pk": 2563,
+          "version": 18
+        },
+        "3.7.92": {
+          "pk": 2643,
+          "version": 19
+        },
+        "3.8": {
+          "pk": 3218,
+          "version": 22
+        },
+        "40": {
+          "pk": 24969,
+          "version": 47
+        },
+        "40.0": {
+          "pk": 22829,
+          "version": 46
+        },
+        "41": {
+          "pk": 28469,
+          "version": 50
+        },
+        "42": {
+          "pk": 29909,
+          "version": 51
+        },
+        "43": {
+          "pk": 34576,
+          "version": 52
+        },
+        "44": {
+          "pk": 40518,
+          "version": 53
+        },
+        "45": {
+          "pk": 48955,
+          "version": 57
+        },
+        "46": {
+          "pk": 61741,
+          "version": 63
+        },
+        "47": {
+          "pk": 63747,
+          "version": 68
+        },
+        "48": {
+          "pk": 63733,
+          "version": 67
+        },
+        "49": {
+          "pk": 65078,
+          "version": 72
+        },
+        "50": {
+          "pk": 73991,
+          "version": 79
+        },
+        "51": {
+          "pk": 72317,
+          "version": 78
+        }
+      },
+      "url": "https://gitlab.gnome.org/GNOME/gnome-shell-extensions",
+      "uuid": "drive-menu@gnome-shell-extensions.gcampax.github.com"
+    },
+    {
+      "creator": "tuxor1337",
+      "creator_url": "/accounts/profile/tuxor1337",
+      "description": "Hides the top bar, except in overview. However, there is an option to show the panel whenever the mouse pointer approaches the edge of the screen. And if \"intellihide\" is enabled, the panel only hides when a window takes the space.\n\n- Press backspace to remove keyboard shortcut.\n- Log off and on again when there is an error after upgrading.",
+      "donation_urls": [],
+      "downloads": 1907912,
+      "icon": "/static/images/plugin.png",
+      "link": "/extension/545/hide-top-bar/",
+      "name": "Hide Top Bar",
+      "pk": 545,
+      "screenshot": "/extension-data/screenshots/screenshot_545_3pF5sZG.png",
+      "shell_version_map": {
+        "3.10": {
+          "pk": 6085,
+          "version": 52
+        },
+        "3.12": {
+          "pk": 6085,
+          "version": 52
+        },
+        "3.14": {
+          "pk": 6085,
+          "version": 52
+        },
+        "3.16": {
+          "pk": 6416,
+          "version": 54
+        },
+        "3.18": {
+          "pk": 8376,
+          "version": 63
+        },
+        "3.20": {
+          "pk": 17329,
+          "version": 72
+        },
+        "3.22": {
+          "pk": 17329,
+          "version": 72
+        },
+        "3.24": {
+          "pk": 17329,
+          "version": 72
+        },
+        "3.26": {
+          "pk": 17329,
+          "version": 72
+        },
+        "3.28": {
+          "pk": 17329,
+          "version": 72
+        },
+        "3.30": {
+          "pk": 17329,
+          "version": 72
+        },
+        "3.32": {
+          "pk": 17329,
+          "version": 72
+        },
+        "3.34": {
+          "pk": 27632,
+          "version": 100
+        },
+        "3.36": {
+          "pk": 27632,
+          "version": 100
+        },
+        "3.38": {
+          "pk": 41994,
+          "version": 114
+        },
+        "3.6": {
+          "pk": 3200,
+          "version": 15
+        },
+        "3.8": {
+          "pk": 6085,
+          "version": 52
+        },
+        "40": {
+          "pk": 41994,
+          "version": 114
+        },
+        "41": {
+          "pk": 41994,
+          "version": 114
+        },
+        "42": {
+          "pk": 41994,
+          "version": 114
+        },
+        "43": {
+          "pk": 41994,
+          "version": 114
+        },
+        "44": {
+          "pk": 41994,
+          "version": 114
+        },
+        "45": {
+          "pk": 73321,
+          "version": 126
+        },
+        "46": {
+          "pk": 73321,
+          "version": 126
+        },
+        "47": {
+          "pk": 73321,
+          "version": 126
+        },
+        "48": {
+          "pk": 73321,
+          "version": 126
+        },
+        "49": {
+          "pk": 73321,
+          "version": 126
+        },
+        "50": {
+          "pk": 73321,
+          "version": 126
+        }
+      },
+      "url": "https://gitlab.gnome.org/tuxor1337/hidetopbar",
+      "uuid": "hidetopbar@mathieu.bidon.ca"
+    },
+    {
+      "creator": "fmuellner",
+      "creator_url": "/accounts/profile/fmuellner",
+      "description": "Add a menu for quickly navigating places in the system.\nThis extension is part of Classic Mode and is officially supported by GNOME. Please do not report bugs using the form below, use GNOME's GitLab instance instead.",
+      "donation_urls": [],
+      "downloads": 1854253,
+      "icon": "/extension-data/icons/icon_8.png",
+      "link": "/extension/8/places-status-indicator/",
+      "name": "Places Status Indicator",
+      "pk": 8,
+      "screenshot": "/extension-data/screenshots/screenshot_8_mVLeGic.png",
+      "shell_version_map": {
+        "3.10": {
+          "pk": 3252,
+          "version": 25
+        },
+        "3.12": {
+          "pk": 3744,
+          "version": 26
+        },
+        "3.14": {
+          "pk": 4331,
+          "version": 27
+        },
+        "3.15.1": {
+          "pk": 4462,
+          "version": 28
+        },
+        "3.15.3": {
+          "pk": 4579,
+          "version": 29
+        },
+        "3.16": {
+          "pk": 4762,
+          "version": 30
+        },
+        "3.18": {
+          "pk": 5210,
+          "version": 31
+        },
+        "3.2": {
+          "pk": 289,
+          "version": 5
+        },
+        "3.2.0": {
+          "pk": 8,
+          "version": 1
+        },
+        "3.2.1": {
+          "pk": 54,
+          "version": 4
+        },
+        "3.2.3": {
+          "pk": 289,
+          "version": 5
+        },
+        "3.20": {
+          "pk": 5763,
+          "version": 32
+        },
+        "3.21.2": {
+          "pk": 5979,
+          "version": 33
+        },
+        "3.22": {
+          "pk": 6204,
+          "version": 34
+        },
+        "3.24": {
+          "pk": 6866,
+          "version": 36
+        },
+        "3.26": {
+          "pk": 7471,
+          "version": 38
+        },
+        "3.28": {
+          "pk": 8116,
+          "version": 40
+        },
+        "3.3.2": {
+          "pk": 39,
+          "version": 3
+        },
+        "3.3.3": {
+          "pk": 501,
+          "version": 6
+        },
+        "3.3.4": {
+          "pk": 644,
+          "version": 7
+        },
+        "3.3.90": {
+          "pk": 836,
+          "version": 8
+        },
+        "3.30": {
+          "pk": 8386,
+          "version": 41
+        },
+        "3.32": {
+          "pk": 10216,
+          "version": 43
+        },
+        "3.34": {
+          "pk": 13339,
+          "version": 45
+        },
+        "3.36": {
+          "pk": 14390,
+          "version": 46
+        },
+        "3.38": {
+          "pk": 21663,
+          "version": 48
+        },
+        "3.4": {
+          "pk": 1214,
+          "version": 10
+        },
+        "3.5.5": {
+          "pk": 1695,
+          "version": 11
+        },
+        "3.5.90": {
+          "pk": 1741,
+          "version": 12
+        },
+        "3.5.91": {
+          "pk": 1812,
+          "version": 13
+        },
+        "3.6": {
+          "pk": 2968,
+          "version": 22
+        },
+        "3.7.5": {
+          "pk": 2495,
+          "version": 18
+        },
+        "3.7.90": {
+          "pk": 2566,
+          "version": 19
+        },
+        "3.7.92": {
+          "pk": 2646,
+          "version": 20
+        },
+        "3.8": {
+          "pk": 3221,
+          "version": 24
+        },
+        "40": {
+          "pk": 24965,
+          "version": 51
+        },
+        "40.0": {
+          "pk": 22823,
+          "version": 50
+        },
+        "41": {
+          "pk": 28475,
+          "version": 53
+        },
+        "42": {
+          "pk": 29916,
+          "version": 54
+        },
+        "43": {
+          "pk": 34568,
+          "version": 55
+        },
+        "44": {
+          "pk": 40527,
+          "version": 56
+        },
+        "45": {
+          "pk": 48967,
+          "version": 59
+        },
+        "46": {
+          "pk": 61745,
+          "version": 65
+        },
+        "47": {
+          "pk": 63751,
+          "version": 70
+        },
+        "48": {
+          "pk": 63737,
+          "version": 69
+        },
+        "49": {
+          "pk": 65082,
+          "version": 74
+        },
+        "50": {
+          "pk": 73995,
+          "version": 81
+        },
+        "51": {
+          "pk": 72321,
+          "version": 80
+        }
+      },
+      "url": "https://gitlab.gnome.org/GNOME/gnome-shell-extensions",
+      "uuid": "places-menu@gnome-shell-extensions.gcampax.github.com"
+    },
+    {
+      "creator": "rastersoft",
+      "creator_url": "/accounts/profile/rastersoft",
+      "description": "Adds icons to the desktop. Fork of the original Desktop Icons extension, with several enhancements .",
+      "donation_urls": [],
+      "downloads": 1715071,
+      "icon": "/extension-data/icons/icon_2087_qmijvjZ.png",
+      "link": "/extension/2087/desktop-icons-ng-ding/",
+      "name": "Desktop Icons NG (DING)",
+      "pk": 2087,
+      "screenshot": "/extension-data/screenshots/screenshot_2087.png",
+      "shell_version_map": {
+        "3.30": {
+          "pk": 19186,
+          "version": 17
+        },
+        "3.32": {
+          "pk": 19186,
+          "version": 17
+        },
+        "3.34": {
+          "pk": 19186,
+          "version": 17
+        },
+        "3.38": {
+          "pk": 45772,
+          "version": 63
+        },
+        "40": {
+          "pk": 45772,
+          "version": 63
+        },
+        "41": {
+          "pk": 45772,
+          "version": 63
+        },
+        "42": {
+          "pk": 45772,
+          "version": 63
+        },
+        "43": {
+          "pk": 45772,
+          "version": 63
+        },
+        "44": {
+          "pk": 45772,
+          "version": 63
+        },
+        "45": {
+          "pk": 63920,
+          "version": 77
+        },
+        "46": {
+          "pk": 72024,
+          "version": 85
+        },
+        "47": {
+          "pk": 72024,
+          "version": 85
+        },
+        "48": {
+          "pk": 72024,
+          "version": 85
+        },
+        "49": {
+          "pk": 72024,
+          "version": 85
+        },
+        "50": {
+          "pk": 73926,
+          "version": 93
+        }
+      },
+      "url": "https://gitlab.com/rastersoft/desktop-icons-ng",
+      "uuid": "ding@rastersoft.com"
+    },
+    {
+      "creator": "dsheeler",
+      "creator_url": "/accounts/profile/dsheeler",
+      "description": "Replacement of Alt-Tab, iterates through windows in a cover-flow manner.",
+      "donation_urls": [
+        "https://github.com/sponsors/dsheeler",
+        "https://liberapay.com/dsheeler",
+        "https://paypal.me/DanielSheeler"
+      ],
+      "downloads": 1601568,
+      "icon": "/extension-data/icons/icon_97_mxBGU7X.png",
+      "link": "/extension/97/coverflow-alt-tab/",
+      "name": "Coverflow Alt-Tab",
+      "pk": 97,
+      "screenshot": "/extension-data/screenshots/screenshot_97_An3NiDH.png",
+      "shell_version_map": {
+        "3.10": {
+          "pk": 8317,
+          "version": 33
+        },
+        "3.12": {
+          "pk": 8317,
+          "version": 33
+        },
+        "3.14": {
+          "pk": 8317,
+          "version": 33
+        },
+        "3.16": {
+          "pk": 8317,
+          "version": 33
+        },
+        "3.18": {
+          "pk": 8317,
+          "version": 33
+        },
+        "3.2": {
+          "pk": 1125,
+          "version": 12
+        },
+        "3.2.1": {
+          "pk": 441,
+          "version": 8
+        },
+        "3.20": {
+          "pk": 8317,
+          "version": 33
+        },
+        "3.21.91": {
+          "pk": 6184,
+          "version": 26
+        },
+        "3.22": {
+          "pk": 8317,
+          "version": 33
+        },
+        "3.24": {
+          "pk": 8317,
+          "version": 33
+        },
+        "3.26": {
+          "pk": 8317,
+          "version": 33
+        },
+        "3.28": {
+          "pk": 8514,
+          "version": 36
+        },
+        "3.30": {
+          "pk": 16855,
+          "version": 42
+        },
+        "3.32": {
+          "pk": 16855,
+          "version": 42
+        },
+        "3.34": {
+          "pk": 16855,
+          "version": 42
+        },
+        "3.36": {
+          "pk": 19141,
+          "version": 44
+        },
+        "3.38": {
+          "pk": 19141,
+          "version": 44
+        },
+        "3.4": {
+          "pk": 8317,
+          "version": 33
+        },
+        "3.6": {
+          "pk": 8317,
+          "version": 33
+        },
+        "3.8": {
+          "pk": 8317,
+          "version": 33
+        },
+        "40": {
+          "pk": 27362,
+          "version": 49
+        },
+        "41": {
+          "pk": 27362,
+          "version": 49
+        },
+        "42": {
+          "pk": 35632,
+          "version": 55
+        },
+        "43": {
+          "pk": 41849,
+          "version": 61
+        },
+        "44": {
+          "pk": 42477,
+          "version": 65
+        },
+        "45": {
+          "pk": 51331,
+          "version": 71
+        },
+        "46": {
+          "pk": 61982,
+          "version": 77
+        },
+        "47": {
+          "pk": 61982,
+          "version": 77
+        },
+        "48": {
+          "pk": 65231,
+          "version": 82
+        },
+        "49": {
+          "pk": 65785,
+          "version": 83
+        },
+        "50": {
+          "pk": 74252,
+          "version": 88
+        }
+      },
+      "url": "https://github.com/dsheeler/CoverflowAltTab",
+      "uuid": "CoverflowAltTab@palatis.blogspot.com"
+    },
+    {
+      "creator": "Simon Schneegans",
+      "creator_url": "/accounts/profile/Simme",
+      "description": "Disintegrate your windows with style.",
+      "donation_urls": [
+        "https://github.com/sponsors/schneegans",
+        "https://ko-fi.com/schneegans",
+        "https://paypal.me/simonschneegans"
+      ],
+      "downloads": 1275464,
+      "icon": "/extension-data/icons/icon_4679.png",
+      "link": "/extension/4679/burn-my-windows/",
+      "name": "Burn My Windows",
+      "pk": 4679,
+      "screenshot": "/extension-data/screenshots/screenshot_4679_trxaQGC.gif",
+      "shell_version_map": {
+        "3.36": {
+          "pk": 51448,
+          "version": 42
+        },
+        "3.38": {
+          "pk": 51448,
+          "version": 42
+        },
+        "40": {
+          "pk": 51448,
+          "version": 42
+        },
+        "41": {
+          "pk": 51448,
+          "version": 42
+        },
+        "42": {
+          "pk": 51448,
+          "version": 42
+        },
+        "43": {
+          "pk": 51448,
+          "version": 42
+        },
+        "44": {
+          "pk": 51448,
+          "version": 42
+        },
+        "45": {
+          "pk": 69157,
+          "version": 48
+        },
+        "46": {
+          "pk": 69157,
+          "version": 48
+        },
+        "47": {
+          "pk": 69157,
+          "version": 48
+        },
+        "48": {
+          "pk": 69157,
+          "version": 48
+        },
+        "49": {
+          "pk": 69157,
+          "version": 48
+        },
+        "50": {
+          "pk": 69157,
+          "version": 48
+        }
+      },
+      "url": "https://github.com/Schneegans/Burn-My-Windows",
+      "uuid": "burn-my-windows@schneegans.github.com"
+    },
+    {
+      "creator": "fmuellner",
+      "creator_url": "/accounts/profile/fmuellner",
+      "description": "Display a window list at the bottom of the screen.\nThis extension is part of Classic Mode and is officially supported by GNOME. Please do not report bugs using the form below, use GNOME's GitLab instance instead.",
+      "donation_urls": [],
+      "downloads": 1214136,
+      "icon": "/static/images/plugin.png",
+      "link": "/extension/602/window-list/",
+      "name": "Window List",
+      "pk": 602,
+      "screenshot": "/extension-data/screenshots/screenshot_602_oSNPKPC.png",
+      "shell_version_map": {
+        "3.10": {
+          "pk": 3255,
+          "version": 8
+        },
+        "3.12": {
+          "pk": 3747,
+          "version": 9
+        },
+        "3.14": {
+          "pk": 4392,
+          "version": 11
+        },
+        "3.15.1": {
+          "pk": 4459,
+          "version": 12
+        },
+        "3.15.3": {
+          "pk": 4576,
+          "version": 13
+        },
+        "3.16": {
+          "pk": 4759,
+          "version": 14
+        },
+        "3.18": {
+          "pk": 5321,
+          "version": 16
+        },
+        "3.20": {
+          "pk": 5760,
+          "version": 17
+        },
+        "3.21.2": {
+          "pk": 5977,
+          "version": 18
+        },
+        "3.22": {
+          "pk": 6201,
+          "version": 19
+        },
+        "3.24": {
+          "pk": 6676,
+          "version": 20
+        },
+        "3.26": {
+          "pk": 7473,
+          "version": 22
+        },
+        "3.28": {
+          "pk": 8119,
+          "version": 24
+        },
+        "3.30": {
+          "pk": 8389,
+          "version": 25
+        },
+        "3.32": {
+          "pk": 10228,
+          "version": 27
+        },
+        "3.34": {
+          "pk": 13351,
+          "version": 30
+        },
+        "3.36": {
+          "pk": 14399,
+          "version": 31
+        },
+        "3.38": {
+          "pk": 21667,
+          "version": 34
+        },
+        "3.7.5": {
+          "pk": 2499,
+          "version": 2
+        },
+        "3.7.90": {
+          "pk": 2570,
+          "version": 3
+        },
+        "3.7.92": {
+          "pk": 2650,
+          "version": 4
+        },
+        "3.8": {
+          "pk": 3224,
+          "version": 7
+        },
+        "40": {
+          "pk": 29176,
+          "version": 41
+        },
+        "40.0": {
+          "pk": 22814,
+          "version": 36
+        },
+        "41": {
+          "pk": 29178,
+          "version": 42
+        },
+        "42": {
+          "pk": 33175,
+          "version": 46
+        },
+        "43": {
+          "pk": 34565,
+          "version": 47
+        },
+        "44": {
+          "pk": 40539,
+          "version": 48
+        },
+        "45": {
+          "pk": 48976,
+          "version": 51
+        },
+        "46": {
+          "pk": 61786,
+          "version": 59
+        },
+        "47": {
+          "pk": 63756,
+          "version": 63
+        },
+        "48": {
+          "pk": 63742,
+          "version": 62
+        },
+        "49": {
+          "pk": 65087,
+          "version": 67
+        },
+        "50": {
+          "pk": 74000,
+          "version": 74
+        },
+        "51": {
+          "pk": 72326,
+          "version": 73
+        }
+      },
+      "url": "https://gitlab.gnome.org/GNOME/gnome-shell-extensions",
+      "uuid": "window-list@gnome-shell-extensions.gcampax.github.com"
+    },
+    {
+      "creator": "hermes83",
+      "creator_url": "/accounts/profile/hermes83",
+      "description": "Magic lamp effect inspired by the Compiz ones\n\nNB:\nIn case of update error please restart Gnome Shell (on Xorg press ALT+F2 then write r and press enter, on Wayland end the session and log in again)",
+      "donation_urls": [],
+      "downloads": 1070974,
+      "icon": "/extension-data/icons/icon_3740.png",
+      "link": "/extension/3740/compiz-alike-magic-lamp-effect/",
+      "name": "Compiz alike magic lamp effect",
+      "pk": 3740,
+      "screenshot": "/extension-data/screenshots/screenshot_3740.png",
+      "shell_version_map": {
+        "3.28": {
+          "pk": 46549,
+          "version": 17
+        },
+        "3.30": {
+          "pk": 46549,
+          "version": 17
+        },
+        "3.32": {
+          "pk": 46549,
+          "version": 17
+        },
+        "3.34": {
+          "pk": 46549,
+          "version": 17
+        },
+        "3.36": {
+          "pk": 46549,
+          "version": 17
+        },
+        "3.38": {
+          "pk": 46549,
+          "version": 17
+        },
+        "40": {
+          "pk": 46549,
+          "version": 17
+        },
+        "41": {
+          "pk": 46549,
+          "version": 17
+        },
+        "42": {
+          "pk": 46549,
+          "version": 17
+        },
+        "43": {
+          "pk": 46549,
+          "version": 17
+        },
+        "44": {
+          "pk": 46549,
+          "version": 17
+        },
+        "45": {
+          "pk": 69833,
+          "version": 24
+        },
+        "46": {
+          "pk": 69833,
+          "version": 24
+        },
+        "47": {
+          "pk": 69833,
+          "version": 24
+        },
+        "48": {
+          "pk": 69833,
+          "version": 24
+        },
+        "49": {
+          "pk": 69833,
+          "version": 24
+        },
+        "50": {
+          "pk": 69833,
+          "version": 24
+        }
+      },
+      "url": "https://github.com/hermes83/compiz-alike-magic-lamp-effect",
+      "uuid": "compiz-alike-magic-lamp-effect@hermes83.github.com"
+    },
+    {
+      "creator": "fmuellner",
+      "creator_url": "/accounts/profile/fmuellner",
+      "description": "Always launch a new instance when clicking in the dash or the application view.\nThis extension is part of Classic Mode and is officially supported by GNOME. Please do not report bugs using the form below, use GNOME's GitLab instance instead.",
+      "donation_urls": [],
+      "downloads": 1057604,
+      "icon": "/static/images/plugin.png",
+      "link": "/extension/600/launch-new-instance/",
+      "name": "Launch New Instance",
+      "pk": 600,
+      "screenshot": null,
+      "shell_version_map": {
+        "3.10": {
+          "pk": 3250,
+          "version": 8
+        },
+        "3.12": {
+          "pk": 3742,
+          "version": 9
+        },
+        "3.14": {
+          "pk": 4393,
+          "version": 11
+        },
+        "3.15.1": {
+          "pk": 4460,
+          "version": 12
+        },
+        "3.15.3": {
+          "pk": 4577,
+          "version": 13
+        },
+        "3.16": {
+          "pk": 4760,
+          "version": 14
+        },
+        "3.18": {
+          "pk": 5208,
+          "version": 15
+        },
+        "3.20": {
+          "pk": 5761,
+          "version": 16
+        },
+        "3.22": {
+          "pk": 6206,
+          "version": 17
+        },
+        "3.24": {
+          "pk": 6681,
+          "version": 18
+        },
+        "3.26": {
+          "pk": 7472,
+          "version": 20
+        },
+        "3.28": {
+          "pk": 8107,
+          "version": 21
+        },
+        "3.30": {
+          "pk": 8384,
+          "version": 22
+        },
+        "3.32": {
+          "pk": 10210,
+          "version": 24
+        },
+        "3.34": {
+          "pk": 13333,
+          "version": 26
+        },
+        "3.36": {
+          "pk": 14384,
+          "version": 27
+        },
+        "3.38": {
+          "pk": 21657,
+          "version": 29
+        },
+        "3.7.5": {
+          "pk": 2493,
+          "version": 2
+        },
+        "3.7.90": {
+          "pk": 2564,
+          "version": 3
+        },
+        "3.7.92": {
+          "pk": 2644,
+          "version": 4
+        },
+        "3.8": {
+          "pk": 3219,
+          "version": 7
+        },
+        "40": {
+          "pk": 24968,
+          "version": 31
+        },
+        "40.0": {
+          "pk": 22828,
+          "version": 30
+        },
+        "41": {
+          "pk": 28471,
+          "version": 33
+        },
+        "42": {
+          "pk": 29910,
+          "version": 34
+        },
+        "43": {
+          "pk": 34573,
+          "version": 35
+        },
+        "44": {
+          "pk": 40521,
+          "version": 36
+        },
+        "45": {
+          "pk": 48958,
+          "version": 39
+        },
+        "46": {
+          "pk": 61742,
+          "version": 44
+        },
+        "47": {
+          "pk": 63748,
+          "version": 49
+        },
+        "48": {
+          "pk": 63734,
+          "version": 48
+        },
+        "49": {
+          "pk": 65079,
+          "version": 53
+        },
+        "50": {
+          "pk": 73992,
+          "version": 60
+        },
+        "51": {
+          "pk": 72318,
+          "version": 59
+        }
+      },
+      "url": "https://gitlab.gnome.org/GNOME/gnome-shell-extensions",
+      "uuid": "launch-new-instance@gnome-shell-extensions.gcampax.github.com"
+    },
+    {
+      "creator": "hermes83",
+      "creator_url": "/accounts/profile/hermes83",
+      "description": "Compiz wobbly windows effect\n\n-----------------------------------\nVideo\n-----------------------------------\nhttps://youtu.be/G8bAVIB9A7A",
+      "donation_urls": [],
+      "downloads": 1020975,
+      "icon": "/extension-data/icons/icon_3210.png",
+      "link": "/extension/3210/compiz-windows-effect/",
+      "name": "Compiz windows effect",
+      "pk": 3210,
+      "screenshot": "/extension-data/screenshots/screenshot_3210_JL6bTjC.png",
+      "shell_version_map": {
+        "3.28": {
+          "pk": 40728,
+          "version": 21
+        },
+        "3.30": {
+          "pk": 40728,
+          "version": 21
+        },
+        "3.32": {
+          "pk": 40728,
+          "version": 21
+        },
+        "3.34": {
+          "pk": 40728,
+          "version": 21
+        },
+        "3.36": {
+          "pk": 40728,
+          "version": 21
+        },
+        "3.38": {
+          "pk": 40728,
+          "version": 21
+        },
+        "40": {
+          "pk": 40728,
+          "version": 21
+        },
+        "41": {
+          "pk": 40728,
+          "version": 21
+        },
+        "42": {
+          "pk": 40728,
+          "version": 21
+        },
+        "43": {
+          "pk": 40728,
+          "version": 21
+        },
+        "44": {
+          "pk": 40728,
+          "version": 21
+        },
+        "45": {
+          "pk": 67396,
+          "version": 29
+        },
+        "46": {
+          "pk": 67396,
+          "version": 29
+        },
+        "47": {
+          "pk": 67396,
+          "version": 29
+        },
+        "48": {
+          "pk": 67396,
+          "version": 29
+        },
+        "49": {
+          "pk": 69832,
+          "version": 31
+        },
+        "50": {
+          "pk": 69832,
+          "version": 31
+        }
+      },
+      "url": "https://github.com/hermes83/compiz-windows-effect",
+      "uuid": "compiz-windows-effect@hermes83.github.com"
+    },
+    {
+      "creator": "fmuellner",
+      "creator_url": "/accounts/profile/fmuellner",
+      "description": "Put an indicator on the panel signaling in which workspace you are, and give you the possibility of switching to another one.",
+      "donation_urls": [],
+      "downloads": 974351,
+      "icon": "/extension-data/icons/icon_21.png",
+      "link": "/extension/21/workspace-indicator/",
+      "name": "Workspace Indicator",
+      "pk": 21,
+      "screenshot": "/extension-data/screenshots/screenshot_21_s4sLLod.png",
+      "shell_version_map": {
+        "3.10": {
+          "pk": 3257,
+          "version": 21
+        },
+        "3.12": {
+          "pk": 3749,
+          "version": 22
+        },
+        "3.14": {
+          "pk": 4390,
+          "version": 24
+        },
+        "3.15.1": {
+          "pk": 4455,
+          "version": 25
+        },
+        "3.15.3": {
+          "pk": 4572,
+          "version": 26
+        },
+        "3.16": {
+          "pk": 4755,
+          "version": 27
+        },
+        "3.18": {
+          "pk": 5215,
+          "version": 28
+        },
+        "3.2": {
+          "pk": 724,
+          "version": 6
+        },
+        "3.2.1": {
+          "pk": 55,
+          "version": 2
+        },
+        "3.2.3": {
+          "pk": 724,
+          "version": 6
+        },
+        "3.20": {
+          "pk": 5756,
+          "version": 29
+        },
+        "3.21.2": {
+          "pk": 5973,
+          "version": 30
+        },
+        "3.22": {
+          "pk": 6199,
+          "version": 31
+        },
+        "3.24": {
+          "pk": 6674,
+          "version": 32
+        },
+        "3.26": {
+          "pk": 7477,
+          "version": 34
+        },
+        "3.28": {
+          "pk": 8117,
+          "version": 36
+        },
+        "3.3.2": {
+          "pk": 43,
+          "version": 1
+        },
+        "3.3.3": {
+          "pk": 505,
+          "version": 4
+        },
+        "3.3.4": {
+          "pk": 647,
+          "version": 5
+        },
+        "3.3.90": {
+          "pk": 839,
+          "version": 7
+        },
+        "3.30": {
+          "pk": 8391,
+          "version": 37
+        },
+        "3.32": {
+          "pk": 10222,
+          "version": 39
+        },
+        "3.34": {
+          "pk": 13360,
+          "version": 41
+        },
+        "3.36": {
+          "pk": 14405,
+          "version": 42
+        },
+        "3.38": {
+          "pk": 21672,
+          "version": 45
+        },
+        "3.4": {
+          "pk": 1017,
+          "version": 8
+        },
+        "3.5.5": {
+          "pk": 1699,
+          "version": 9
+        },
+        "3.5.90": {
+          "pk": 1745,
+          "version": 10
+        },
+        "3.5.91": {
+          "pk": 1816,
+          "version": 11
+        },
+        "3.6": {
+          "pk": 2220,
+          "version": 13
+        },
+        "3.7.5": {
+          "pk": 2501,
+          "version": 15
+        },
+        "3.7.90": {
+          "pk": 2572,
+          "version": 16
+        },
+        "3.7.92": {
+          "pk": 2652,
+          "version": 17
+        },
+        "3.8": {
+          "pk": 3226,
+          "version": 20
+        },
+        "40": {
+          "pk": 24956,
+          "version": 49
+        },
+        "40.0": {
+          "pk": 22811,
+          "version": 47
+        },
+        "41": {
+          "pk": 28480,
+          "version": 51
+        },
+        "42": {
+          "pk": 29927,
+          "version": 52
+        },
+        "43": {
+          "pk": 34561,
+          "version": 53
+        },
+        "44": {
+          "pk": 40545,
+          "version": 54
+        },
+        "45": {
+          "pk": 48982,
+          "version": 57
+        },
+        "46": {
+          "pk": 61751,
+          "version": 62
+        },
+        "47": {
+          "pk": 63758,
+          "version": 67
+        },
+        "48": {
+          "pk": 63744,
+          "version": 66
+        },
+        "49": {
+          "pk": 65089,
+          "version": 71
+        },
+        "50": {
+          "pk": 74002,
+          "version": 78
+        },
+        "51": {
+          "pk": 72328,
+          "version": 77
+        }
+      },
+      "url": "https://gitlab.gnome.org/GNOME/gnome-shell-extensions",
+      "uuid": "workspace-indicator@gnome-shell-extensions.gcampax.github.com"
+    },
+    {
+      "creator": "fmuellner",
+      "creator_url": "/accounts/profile/fmuellner",
+      "description": "Move applications to specific workspaces when they create windows.",
+      "donation_urls": [],
+      "downloads": 941253,
+      "icon": "/static/images/plugin.png",
+      "link": "/extension/16/auto-move-windows/",
+      "name": "Auto Move Windows",
+      "pk": 16,
+      "screenshot": null,
+      "shell_version_map": {
+        "3.10": {
+          "pk": 3248,
+          "version": 21
+        },
+        "3.12": {
+          "pk": 3740,
+          "version": 22
+        },
+        "3.14": {
+          "pk": 4389,
+          "version": 24
+        },
+        "3.15.1": {
+          "pk": 4454,
+          "version": 25
+        },
+        "3.15.3": {
+          "pk": 4571,
+          "version": 26
+        },
+        "3.16": {
+          "pk": 4754,
+          "version": 27
+        },
+        "3.18": {
+          "pk": 5206,
+          "version": 28
+        },
+        "3.2": {
+          "pk": 285,
+          "version": 3
+        },
+        "3.2.3": {
+          "pk": 285,
+          "version": 3
+        },
+        "3.20": {
+          "pk": 5755,
+          "version": 29
+        },
+        "3.21.2": {
+          "pk": 5972,
+          "version": 30
+        },
+        "3.22": {
+          "pk": 6208,
+          "version": 31
+        },
+        "3.24": {
+          "pk": 6683,
+          "version": 32
+        },
+        "3.26": {
+          "pk": 7478,
+          "version": 34
+        },
+        "3.28": {
+          "pk": 8123,
+          "version": 36
+        },
+        "3.3.2": {
+          "pk": 34,
+          "version": 2
+        },
+        "3.3.3": {
+          "pk": 497,
+          "version": 4
+        },
+        "3.3.4": {
+          "pk": 641,
+          "version": 5
+        },
+        "3.3.90": {
+          "pk": 832,
+          "version": 6
+        },
+        "3.30": {
+          "pk": 8382,
+          "version": 37
+        },
+        "3.32": {
+          "pk": 10204,
+          "version": 39
+        },
+        "3.34": {
+          "pk": 13366,
+          "version": 41
+        },
+        "3.36": {
+          "pk": 14375,
+          "version": 42
+        },
+        "3.38": {
+          "pk": 21651,
+          "version": 44
+        },
+        "3.4": {
+          "pk": 1221,
+          "version": 8
+        },
+        "3.5.5": {
+          "pk": 1691,
+          "version": 9
+        },
+        "3.5.90": {
+          "pk": 1737,
+          "version": 10
+        },
+        "3.5.91": {
+          "pk": 1808,
+          "version": 11
+        },
+        "3.6": {
+          "pk": 2214,
+          "version": 13
+        },
+        "3.7.5": {
+          "pk": 2490,
+          "version": 15
+        },
+        "3.7.90": {
+          "pk": 2561,
+          "version": 16
+        },
+        "3.7.92": {
+          "pk": 2641,
+          "version": 17
+        },
+        "3.8": {
+          "pk": 3217,
+          "version": 20
+        },
+        "40": {
+          "pk": 24972,
+          "version": 46
+        },
+        "40.0": {
+          "pk": 22831,
+          "version": 45
+        },
+        "41": {
+          "pk": 28468,
+          "version": 48
+        },
+        "42": {
+          "pk": 29907,
+          "version": 49
+        },
+        "43": {
+          "pk": 34579,
+          "version": 50
+        },
+        "44": {
+          "pk": 40515,
+          "version": 51
+        },
+        "45": {
+          "pk": 48952,
+          "version": 54
+        },
+        "46": {
+          "pk": 61740,
+          "version": 59
+        },
+        "47": {
+          "pk": 63746,
+          "version": 64
+        },
+        "48": {
+          "pk": 63732,
+          "version": 63
+        },
+        "49": {
+          "pk": 65077,
+          "version": 68
+        },
+        "50": {
+          "pk": 73990,
+          "version": 75
+        },
+        "51": {
+          "pk": 72316,
+          "version": 74
+        }
+      },
+      "url": "https://gitlab.gnome.org/GNOME/gnome-shell-extensions",
+      "uuid": "auto-move-windows@gnome-shell-extensions.gcampax.github.com"
+    },
+    {
+      "creator": "kazimieras.vaina",
+      "creator_url": "/accounts/profile/kazimieras.vaina",
+      "description": "Numlock & Capslock status on the panel.",
+      "donation_urls": [],
+      "downloads": 890007,
+      "icon": "/extension-data/icons/icon_36_4.png",
+      "link": "/extension/36/lock-keys/",
+      "name": "Lock Keys",
+      "pk": 36,
+      "screenshot": "/extension-data/screenshots/screenshot_36_2.png",
+      "shell_version_map": {
+        "3.0": {
+          "pk": 906,
+          "version": 3
+        },
+        "3.10": {
+          "pk": 13816,
+          "version": 30
+        },
+        "3.12": {
+          "pk": 13816,
+          "version": 30
+        },
+        "3.14": {
+          "pk": 13816,
+          "version": 30
+        },
+        "3.16": {
+          "pk": 13816,
+          "version": 30
+        },
+        "3.18": {
+          "pk": 26229,
+          "version": 44
+        },
+        "3.2": {
+          "pk": 906,
+          "version": 3
+        },
+        "3.20": {
+          "pk": 26229,
+          "version": 44
+        },
+        "3.22": {
+          "pk": 26229,
+          "version": 44
+        },
+        "3.24": {
+          "pk": 26229,
+          "version": 44
+        },
+        "3.26": {
+          "pk": 26229,
+          "version": 44
+        },
+        "3.28": {
+          "pk": 26883,
+          "version": 45
+        },
+        "3.30": {
+          "pk": 26883,
+          "version": 45
+        },
+        "3.32": {
+          "pk": 38781,
+          "version": 50
+        },
+        "3.34": {
+          "pk": 40191,
+          "version": 52
+        },
+        "3.36": {
+          "pk": 40191,
+          "version": 52
+        },
+        "3.38": {
+          "pk": 40191,
+          "version": 52
+        },
+        "3.4": {
+          "pk": 13816,
+          "version": 30
+        },
+        "3.6": {
+          "pk": 13816,
+          "version": 30
+        },
+        "3.8": {
+          "pk": 13816,
+          "version": 30
+        },
+        "40": {
+          "pk": 40191,
+          "version": 52
+        },
+        "41": {
+          "pk": 40191,
+          "version": 52
+        },
+        "42": {
+          "pk": 40191,
+          "version": 52
+        },
+        "43": {
+          "pk": 40191,
+          "version": 52
+        },
+        "44": {
+          "pk": 40191,
+          "version": 52
+        },
+        "45": {
+          "pk": 69712,
+          "version": 69
+        },
+        "46": {
+          "pk": 69712,
+          "version": 69
+        },
+        "47": {
+          "pk": 69712,
+          "version": 69
+        },
+        "48": {
+          "pk": 69712,
+          "version": 69
+        },
+        "49": {
+          "pk": 69712,
+          "version": 69
+        },
+        "50": {
+          "pk": 69712,
+          "version": 69
+        }
+      },
+      "url": "https://github.com/kazysmaster/gnome-shell-extension-lockkeys",
+      "uuid": "lockkeys@vaina.lt"
+    }
+  ],
+  "numpages": 44,
+  "total": 25
+}

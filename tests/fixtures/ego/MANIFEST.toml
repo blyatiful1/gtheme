@@ -1,0 +1,81 @@
+# Recorded extensions.gnome.org responses. Read-only captures; tests never
+# touch the network. Regenerate with tests/fixtures/ego/record_fixtures.py.
+fetched = "2026-08-25"
+
+[query_downloads_p1]
+file = "query-downloads-p1.json"
+url = "https://extensions.gnome.org/extension-query/?shell_version=50&sort=downloads&page=1&n_per_page=25"
+method = "GET"
+sha256 = "6924ee1235a8d48871ad6bfe47e5f43fd1908f631bdf201759ea9b892f98eacb"
+bytes = 76440
+
+[query_search_blur]
+file = "query-search-blur.json"
+url = "https://extensions.gnome.org/extension-query/?shell_version=50&search=blur&sort=relevance&page=1&n_per_page=5"
+method = "GET"
+sha256 = "ae48b4bb22c446872f9be9239759cec3fa33058f2625467b15d4351471be8439"
+bytes = 7295
+
+[query_count_probe]
+file = "query-count-probe.json"
+url = "https://extensions.gnome.org/extension-query/?shell_version=50&n_per_page=1&page=1"
+method = "GET"
+sha256 = "251b69a366f2827970b78bb7fbb5fa952f6b8f1cb7b01855ff309725ced7edf4"
+bytes = 1502
+
+[query_past_end]
+file = "query-past-end.json"
+url = "https://extensions.gnome.org/extension-query/?shell_version=50&search=blur&page=999&n_per_page=25"
+method = "GET"
+sha256 = "f12f33aae2f108a4ec4c8f5247dbd1f2dcc699ec1320fc0ba0da9f3dc53dbbd7"
+bytes = 54
+
+[info_blur_my_shell]
+file = "info-blur-my-shell.json"
+url = "https://extensions.gnome.org/extension-info/?uuid=blur-my-shell@aunetx&shell_version=50"
+method = "GET"
+sha256 = "f4e3e77ca43f0c6743939fb1d0ca0829e901ae98969ceaaac127f5b2ea6a6516"
+bytes = 2027
+
+[info_blur_my_shell_noversion]
+file = "info-blur-my-shell-noversion.json"
+url = "https://extensions.gnome.org/extension-info/?uuid=blur-my-shell@aunetx"
+method = "GET"
+sha256 = "e780bb3cb61a6cd8ddd86ccdcf11d621bff55bb6ffc908a87eeca901275e623a"
+bytes = 1886
+
+[info_adb_bp_incompatible]
+file = "info-adb-bp-incompatible.json"
+url = "https://extensions.gnome.org/extension-info/?pk=4066&shell_version=50"
+method = "GET"
+sha256 = "7b2d9bb88ce375ebe55162eb84a0c4f46f70e9070539739dcc2d969d8683d201"
+bytes = 761
+
+[apiv1_blur_my_shell]
+file = "apiv1-blur-my-shell.json"
+url = "https://extensions.gnome.org/api/v1/extensions/blur-my-shell@aunetx/"
+method = "GET"
+sha256 = "a5a1e4106591542a4e200e6821af3431d0b907c5bba3ac6dd08cd51dbacea395"
+bytes = 1327
+
+[apiv1_battery_indicator]
+file = "apiv1-battery-indicator.json"
+url = "https://extensions.gnome.org/api/v1/extensions/battery-indicator@tty.gr/"
+method = "GET"
+sha256 = "c13c056cdabb23e46c62fddfb453bdc5cb41794eafb7bc153306f6b4fa167695"
+bytes = 674
+
+[comments_3193]
+file = "comments-3193.json"
+url = "https://extensions.gnome.org/comments/all/?pk=3193"
+method = "GET"
+sha256 = "201dd16b9d4514cd3ffb24a14b78c2d4da00fe1267cf530de41b5b70ae8e0093"
+bytes = 2321
+
+[update_info]
+file = "update-info.json"
+url = "https://extensions.gnome.org/update-info/?shell_version=50.4&disable_version_validation=false"
+method = "POST"
+request_body_json = """{"blur-my-shell@aunetx": {"version": 60}, "adb_bp@gnome_extensions.github.com": {"version": 1}, "nonexistent@gtheme.local": {"version": 1}}"""
+sha256 = "ba7c6a5a0bd1e6671fcbbf30f719850d8e91be95bae58adb5f02f653afe84873"
+bytes = 93
