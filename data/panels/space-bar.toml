@@ -1,0 +1,138 @@
+# Space Bar — numbered desktop buttons in the top bar.
+id = "space-bar"
+
+[target]
+uuids = ["space-bar@luchrioh"]
+ego_pk = 5090
+schema_id = "org.gnome.shell.extensions.space-bar.behavior"
+child_schemas = [
+  "org.gnome.shell.extensions.space-bar.appearance",
+  "org.gnome.shell.extensions.space-bar.shortcuts",
+  "org.gnome.shell.extensions.space-bar.state",
+]
+category = "getting things done"
+summary = "Shows numbered buttons in the top bar, one for each of your desktops, so you can see and click between them."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.space-bar.behavior"
+key = "indicator-style"
+title = "What the buttons look like"
+subtitle = "A row of numbers for every desktop, or just the name of the one you are on."
+synonyms = ["workspaces", "desktops", "indicator"]
+kind = "choice"
+[[rows.choices]]
+value = "'workspaces-bar'"
+label = "A button for every desktop"
+[[rows.choices]]
+value = "'current-workspace'"
+label = "Only the one you are on"
+[[rows.choices]]
+value = "'current-workspace-name'"
+label = "The name of the one you are on"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.space-bar.behavior"
+key = "position"
+title = "Where the buttons sit"
+subtitle = "Which part of the bar at the top they line up in."
+kind = "choice"
+[[rows.choices]]
+value = "'left'"
+label = "Left"
+[[rows.choices]]
+value = "'center'"
+label = "Middle"
+[[rows.choices]]
+value = "'right'"
+label = "Right"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.space-bar.behavior"
+key = "show-empty-workspaces"
+title = "Show desktops with nothing on them"
+subtitle = "Turn this off and only the desktops that have windows get a button."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.space-bar.behavior"
+key = "smart-workspace-names"
+title = "Name each desktop after what is on it"
+subtitle = "Labels a desktop with the app you use there most, instead of a bare number."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.space-bar.behavior"
+key = "scroll-wheel"
+title = "Switch desktops with the scroll wheel"
+subtitle = "Choose where you have to be pointing for scrolling to move you between desktops."
+kind = "choice"
+[[rows.choices]]
+value = "'panel'"
+label = "Anywhere on the top bar"
+[[rows.choices]]
+value = "'workspaces-bar'"
+label = "Only over the buttons themselves"
+[[rows.choices]]
+value = "'disabled'"
+label = "Never"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.space-bar.behavior"
+key = "toggle-overview"
+title = "Clicking the current desktop opens the app view"
+subtitle = "Click the button you are already on and you see all your windows."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.space-bar.shortcuts"
+key = "enable-activate-workspace-shortcuts"
+title = "Jump to a desktop with a number key"
+subtitle = "Turns on the key combinations that take you straight to a numbered desktop."
+synonyms = ["keyboard shortcut", "hotkey"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.space-bar.shortcuts"
+key = "back-and-forth"
+title = "Press it twice to go back"
+subtitle = "Using the same shortcut again returns you to the desktop you came from."
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.space-bar.behavior"
+key = "position-index"
+title = "How far along the top bar"
+subtitle = "Nudges the buttons past whatever else is sitting in that part of the bar."
+kind = "slider"
+clamp_min = 0
+clamp_max = 100
+step = 1
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.space-bar.appearance"
+key = "workspace-margin"
+title = "Space between the buttons"
+subtitle = "How far apart the desktop buttons sit."
+kind = "slider"
+clamp_min = 0
+clamp_max = 32
+step = 1
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.space-bar.appearance"
+key = "active-workspace-background-color"
+title = "Colour behind the desktop you are on"
+subtitle = "Marks out which button is the current one."
+kind = "color"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.space-bar.appearance"
+key = "inactive-workspace-text-color"
+title = "Colour of the other desktop numbers"
+subtitle = "The colour used for every button that is not the one you are on."
+kind = "color"
+advanced = true

@@ -1,0 +1,109 @@
+# Clipboard History — the lighter alternative to Clipboard Indicator.
+#
+# Note for whoever maintains this: this add-on ships its settings in a file
+# named after a DIFFERENT add-on. Everything here is addressed by the id
+# inside that file, never by its filename.
+id = "clipboard-history"
+
+[target]
+uuids = ["clipboard-history@alexsaveau.dev"]
+ego_pk = 4839
+schema_id = "org.gnome.shell.extensions.clipboard-history"
+conflicts = ["clipboard-indicator@tudmotu.com"]
+category = "getting things done"
+summary = "A faster, lighter list of everything you have copied, built for people who copy a lot."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.clipboard-history"
+key = "history-size"
+title = "How many copies to remember"
+subtitle = "This one is happy holding thousands of items without slowing down."
+synonyms = ["history", "clipboard"]
+kind = "slider"
+clamp_min = 1
+clamp_max = 10000
+step = 1
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.clipboard-history"
+key = "display-mode"
+title = "What to keep"
+subtitle = "Remember copied text, copied pictures, or both."
+kind = "choice"
+[[rows.choices]]
+value = "0"
+label = "Text and pictures"
+[[rows.choices]]
+value = "1"
+label = "Text only"
+[[rows.choices]]
+value = "2"
+label = "Pictures only"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.clipboard-history"
+key = "paste-on-selection"
+title = "Paste as soon as you pick something"
+subtitle = "Picking an item from the list drops it straight into whatever you are typing in."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.clipboard-history"
+key = "ignore-password-mimes"
+title = "Never remember passwords"
+subtitle = "Skips anything copied out of a password manager, so it is not kept in the list."
+synonyms = ["password", "privacy", "security"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.clipboard-history"
+key = "topbar-preview-size"
+title = "How much of each item to show"
+subtitle = "The number of letters shown for each remembered item."
+kind = "slider"
+clamp_min = 1
+clamp_max = 100
+step = 1
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.clipboard-history"
+key = "private-mode"
+title = "Pause remembering"
+subtitle = "While this is on, nothing new is added to the list."
+synonyms = ["private", "incognito", "pause"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.clipboard-history"
+key = "cache-size"
+title = "How much room the list may use"
+subtitle = "An upper limit in megabytes for everything being remembered."
+kind = "slider"
+clamp_min = 1
+clamp_max = 1024
+step = 1
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.clipboard-history"
+key = "cache-only-favorites"
+title = "Only keep the items you starred"
+subtitle = "Everything else is forgotten when you log out."
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.clipboard-history"
+key = "notify-on-copy"
+title = "Say something each time you copy"
+subtitle = "Shows a short message whenever something new is added to the list."
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.clipboard-history"
+key = "enable-keybindings"
+title = "Allow keyboard shortcuts"
+subtitle = "Turns on the key combinations that open the list and step through it."
+kind = "toggle"
+advanced = true

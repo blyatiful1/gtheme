@@ -1,0 +1,85 @@
+# Hide Top Bar — slide the top bar out of the way.
+id = "hidetopbar"
+
+[target]
+uuids = ["hidetopbar@mathieu.bidon.ca"]
+ego_pk = 545
+schema_id = "org.gnome.shell.extensions.hidetopbar"
+category = "layout"
+summary = "Slides the bar at the top of the screen out of sight until you push the mouse against the top edge."
+warn = "On this computer, hiding the top bar at the same time as frosting it has been seen to stop screen recording from working."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.hidetopbar"
+key = "enable-intellihide"
+title = "Hide only when a window is near"
+subtitle = "The bar stays put on an empty desktop and gets out of the way when a window comes close."
+synonyms = ["auto hide", "hide top bar"]
+kind = "toggle"
+warn = "On this computer, hiding the top bar while it is also set to look frosted has been seen to stop screen recording from working."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.hidetopbar"
+key = "enable-active-window"
+title = "Hide only for full-height windows"
+subtitle = "The bar only slides away when the window you are using fills the screen."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.hidetopbar"
+key = "mouse-sensitive"
+title = "Bring it back by pointing at the top"
+subtitle = "Push the mouse against the very top of the screen and the bar slides back down."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.hidetopbar"
+key = "hot-corner"
+title = "Keep the top-left corner shortcut"
+subtitle = "The corner that opens the app view keeps working even while the bar is hidden."
+synonyms = ["hot corner", "corner"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.hidetopbar"
+key = "show-in-overview"
+title = "Always show it in the app view"
+subtitle = "The bar comes back whenever you are looking at all your windows and apps."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.hidetopbar"
+key = "animation-time-autohide"
+title = "How long the slide takes"
+subtitle = "Measured in seconds. Zero makes it appear and disappear instantly."
+kind = "slider"
+clamp_min = 0.0
+clamp_max = 2.0
+step = 0.05
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.hidetopbar"
+key = "mouse-sensitive-fullscreen-window"
+title = "Also bring it back over full-screen apps"
+subtitle = "Lets you reach the bar while a film or game is filling the screen."
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.hidetopbar"
+key = "pressure-threshold"
+title = "How hard you have to push"
+subtitle = "How far the mouse has to press against the top edge before the bar comes back. Higher means you have to mean it."
+kind = "slider"
+clamp_min = 0
+clamp_max = 1000
+step = 10
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.hidetopbar"
+key = "keep-round-corners"
+title = "Keep the rounded screen corners"
+subtitle = "Leaves the softened top corners in place while the bar is hidden."
+kind = "toggle"
+advanced = true

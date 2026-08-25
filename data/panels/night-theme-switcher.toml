@@ -1,0 +1,114 @@
+# Night Theme Switcher — light by day, dark by night.
+id = "night-theme-switcher"
+
+[target]
+uuids = ["nightthemeswitcher@romainvigier.fr"]
+ego_pk = 2236
+schema_id = "org.gnome.shell.extensions.nightthemeswitcher"
+child_schemas = [
+  "org.gnome.shell.extensions.nightthemeswitcher.time",
+  "org.gnome.shell.extensions.nightthemeswitcher.color-scheme",
+  "org.gnome.shell.extensions.nightthemeswitcher.commands",
+]
+category = "looks"
+summary = "Switches the desktop between its light and dark looks on its own, at sunset and sunrise or at times you pick."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.nightthemeswitcher.color-scheme"
+key = "day"
+title = "How the desktop looks during the day"
+subtitle = "What to switch to when daytime starts."
+synonyms = ["light mode", "day"]
+kind = "choice"
+[[rows.choices]]
+value = "'default'"
+label = "Light"
+[[rows.choices]]
+value = "'prefer-light'"
+label = "Light, and ask apps to follow"
+[[rows.choices]]
+value = "'prefer-dark'"
+label = "Dark"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.nightthemeswitcher.color-scheme"
+key = "night"
+title = "How the desktop looks at night"
+subtitle = "What to switch to when night starts."
+synonyms = ["dark mode", "night"]
+kind = "choice"
+[[rows.choices]]
+value = "'prefer-dark'"
+label = "Dark"
+[[rows.choices]]
+value = "'prefer-light'"
+label = "Light, and ask apps to follow"
+[[rows.choices]]
+value = "'default'"
+label = "Light"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.nightthemeswitcher.time"
+key = "manual-schedule"
+title = "Pick the times myself"
+subtitle = "Turn this off to follow real sunrise and sunset where you are."
+synonyms = ["schedule", "sunset", "sunrise"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.nightthemeswitcher.time"
+key = "sunrise"
+title = "Daytime starts at"
+subtitle = "The hour of the morning the light look takes over. Only used when you pick the times yourself."
+kind = "slider"
+clamp_min = 0.0
+clamp_max = 23.99
+step = 0.25
+[[rows.requires_first]]
+schema_id = "org.gnome.shell.extensions.nightthemeswitcher.time"
+key = "manual-schedule"
+value = "true"
+explain = "To set your own times, gtheme also needs to stop following real sunrise and sunset."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.nightthemeswitcher.time"
+key = "sunset"
+title = "Night starts at"
+subtitle = "The hour of the evening the dark look takes over. Only used when you pick the times yourself."
+kind = "slider"
+clamp_min = 0.0
+clamp_max = 23.99
+step = 0.25
+[[rows.requires_first]]
+schema_id = "org.gnome.shell.extensions.nightthemeswitcher.time"
+key = "manual-schedule"
+value = "true"
+explain = "To set your own times, gtheme also needs to stop following real sunrise and sunset."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.nightthemeswitcher.time"
+key = "offset"
+title = "Shift the switch earlier or later"
+subtitle = "Moves both switches by up to six hours, for people who are up late."
+kind = "slider"
+clamp_min = -6.0
+clamp_max = 6.0
+step = 0.25
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.nightthemeswitcher.time"
+key = "fullscreen-transition"
+title = "Switch even during a full-screen app"
+subtitle = "Lets the change happen while you are watching something full screen."
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.nightthemeswitcher.commands"
+key = "enabled"
+title = "Run something of my own at each switch"
+subtitle = "For people who keep other programs in step with light and dark. Leave this off unless you set one up."
+kind = "toggle"
+advanced = true
+warn = "This runs a program you name every time the desktop switches. gtheme does not check what that program does."

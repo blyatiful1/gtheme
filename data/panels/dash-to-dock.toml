@@ -1,0 +1,142 @@
+# Dash to Dock — turns the strip of app icons into a permanent dock.
+id = "dash-to-dock"
+
+[target]
+uuids = ["dash-to-dock@micxgx.gmail.com"]
+ego_pk = 307
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+conflicts = ["dash-to-panel@jderose9.github.com"]
+category = "layout"
+summary = "Keeps the strip of app icons on screen all the time, on whichever edge you like, the way macOS does."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "dock-position"
+title = "Which edge it sits on"
+subtitle = "Puts the strip of app icons against the left, right, top or bottom of the screen."
+synonyms = ["dock", "taskbar", "position", "left", "bottom"]
+kind = "choice"
+[[rows.choices]]
+value = "'LEFT'"
+label = "Left edge"
+[[rows.choices]]
+value = "'RIGHT'"
+label = "Right edge"
+[[rows.choices]]
+value = "'BOTTOM'"
+label = "Bottom edge"
+[[rows.choices]]
+value = "'TOP'"
+label = "Top edge"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "dash-max-icon-size"
+title = "Icon size"
+subtitle = "How big the app icons in the strip are drawn."
+synonyms = ["bigger icons", "smaller icons"]
+kind = "slider"
+clamp_min = 16
+clamp_max = 96
+step = 2
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "dock-fixed"
+title = "Always on screen"
+subtitle = "Keeps the strip of app icons visible instead of letting it slide away."
+synonyms = ["always visible", "pinned"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "autohide"
+title = "Slide away when not in use"
+subtitle = "Hides the strip of app icons until you push the mouse against that edge of the screen."
+synonyms = ["auto hide", "hide"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "intellihide"
+title = "Hide only when a window is in the way"
+subtitle = "Leaves the strip of app icons on screen until a window would cover it."
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "transparency-mode"
+title = "How see-through the strip is"
+subtitle = "Choose a fixed amount of see-through, or let it change as windows come close."
+synonyms = ["transparency", "opacity"]
+kind = "choice"
+[[rows.choices]]
+value = "'DEFAULT'"
+label = "Match the rest of the desktop"
+[[rows.choices]]
+value = "'FIXED'"
+label = "Always the same"
+subtitle = "Use the slider below to pick how solid it looks."
+[[rows.choices]]
+value = "'DYNAMIC'"
+label = "Change as windows come close"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "background-opacity"
+title = "How solid the strip looks"
+subtitle = "Zero is invisible, one is completely solid."
+kind = "slider"
+clamp_min = 0.0
+clamp_max = 1.0
+step = 0.05
+[[rows.requires_first]]
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "transparency-mode"
+value = "'FIXED'"
+explain = "To set this yourself, gtheme also needs to stop the strip from changing on its own."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "show-trash"
+title = "Show the wastebasket"
+subtitle = "Adds a wastebasket icon to the end of the strip."
+synonyms = ["trash", "bin", "recycle bin"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "show-mounts"
+title = "Show plugged-in drives"
+subtitle = "Adds an icon for each memory stick or external drive you plug in."
+synonyms = ["usb", "drives", "disks"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "click-action"
+title = "What clicking an open app does"
+subtitle = "Choose what happens when you click the icon of an app that is already running."
+kind = "choice"
+advanced = true
+[[rows.choices]]
+value = "'launch'"
+label = "Open another copy of it"
+[[rows.choices]]
+value = "'minimize'"
+label = "Tuck its window away"
+[[rows.choices]]
+value = "'cycle-windows'"
+label = "Step through its windows"
+[[rows.choices]]
+value = "'previews'"
+label = "Show small pictures of its windows"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.dash-to-dock"
+key = "show-show-apps-button"
+title = "Show the all-apps button"
+subtitle = "Keeps the grid button that opens your full list of apps at the end of the strip."
+kind = "toggle"
+advanced = true

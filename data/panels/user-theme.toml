@@ -1,0 +1,17 @@
+# User Themes — one key, but it is the whole top-bar-style story.
+id = "user-theme"
+
+[target]
+uuids = ["user-theme@gnome-shell-extensions.gcampax.github.com"]
+ego_pk = 19
+schema_id = "org.gnome.shell.extensions.user-theme"
+category = "looks"
+summary = "Lets you use a downloaded style for the top bar and its menus. Without this add-on the desktop refuses to change them at all."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.user-theme"
+key = "name"
+title = "Top bar style"
+subtitle = "Pick a look for the bar at the top of the screen and the menus that drop out of it. Leave it empty for the one the desktop comes with."
+synonyms = ["theme", "skin", "top bar", "appearance"]
+kind = "picker"

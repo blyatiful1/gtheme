@@ -1,0 +1,87 @@
+# AppIndicator support — brings back old-style tray icons.
+id = "appindicator"
+
+[target]
+uuids = ["appindicatorsupport@rgcjonas.gmail.com"]
+ego_pk = 615
+schema_id = "org.gnome.shell.extensions.appindicator"
+category = "system"
+summary = "Brings back the small tray icons that apps like Steam, Discord and Dropbox expect, which this desktop otherwise hides."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.appindicator"
+key = "icon-size"
+title = "Tray icon size"
+subtitle = "How big those app icons are drawn. Zero lets the desktop choose."
+kind = "slider"
+clamp_min = 0
+clamp_max = 48
+step = 1
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.appindicator"
+key = "tray-pos"
+title = "Where the tray icons sit"
+subtitle = "Which part of the bar at the top they line up in."
+kind = "choice"
+[[rows.choices]]
+value = "'left'"
+label = "Left"
+[[rows.choices]]
+value = "'center'"
+label = "Middle"
+[[rows.choices]]
+value = "'right'"
+label = "Right"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.appindicator"
+key = "icon-opacity"
+title = "How solid the tray icons look"
+subtitle = "Lower settings fade them into the bar. The full range is 0 to 255."
+kind = "slider"
+clamp_min = 0
+clamp_max = 255
+step = 5
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.appindicator"
+key = "icon-saturation"
+title = "How colourful the tray icons are"
+subtitle = "Below zero drains the colour out of them; above zero makes it stronger."
+kind = "slider"
+clamp_min = -1.0
+clamp_max = 1.0
+step = 0.05
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.appindicator"
+key = "icon-brightness"
+title = "How bright the tray icons are"
+subtitle = "Nudges every tray icon lighter or darker."
+kind = "slider"
+clamp_min = -1.0
+clamp_max = 1.0
+step = 0.05
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.appindicator"
+key = "icon-contrast"
+title = "Tray icon contrast"
+subtitle = "Makes the light and dark parts of each icon further apart or closer together."
+kind = "slider"
+clamp_min = -1.0
+clamp_max = 1.0
+step = 0.05
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.appindicator"
+key = "legacy-tray-enabled"
+title = "Also support older apps"
+subtitle = "Shows tray icons from apps that use the older way of asking for one."
+synonyms = ["old apps", "tray"]
+kind = "toggle"
+advanced = true

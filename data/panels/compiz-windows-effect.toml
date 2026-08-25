@@ -1,0 +1,90 @@
+# Compiz windows effect — wobbly windows.
+#
+# Promoted into the curated set: it is installed on this machine, sits at
+# roughly a million downloads, and the whole add-on fits in five controls.
+id = "compiz-windows-effect"
+
+[target]
+uuids = ["compiz-windows-effect@hermes83.github.com"]
+ego_pk = 3210
+schema_id = "org.gnome.shell.extensions.com.github.hermes83.compiz-windows-effect"
+category = "looks"
+summary = "Windows wobble like jelly when you drag them around the screen."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.com.github.hermes83.compiz-windows-effect"
+key = "friction"
+title = "How quickly the wobble settles"
+subtitle = "Higher settings make the window stop shaking sooner."
+synonyms = ["wobble", "damping", "jelly"]
+kind = "slider"
+clamp_min = 1.0
+clamp_max = 10.0
+step = 0.1
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.com.github.hermes83.compiz-windows-effect"
+key = "spring-k"
+title = "How springy the window is"
+subtitle = "Higher settings make it snap back to shape harder."
+kind = "slider"
+clamp_min = 1.0
+clamp_max = 10.0
+step = 0.1
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.com.github.hermes83.compiz-windows-effect"
+key = "mass"
+title = "How heavy the window feels"
+subtitle = "Heavier windows sag further behind the mouse as you drag them."
+kind = "slider"
+clamp_min = 10.0
+clamp_max = 200.0
+step = 5.0
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.com.github.hermes83.compiz-windows-effect"
+key = "maximize-effect"
+title = "Wobble when a window fills the screen"
+subtitle = "Adds the same jelly movement when a window is made to fill the whole screen."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.com.github.hermes83.compiz-windows-effect"
+key = "resize-effect"
+title = "Wobble while you change a window's size"
+subtitle = "Adds the jelly movement when you drag a window's corner."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.com.github.hermes83.compiz-windows-effect"
+key = "speedup-factor-divider"
+title = "Overall speed"
+subtitle = "Higher settings slow the whole wobble down."
+kind = "slider"
+clamp_min = 1.0
+clamp_max = 30.0
+step = 0.5
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.com.github.hermes83.compiz-windows-effect"
+key = "x-tiles"
+title = "Detail across"
+subtitle = "How finely the window is cut up sideways while it wobbles. Higher looks smoother and asks more of the graphics card."
+kind = "slider"
+clamp_min = 2
+clamp_max = 30
+step = 1
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.com.github.hermes83.compiz-windows-effect"
+key = "y-tiles"
+title = "Detail down"
+subtitle = "How finely the window is cut up top to bottom while it wobbles."
+kind = "slider"
+clamp_min = 2
+clamp_max = 30
+step = 1
+advanced = true

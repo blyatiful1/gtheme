@@ -1,0 +1,88 @@
+# Caffeine — stop the screen dimming, locking or sleeping.
+id = "caffeine"
+
+[target]
+uuids = ["caffeine@patapon.info"]
+ego_pk = 517
+schema_id = "org.gnome.shell.extensions.caffeine"
+category = "system"
+summary = "Adds a switch to the top bar that stops the screen dimming, locking or going to sleep while you are watching or presenting something."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.caffeine"
+key = "user-enabled"
+title = "Keep the screen awake right now"
+subtitle = "While this is on, the screen will not dim, lock or go to sleep on its own."
+synonyms = ["stay awake", "no sleep", "presentation"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.caffeine"
+key = "restore-state"
+title = "Remember this after a restart"
+subtitle = "Comes back on by itself the next time you log in."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.caffeine"
+key = "show-indicator"
+title = "When to show the cup in the top bar"
+subtitle = "The little cup that tells you the screen is being kept awake."
+kind = "choice"
+[[rows.choices]]
+value = "'only-active'"
+label = "Only while the screen is being kept awake"
+[[rows.choices]]
+value = "'always'"
+label = "Always"
+[[rows.choices]]
+value = "'never'"
+label = "Never"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.caffeine"
+key = "enable-fullscreen"
+title = "Stay awake for full-screen apps"
+subtitle = "Automatically keeps the screen awake whenever something is playing full screen, such as a film."
+synonyms = ["video", "fullscreen", "movie"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.caffeine"
+key = "screen-blank"
+title = "Also stop the screen going black"
+subtitle = "Choose whether the screen is allowed to go dark while the computer is being kept awake."
+kind = "choice"
+[[rows.choices]]
+value = "'never'"
+label = "Never let it go dark"
+[[rows.choices]]
+value = "'always'"
+label = "Let it go dark as usual"
+[[rows.choices]]
+value = "'for-apps'"
+label = "Only for the apps in the list"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.caffeine"
+key = "show-notifications"
+title = "Say something when it switches"
+subtitle = "Shows a short message each time the screen starts or stops being kept awake."
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.caffeine"
+key = "use-custom-duration"
+title = "Switch off again after a while"
+subtitle = "Keeps the screen awake for a set time instead of until you turn it off yourself."
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.caffeine"
+key = "show-timer"
+title = "Show the countdown"
+subtitle = "Puts the time remaining next to the cup in the top bar."
+kind = "toggle"
+advanced = true

@@ -1,0 +1,149 @@
+# Dash to Panel — one Windows-style taskbar.
+#
+# Several of this add-on's headline settings are stored as text keyed by
+# which screen you are on, one entry per monitor. gtheme does not try to edit
+# those: they are out of scope on purpose, and the Add-ons page offers the
+# add-on's own settings window for them.
+id = "dash-to-panel"
+
+[target]
+uuids = ["dash-to-panel@jderose9.github.com"]
+ego_pk = 1160
+schema_id = "org.gnome.shell.extensions.dash-to-panel"
+conflicts = ["dash-to-dock@micxgx.gmail.com"]
+category = "layout"
+summary = "Merges the bar at the top and the strip of app icons into one taskbar, the way Windows lays things out."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.dash-to-panel"
+key = "show-favorites"
+title = "Show your favourite apps"
+subtitle = "Keeps the apps you pinned on the taskbar even when they are not running."
+synonyms = ["favourites", "favorites", "pinned"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.dash-to-panel"
+key = "group-apps"
+title = "Group windows of the same app"
+subtitle = "One icon per app instead of one icon per open window."
+synonyms = ["combine", "group", "taskbar buttons"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.dash-to-panel"
+key = "appicon-style"
+title = "How app icons are drawn"
+subtitle = "Full colour, plain outlines, or drained of colour."
+kind = "choice"
+[[rows.choices]]
+value = "'NORMAL'"
+label = "Full colour"
+[[rows.choices]]
+value = "'SYMBOLIC'"
+label = "Plain outlines"
+[[rows.choices]]
+value = "'GRAYSCALE'"
+label = "Grey"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.dash-to-panel"
+key = "dot-style-focused"
+title = "How running apps are marked"
+subtitle = "The little mark that tells you an app is open."
+kind = "choice"
+[[rows.choices]]
+value = "'DOTS'"
+label = "Dots"
+[[rows.choices]]
+value = "'SQUARES'"
+label = "Squares"
+[[rows.choices]]
+value = "'DASHES'"
+label = "Dashes"
+[[rows.choices]]
+value = "'SEGMENTED'"
+label = "Segments"
+[[rows.choices]]
+value = "'SOLID'"
+label = "A solid bar"
+[[rows.choices]]
+value = "'METRO'"
+label = "A filled block behind the icon"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.dash-to-panel"
+key = "dot-position"
+title = "Where that mark sits"
+subtitle = "Which side of the app icon the running mark is drawn on."
+kind = "choice"
+[[rows.choices]]
+value = "'BOTTOM'"
+label = "Below the icon"
+[[rows.choices]]
+value = "'TOP'"
+label = "Above the icon"
+[[rows.choices]]
+value = "'LEFT'"
+label = "To the left"
+[[rows.choices]]
+value = "'RIGHT'"
+label = "To the right"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.dash-to-panel"
+key = "trans-use-custom-opacity"
+title = "Set how see-through the bar is myself"
+subtitle = "Takes over from the amount your chosen look picks."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.dash-to-panel"
+key = "trans-panel-opacity"
+title = "How solid the bar looks"
+subtitle = "Zero is invisible, one is completely solid."
+kind = "slider"
+clamp_min = 0.0
+clamp_max = 1.0
+step = 0.05
+[[rows.requires_first]]
+schema_id = "org.gnome.shell.extensions.dash-to-panel"
+key = "trans-use-custom-opacity"
+value = "true"
+explain = "To set this yourself, gtheme also needs to stop the bar from taking the amount from your chosen look."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.dash-to-panel"
+key = "show-favorites-all-monitors"
+title = "Show favourites on every screen"
+subtitle = "Repeats your pinned apps on each of your screens."
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.dash-to-panel"
+key = "animate-appicon-hover"
+title = "Bounce icons when you point at them"
+subtitle = "Gives the app icons a small movement as the mouse passes over."
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.dash-to-panel"
+key = "group-apps-label-max-width"
+title = "How wide app names may be"
+subtitle = "Only used when each window gets its own button rather than being grouped."
+kind = "slider"
+clamp_min = 0
+clamp_max = 500
+step = 10
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.dash-to-panel"
+key = "isolate-workspaces"
+title = "Only show apps from this desktop"
+subtitle = "The taskbar lists what is open here, not everything open everywhere."
+synonyms = ["workspaces", "desktops"]
+kind = "toggle"
+advanced = true

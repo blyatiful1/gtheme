@@ -1,0 +1,150 @@
+# ArcMenu — a full start menu.
+id = "arcmenu"
+
+[target]
+uuids = ["arcmenu@arcmenu.com"]
+ego_pk = 3628
+schema_id = "org.gnome.shell.extensions.arcmenu"
+child_schemas = ["org.gnome.shell.extensions.arcmenu.pinned-apps-folders"]
+category = "layout"
+summary = "Adds a proper start menu with categories, search and pinned apps, in place of the full-screen app view."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.arcmenu"
+key = "menu-layout"
+title = "Shape of the menu"
+subtitle = "The single decision that changes everything else: which desktop's start menu this should feel like."
+synonyms = ["start menu", "layout", "style"]
+kind = "choice"
+[[rows.choices]]
+value = "'arcmenu'"
+label = "The add-on's own"
+subtitle = "Pinned apps down one side, categories down the other."
+[[rows.choices]]
+value = "'windows'"
+label = "Windows 11 style"
+[[rows.choices]]
+value = "'redmond'"
+label = "Windows 7 style"
+[[rows.choices]]
+value = "'mint'"
+label = "Linux Mint style"
+[[rows.choices]]
+value = "'unity'"
+label = "Full-screen grid"
+[[rows.choices]]
+value = "'elementary'"
+label = "A plain grid of apps"
+[[rows.choices]]
+value = "'runner'"
+label = "Just a search box"
+[[rows.choices]]
+value = "'gnome-menu'"
+label = "A simple list of categories"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.arcmenu"
+key = "position-in-panel"
+title = "Where the button sits"
+subtitle = "Which part of the bar at the top the menu button appears in."
+kind = "choice"
+[[rows.choices]]
+value = "'Left'"
+label = "Left"
+[[rows.choices]]
+value = "'Center'"
+label = "Middle"
+[[rows.choices]]
+value = "'Right'"
+label = "Right"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.arcmenu"
+key = "menu-button-icon-size"
+title = "Menu button size"
+subtitle = "How big the button that opens the menu is drawn."
+kind = "slider"
+clamp_min = 8
+clamp_max = 64
+step = 1
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.arcmenu"
+key = "max-search-results"
+title = "How many search results to show"
+subtitle = "More results fill the menu; fewer keep it short."
+kind = "slider"
+clamp_min = 1
+clamp_max = 20
+step = 1
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.arcmenu"
+key = "multi-monitor"
+title = "Open on whichever screen the mouse is on"
+subtitle = "Useful when you have more than one screen."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.arcmenu"
+key = "menu-position-alignment"
+title = "How far along the screen the menu opens"
+subtitle = "Nudges the open menu sideways. Fifty puts it in the middle."
+kind = "slider"
+clamp_min = 0
+clamp_max = 100
+step = 1
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.arcmenu"
+key = "override-menu-theme"
+title = "Give the menu its own colours"
+subtitle = "Stops the menu following your desktop look, so you can colour it yourself."
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.arcmenu"
+key = "menu-background-color"
+title = "Menu background colour"
+subtitle = "Only used while the menu has its own colours."
+kind = "color"
+advanced = true
+[[rows.requires_first]]
+schema_id = "org.gnome.shell.extensions.arcmenu"
+key = "override-menu-theme"
+value = "true"
+explain = "To colour the menu yourself, gtheme also needs to stop it following your desktop look."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.arcmenu"
+key = "menu-font-size"
+title = "Menu text size"
+subtitle = "Only used while the menu has its own colours."
+kind = "slider"
+clamp_min = 6
+clamp_max = 30
+step = 1
+advanced = true
+[[rows.requires_first]]
+schema_id = "org.gnome.shell.extensions.arcmenu"
+key = "override-menu-theme"
+value = "true"
+explain = "To set the menu's text size yourself, gtheme also needs to stop it following your desktop look."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.arcmenu"
+key = "show-search-result-details"
+title = "Show a line about each search result"
+subtitle = "Adds a short description under every result, instead of just its name."
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.arcmenu"
+key = "highlight-search-result-terms"
+title = "Highlight what you typed in the results"
+subtitle = "Marks out the letters you searched for inside each result."
+kind = "toggle"
+advanced = true
