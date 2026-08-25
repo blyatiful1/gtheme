@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# netrunner-ice — the ICE lamp. lavat (AngelJumbo/lavat) dressed for Night City.
+#
+# Modes (all truecolor via -g, exact hues independent of terminal palette):
+#   ice            calm cyan glow lamp (black->cyan->white ramp: dark edges,
+#                  hot cores — shaded, not flat)       (the daily driver)
+#   ice duo        cyan-core / hot-pink-rim duotone    (the Edgerunners vein)
+#   ice breach     dense icy shards, brisk             (ICE breach in progress)
+#   ice reactor    gravity/buoyancy churn              (thermal core)
+#   ice street     16-color mode — hues come from the terminal palette,
+#                  so it recolors itself with whatever theme is applied
+# Runtime keys (lavat): +/- speed, i/d radius, m/l ball count, q/ESC quit.
+
+set -euo pipefail
+
+if ! command -v lavat >/dev/null 2>&1; then
+  echo "netrunner-ice: lavat not found on PATH (expected ~/.local/bin/lavat)." >&2
+  echo "build: git clone https://github.com/AngelJumbo/lavat && cd lavat && make && install -Dm755 lavat ~/.local/bin/lavat" >&2
+  exit 127
+fi
+
+mode="${1:-ice}"
+
+# -g needs COLORTERM=truecolor|24bit (lavat aborts otherwise). Ptyxis and
+# Alacritty both advertise it; anything else falls back to palette mode.
+truecolor=0
+case "${COLORTERM:-}" in truecolor|24bit) truecolor=1 ;; esac
+
+case "$mode" in
+  ice|lamp)
+    if [ "$truecolor" -eq 1 ]; then
+      # single -c builds a black->cyan->white shading ramp: glowing HUD
+      # plasma with dark edges and white-hot cores, slow drift
+      exec lavat -g -c 00F0FF -s 2 -r 7 -b 8
+    else
+      exec lavat -c cyan -k cyan -R 2 -s 2 -r 7 -b 8
+    fi
+    ;;
+  duo)
+    if [ "$truecolor" -eq 1 ]; then
+      # gradient runs first-color(rim) -> second-color(core), so pink goes
+      # FIRST to keep the body cyan (screen-verified: c=core-opposite)
+      exec lavat -g -c FF2E97 -k 00F0FF -s 2 -r 6 -b 8
+    else
+      exec lavat -c magenta -k cyan -R 2 -s 2 -r 6 -b 8
+    fi
+    ;;
+  breach)
+    # no -C here: lavat's own help warns containment renders poorly with
+    # many balls — free-flowing shards look better anyway
+    if [ "$truecolor" -eq 1 ]; then
+      # cyan -> pale ice, brisk, many small shards
+      exec lavat -g -c 00E5FF -k CFFBFF -s 6 -r 4 -b 16
+    else
+      exec lavat -c cyan -k white -R 1 -s 6 -r 4 -b 16
+    fi
+    ;;
+  reactor)
+    if [ "$truecolor" -eq 1 ]; then
+      # gravity + buoyancy: blobs heat at the floor, rise, cool, fall
+      exec lavat -G -g -c 00E5FF -k BFF7FF -s 5 -r 5 -b 16
+    else
+      exec lavat -G -c cyan -k blue -R 2 -s 5 -r 5 -b 16
+    fi
+    ;;
+  street)
+    # palette-driven on purpose: slot 6/5 of the live terminal palette
+    exec lavat -c cyan -k magenta -R 2 -s 2 -r 8 -b 7
+    ;;
+  -h|--help|help)
+    sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
+    ;;
+  *)
+    echo "netrunner-ice: unknown mode '$mode' (ice|breach|reactor|street)" >&2
+    exit 2
+    ;;
+esac

@@ -1,0 +1,612 @@
+#!/usr/bin/env python3
+"""magma-vitals — the greeting: the vent, ignited, beside your machine's vitals.
+
+The obsidian vent from the old static greeting card, brought to life: it
+flickers awake, embers pop off the tip, and a vitals readout sweeps in with
+a molten leading edge — CPU / MEM / DISK / GPU gauges filling to live values
+(read from /proc, /sys and an async nvidia-smi) — then everything cools calm
+and hands you the prompt. Plain ANSI in the normal buffer, so the card stays
+in scrollback; foreground-only paint keeps the glass glowing through it.
+
+    magma-vitals              # ~1.4 s animation; any key skips to the card
+    magma-vitals --static     # final card only, no animation
+
+The skip key is peeked, never read — type your command during the animation
+and it lands intact at the prompt. Ctrl-C completes the card instantly.
+Without a TTY it prints the static card. Deterministic hash jitter, no RNG
+(except the quote pick, which is seeded per shell like `shuf`).
+"""
+import os
+import select
+import shutil
+import subprocess
+import sys
+import time
+import unicodedata
+
+ESC = "\x1b"
+RESET = ESC + "[0m"
+BOLD = ESC + "[1m"
+ITAL = ESC + "[3m"
+HIDE = ESC + "[?25l"
+SHOW = ESC + "[?25h"
+
+# Obsidian Flow palette (truecolor)
+ASH = (122, 100, 112)
+CRIMSON = (224, 48, 78)
+LAVA = (255, 109, 58)
+LAVA_BRIGHT = (255, 160, 92)
+GOLD = (255, 193, 69)
+WHITE_HOT = (255, 246, 232)
+TEAL = (69, 199, 181)
+PARCHMENT = (242, 229, 213)
+
+# Heat ramp: obsidian -> plum -> maroon -> crimson -> lava -> gold -> white-hot.
+STOPS = (
+    (0.00, (13, 10, 15)),
+    (0.30, (38, 16, 34)),
+    (0.46, (96, 24, 40)),
+    (0.60, (224, 48, 78)),
+    (0.72, (255, 109, 58)),
+    (0.84, (255, 193, 69)),
+    (0.94, (255, 238, 190)),
+    (1.00, (255, 252, 235)),
+)
+RAMP_N = 112
+
+
+def fg(rgb):
+    return ESC + "[38;2;%d;%d;%dm" % rgb
+
+
+def _build_ramp():
+    fgs = []
+    for i in range(RAMP_N):
+        t = i / (RAMP_N - 1)
+        r = g = b = 0
+        for (t0, c0), (t1, c1) in zip(STOPS, STOPS[1:]):
+            if t <= t1:
+                k = 0.0 if t1 == t0 else (t - t0) / (t1 - t0)
+                r = int(c0[0] + (c1[0] - c0[0]) * k)
+                g = int(c0[1] + (c1[1] - c0[1]) * k)
+                b = int(c0[2] + (c1[2] - c0[2]) * k)
+                break
+        fgs.append(fg((r, g, b)))
+    return fgs
+
+
+FG = _build_ramp()
+LADDER = (TEAL, GOLD, LAVA_BRIGHT, LAVA, CRIMSON, WHITE_HOT)   # gauge, cold->hot
+
+
+def jitter(n):
+    """Deterministic pseudo-random 0..2^32 from an integer."""
+    return (n * 2654435761 + 1013904223) & 0xFFFFFFFF
+
+
+# ── the vent (the old static card's stone, kept as the final calm state) ──
+VENT = (
+    "    ▂▃▂     ",
+    "   ▟█▓█▙    ",
+    "  ▄██▓██▄   ",
+    " ▄███████▄  ",
+    "▔▔▔▔▔▔▔▔▔▔▔ ",
+)
+LEFTW = 13
+VENT_CALM = (0.74, 0.70, 0.60, 0.37, 0.33)     # per-row heat at rest
+SKY_ROWS = 3                                    # ember space above the vent
+EMBER_GLYPHS = ("✦", "*", "•", "·", "˚")
+
+FPS = 30.0
+SETTLE = 42                                     # tick of the final frame
+CPU_TICK = 12                                   # second /proc/stat sample
+BRAND = "『O B S I D I A N   F L O W』"
+
+
+# ── stats ─────────────────────────────────────────────────────────────────
+
+def read_cpu_stat():
+    with open("/proc/stat") as f:
+        parts = f.readline().split()[1:11]
+    vals = [int(v) for v in parts]
+    idle = vals[3] + vals[4]
+    return idle, sum(vals)
+
+
+def cpu_percent(s0, s1):
+    didle, dtotal = s1[0] - s0[0], s1[1] - s0[1]
+    if dtotal <= 0:
+        return 0.0
+    return max(0.0, min(100.0, 100.0 * (dtotal - didle) / dtotal))
+
+
+def cpu_temp():
+    try:
+        for hw in os.scandir("/sys/class/hwmon"):
+            try:
+                with open(os.path.join(hw.path, "name")) as f:
+                    name = f.read().strip()
+                if name in ("k10temp", "coretemp", "zenpower"):
+                    with open(os.path.join(hw.path, "temp1_input")) as f:
+                        return int(f.read()) / 1000.0
+            except OSError:
+                continue
+    except OSError:
+        pass
+    return None
+
+
+def short_cpu_model():
+    model = ""
+    try:
+        with open("/proc/cpuinfo") as f:
+            for line in f:
+                if line.startswith("model name"):
+                    model = line.split(":", 1)[1].strip()
+                    break
+    except OSError:
+        return ""
+    for junk in ("AMD ", "Intel(R) ", "(R)", "(TM)", " CPU"):
+        model = model.replace(junk, "")
+    for tail in ("-Core Processor", " Processor"):
+        if tail in model:
+            model = model.split(tail)[0]
+            if tail == "-Core Processor":                # drop the core count
+                model = model.rsplit(" ", 1)[0]
+    return model.split("@")[0].strip()
+
+
+def gpu_name():
+    try:
+        for entry in os.scandir("/proc/driver/nvidia/gpus"):
+            with open(os.path.join(entry.path, "information")) as f:
+                for line in f:
+                    if line.startswith("Model:"):
+                        return line.split(":", 1)[1].strip().replace(
+                            "NVIDIA GeForce ", "")
+    except OSError:
+        pass
+    return None
+
+
+def spawn_gpu_query():
+    try:
+        return subprocess.Popen(
+            ["nvidia-smi", "--query-gpu=temperature.gpu,utilization.gpu,"
+             "memory.used,memory.total", "--format=csv,noheader,nounits"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    except OSError:
+        return None
+
+
+def parse_gpu(proc):
+    """(temp°C, util%, vram_used GiB, vram_total GiB) or None."""
+    try:
+        line = proc.stdout.read().strip().splitlines()
+        vals = [float(v) for v in line[0].split(",")] if line else []
+        if len(vals) == 4:
+            return vals[0], vals[1], vals[2] / 1024.0, vals[3] / 1024.0
+    except (OSError, ValueError, IndexError):
+        pass
+    return None
+
+
+def fmt_uptime():
+    try:
+        with open("/proc/uptime") as f:
+            s = float(f.read().split()[0])
+    except OSError:
+        return ""
+    d, rem = divmod(int(s), 86400)
+    h, rem = divmod(rem, 3600)
+    m = rem // 60
+    if d:
+        return "up %dd %dh" % (d, h)
+    if h:
+        return "up %dh %dm" % (h, m)
+    return "up %dm" % m
+
+
+def gather():
+    st = {}
+    uname = os.uname()
+    st["user"] = os.environ.get("USER") or "you"
+    st["host"] = uname.nodename
+    st["kernel"] = uname.release
+    st["os"] = "Linux"
+    try:
+        with open("/etc/os-release") as f:
+            for line in f:
+                if line.startswith("PRETTY_NAME="):
+                    st["os"] = line.split("=", 1)[1].strip().strip('"')
+                    break
+    except OSError:
+        pass
+    st["cpu_model"] = short_cpu_model()
+    st["gpu_name"] = gpu_name()
+    st["uptime"] = fmt_uptime()
+    try:
+        st["pkgs"] = sum(1 for e in os.scandir("/var/lib/pacman/local")
+                         if e.is_dir())
+    except OSError:
+        st["pkgs"] = None
+    mem_total = mem_avail = 0
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemTotal:"):
+                    mem_total = int(line.split()[1])
+                elif line.startswith("MemAvailable:"):
+                    mem_avail = int(line.split()[1])
+                if mem_total and mem_avail:
+                    break
+    except OSError:
+        pass
+    st["mem_tot"] = mem_total / 1048576.0
+    st["mem_used"] = max(mem_total - mem_avail, 0) / 1048576.0
+    try:
+        vfs = os.statvfs("/")
+        used = (vfs.f_blocks - vfs.f_bfree) * vfs.f_frsize
+        avail = vfs.f_bavail * vfs.f_frsize
+        st["disk_used"] = used / 1073741824.0
+        st["disk_tot"] = (used + avail) / 1073741824.0
+    except OSError:
+        st["disk_used"] = st["disk_tot"] = 0.0
+    st["cpu_temp"] = cpu_temp()
+    st["stat0"] = read_cpu_stat()
+    # provisional CPU target until the second /proc/stat sample lands
+    try:
+        st["cpu_pct"] = min(os.getloadavg()[0] / (os.cpu_count() or 1), 1.0) * 100
+    except OSError:
+        st["cpu_pct"] = 0.0
+    st["cpu_final"] = False
+    st["gpu"] = None
+    return st
+
+
+def pick_quote():
+    path = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                        os.pardir, "ascii", "quotes.txt")
+    try:
+        with open(path, encoding="utf-8") as f:
+            lines = [ln.strip() for ln in f if ln.strip()]
+    except OSError:
+        return None
+    if not lines:
+        return None
+    line = lines[jitter(os.getpid() ^ time.time_ns()) % len(lines)]
+    parts = line.split(" — ", 1)
+    return parts[0], (parts[1] if len(parts) > 1 else None)
+
+
+# ── styled-char assembly (a line is a list of (char, sgr) cells) ──────────
+
+def seg(text, sgr):
+    return [(ch, sgr) for ch in text]
+
+
+def heat_sgr(h):
+    return FG[max(0, min(int(h * (RAMP_N - 1)), RAMP_N - 1))]
+
+
+def temp_rgb(t):
+    return TEAL if t < 45 else GOLD if t < 62 else LAVA if t < 78 else CRIMSON
+
+
+def bar_cells(frac, width):
+    """Heat-graded gauge, same language as magma-thermal."""
+    filled = max(0, min(int(frac * width + 0.5), width))
+    cells = [("▰", fg(LADDER[min(i * len(LADDER) // width, len(LADDER) - 1)]))
+             for i in range(filled)]
+    cells += [("▱", fg(ASH))] * (width - filled)
+    return cells
+
+
+def gauge_line(label, shown, target, value_cells, barw):
+    line = seg("%-5s" % label, fg(PARCHMENT))
+    line += bar_cells(shown, barw)
+    line += seg(" ", "")
+    line += value_cells
+    return line
+
+
+def build_lines(st, tick, quote, slim, barw):
+    """The right-hand column: (start_tick, cells) per logical line."""
+    a = fg(ASH)
+    dot = seg(" · ", a)
+    u = {}                                       # per-gauge fill progress 0..1
+    for k in ("cpu", "mem", "disk", "gpu"):
+        g = st["gauges"][k]
+        u[k] = min(g["shown"] / g["target"], 1.0) if g["target"] > 0 else \
+            (1.0 if tick >= SETTLE or g["gate"] <= tick - 14 else 0.0)
+
+    title = seg(BRAND, BOLD + fg(GOLD))
+
+    l1 = (seg(st["user"], BOLD + fg(GOLD)) + seg(" @ ", a)
+          + seg(st["host"], BOLD + fg(PARCHMENT)) + dot
+          + seg(st["os"], fg(LAVA)))
+    if not slim:
+        l1 += dot + seg(st["kernel"], a)
+
+    l2 = []
+    if not slim and st["cpu_model"]:
+        l2 += seg(st["cpu_model"], fg(PARCHMENT)) + dot
+    if not slim and st["gpu_name"]:
+        l2 += seg(st["gpu_name"], fg(PARCHMENT)) + dot
+    l2 += seg(st["uptime"], fg(TEAL))
+    if st["pkgs"]:
+        l2 += dot + seg("%d pkgs" % st["pkgs"], a)
+
+    rule = seg("─" * (barw + 26), a)
+
+    def pct_cells(pct, prog, temp, show_temp):
+        shown_pct = pct * prog
+        cells = seg("%3.0f%%" % shown_pct,
+                    BOLD + fg(LADDER[min(int(shown_pct / 100 * len(LADDER)),
+                                         len(LADDER) - 1)]))
+        if temp is not None and show_temp:
+            cells += dot + seg("%.0f°C" % temp, fg(temp_rgb(temp)))
+        return cells
+
+    def gib_cells(used, tot, prog, dec):
+        f = "%4.1f" if dec else "%4.0f"
+        return (seg(f % (used * prog), BOLD + fg(PARCHMENT))
+                + seg(" / " + (f % tot).strip() + " GiB", a))
+
+    g = st["gauges"]
+    show = {k: tick >= g[k]["gate"] + 12 or tick >= SETTLE
+            for k in ("cpu", "mem", "disk", "gpu")}
+    cpu = gauge_line("CPU", g["cpu"]["shown"], g["cpu"]["target"],
+                     pct_cells(st["cpu_pct"], u["cpu"], st["cpu_temp"],
+                               show["cpu"]), barw)
+    mem = gauge_line("MEM", g["mem"]["shown"], g["mem"]["target"],
+                     gib_cells(st["mem_used"], st["mem_tot"], u["mem"], True),
+                     barw)
+    dsk = gauge_line("DISK", g["disk"]["shown"], g["disk"]["target"],
+                     gib_cells(st["disk_used"], st["disk_tot"], u["disk"],
+                               False), barw)
+    if st["gpu"] is not None:
+        gt, gu, vu, vt = st["gpu"]
+        vals = pct_cells(gu, u["gpu"], gt, show["gpu"])
+        if not slim and show["gpu"]:
+            vals += dot + gib_cells(vu, vt, 1.0, True)
+        gpu = gauge_line("GPU", g["gpu"]["shown"], g["gpu"]["target"], vals,
+                         barw)
+    else:
+        gpu = (seg("%-5s" % "GPU", fg(PARCHMENT))
+               + seg(st["gpu_name"] or "—", a))
+
+    lines = [(2, title), (4, l1), (6, l2), (8, rule),
+             (10, cpu), (13, mem), (16, dsk), (19, gpu)]
+    if quote:
+        q = seg("“%s”" % quote[0], ITAL + fg(ASH))
+        if quote[1]:
+            q += seg(" — " + quote[1], fg(LAVA))
+        lines.append((23, q))
+    return lines
+
+
+def reveal(cells, start, tick):
+    """Sweep a line in behind a molten leading edge."""
+    if tick >= SETTLE:
+        return cells
+    p = (tick - start) * 6
+    if p <= 0:
+        return []
+    vis = list(cells[:p])
+    for j, (rgb, attr) in enumerate(((WHITE_HOT, BOLD), (GOLD, ""),
+                                     (LAVA_BRIGHT, ""))):
+        i = p - 1 - j
+        if 0 <= i < len(vis) and vis[i][0] != " ":
+            vis[i] = (vis[i][0], attr + fg(rgb))
+    return vis
+
+
+def vent_cells(row, tick):
+    """One vent row, glyphs heat-graded: igniting, flickering, then calm."""
+    ig = 0.30 + 0.70 * min(tick / 6.0, 1.0)
+    act = 1.0 if tick < 28 else max(0.0, 1.0 - (tick - 28) / 12.0)
+    if tick >= SETTLE:
+        ig, act = 1.0, 0.0
+    cells = []
+    for x, ch in enumerate(VENT[row]):
+        if ch == " ":
+            cells.append((" ", ""))
+            continue
+        h = VENT_CALM[row] + 0.05 * (1.0 - abs(x - 5.5) / 6.0)
+        if ch == "▓":
+            h += 0.12
+        if act > 0:
+            flick = (jitter((tick // 2) * 7919 + row * 131 + x * 17)
+                     % 1000) / 500.0 - 1.0
+            h += act * (0.13 + 0.11 * flick)
+        cells.append((ch, heat_sgr(h * ig)))
+    cells.append((" ", ""))                       # pad to LEFTW
+    return cells
+
+
+def sky_cells(tick):
+    """SKY_ROWS x LEFTW of drifting embers above the vent; empty at rest."""
+    grid = [[(" ", "")] * LEFTW for _ in range(SKY_ROWS)]
+    if tick >= SETTLE:
+        return grid
+    for i in range(10):
+        birth = 3 + int(i * 2.6) + jitter(i * 997) % 2
+        age = tick - birth
+        if not 0 <= age < 9:
+            continue
+        y = 2.85 - 0.40 * age
+        drift = ((jitter(i * 331) >> 5) % 3 - 1) * 0.18
+        x = 3 + (jitter(i * 613) >> 3) % 7 + drift * age
+        yi, xi = int(y), int(x + 0.5)
+        if 0 <= yi < SKY_ROWS and 0 <= xi < LEFTW:
+            glyph = EMBER_GLYPHS[min(age // 2, len(EMBER_GLYPHS) - 1)]
+            grid[yi][xi] = (glyph, heat_sgr(0.96 - 0.10 * age))
+    return grid
+
+
+def compose(st, tick, quote, slim, barw):
+    """All card rows for one tick, as styled-cell lists."""
+    lines = build_lines(st, tick, quote, slim, barw)
+    sky = sky_cells(tick)
+    rows = []
+    for r in range(SKY_ROWS):                          # title / id / hw
+        rows.append(sky[r] + seg(" ", "") + reveal(lines[r][1],
+                                                   lines[r][0], tick))
+    for r in range(len(VENT)):                         # rule + gauges
+        start, cells = lines[SKY_ROWS + r]
+        rows.append(vent_cells(r, tick) + seg(" ", "")
+                    + reveal(cells, start, tick))
+    if quote:
+        rows.append([])
+        rows.append(seg("  ", "") + reveal(lines[-1][1], lines[-1][0], tick))
+    return rows
+
+
+def emit_row(cells, maxw):
+    out, last, w = [], None, 0
+    for ch, sgr in cells:
+        w += 2 if unicodedata.east_asian_width(ch) in "WF" else 1
+        if w > maxw:
+            break
+        if sgr != last:
+            out.append(RESET + sgr)
+            last = sgr
+        out.append(ch)
+    out.append(RESET)
+    return "".join(out)
+
+
+# ── update & main ─────────────────────────────────────────────────────────
+
+def init_gauges(st):
+    st["gauges"] = {
+        "cpu": {"target": st["cpu_pct"] / 100.0, "shown": 0.0, "gate": 10},
+        "mem": {"target": st["mem_used"] / max(st["mem_tot"], 0.1),
+                "shown": 0.0, "gate": 13},
+        "disk": {"target": st["disk_used"] / max(st["disk_tot"], 0.1),
+                 "shown": 0.0, "gate": 16},
+        "gpu": {"target": 0.0, "shown": 0.0, "gate": 19},
+    }
+
+
+def update(st, tick, gproc):
+    if tick >= CPU_TICK and not st["cpu_final"]:
+        st["cpu_pct"] = cpu_percent(st["stat0"], read_cpu_stat())
+        st["cpu_final"] = True
+        st["gauges"]["cpu"]["target"] = st["cpu_pct"] / 100.0
+    if gproc is not None and st["gpu"] is None and gproc.poll() is not None:
+        st["gpu"] = parse_gpu(gproc)
+        if st["gpu"] is not None:
+            st["gauges"]["gpu"]["target"] = st["gpu"][1] / 100.0
+    for g in st["gauges"].values():
+        if tick >= SETTLE:
+            g["shown"] = g["target"]
+        elif tick >= g["gate"]:
+            g["shown"] += (g["target"] - g["shown"]) * 0.30
+
+
+def print_static(st, quote, slim, barw, maxw, out):
+    for g in st["gauges"].values():
+        g["shown"] = g["target"]
+    rows = compose(st, SETTLE, quote, slim, barw)
+    out.write("\n" + "\n".join(emit_row(r, maxw) for r in rows) + "\n\n")
+    out.flush()
+
+
+def main():
+    static = "--static" in sys.argv[1:]
+    out = sys.stdout
+    size = shutil.get_terminal_size()
+    cols, rows_avail = size.columns, size.lines
+    slim = cols < 64
+    barw = 10 if slim else 14
+    maxw = max(cols - 1, 20)
+
+    st = gather()
+    quote = pick_quote()
+    init_gauges(st)
+    gproc = spawn_gpu_query() if st["gpu_name"] else None
+
+    card_rows = 8 + (2 if quote else 0)
+    animate = (not static and out.isatty()
+               and cols >= 46 and rows_avail >= card_rows + 3)
+
+    if not animate:
+        # settle CPU% and GPU stats quickly, then print the final card
+        time.sleep(0.18)
+        st["cpu_pct"] = cpu_percent(st["stat0"], read_cpu_stat())
+        st["gauges"]["cpu"]["target"] = st["cpu_pct"] / 100.0
+        if gproc is not None:
+            try:
+                gproc.wait(timeout=0.5)
+            except subprocess.TimeoutExpired:
+                gproc.kill()
+            update(st, SETTLE, gproc)
+        print_static(st, quote, slim, barw, maxw, out)
+        return
+
+    # cbreak with ECHO off, set explicitly (setcbreak's ECHO handling moved
+    # across Python versions); the skip key is peeked via select, never read,
+    # so a command typed during the animation lands intact at the prompt.
+    saved = None
+    if sys.stdin.isatty():
+        import termios
+        fd = sys.stdin.fileno()
+        saved = termios.tcgetattr(fd)
+        raw = termios.tcgetattr(fd)
+        raw[3] &= ~(termios.ICANON | termios.ECHO)
+        termios.tcsetattr(fd, termios.TCSANOW, raw)
+
+    out.write(HIDE + "\n")
+    frame = 1.0 / FPS
+    tick = 0
+    drawn = False
+    try:
+        while True:
+            start = time.monotonic()
+            update(st, tick, gproc)
+            rows = compose(st, tick, quote, slim, barw)
+            buf = [ESC + "[%dA" % len(rows)] if drawn else []
+            for r in rows:
+                buf.append("\r" + emit_row(r, maxw) + ESC + "[K\n")
+            out.write("".join(buf))
+            out.flush()
+            drawn = True
+            if tick >= SETTLE:
+                break
+            wait = max(0.0, frame - (time.monotonic() - start))
+            if saved is not None:
+                r, _, _ = select.select([sys.stdin], [], [], wait)
+                if r:
+                    tick = SETTLE                 # peeked, not read: skip
+                    continue
+            else:
+                time.sleep(wait)
+            tick += 1
+    except KeyboardInterrupt:
+        update(st, SETTLE, gproc)
+        rows = compose(st, SETTLE, quote, slim, barw)
+        buf = [ESC + "[%dA" % len(rows)] if drawn else []
+        for r in rows:
+            buf.append("\r" + emit_row(r, maxw) + ESC + "[K\n")
+        out.write("".join(buf))
+    finally:
+        if gproc is not None and gproc.poll() is None:
+            gproc.kill()
+        out.write(RESET + SHOW + "\n")
+        out.flush()
+        if saved is not None:
+            import termios
+            termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, saved)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except BrokenPipeError:
+        try:
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        except OSError:
+            pass
+        sys.exit(0)

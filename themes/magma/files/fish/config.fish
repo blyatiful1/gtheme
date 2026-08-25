@@ -10,9 +10,17 @@ fish_add_path "$HOME/.local/bin"
 #  loaded after CachyOS config
 # ──────────────────────────────────────────────────────────────
 
-# Greeting — a small vent + 『OBSIDIAN FLOW』 card + one random quote
+# Greeting — the vent ignites beside live machine vitals (magma-vitals):
+# CPU/MEM/DISK/GPU gauges sweep in molten, then settle calm. Any key skips
+# the animation without eating the keystroke. MAGMA_VITALS=off silences it.
+# Falls back to the old static card if the script is missing.
 # (overrides the CachyOS fastfetch greeting; run `fastfetch` manually)
 function fish_greeting
+    set -l vitals $HOME/.local/share/gtheme/assets/magma/bin/magma-vitals
+    if test "$MAGMA_VITALS" != off -a -x "$vitals"
+        $vitals
+        return
+    end
     set_color FF6D3A
     echo '     ▂▃▂'
     echo -n '    ▟█▓█▙    '
@@ -114,4 +122,38 @@ function erupt --description '~3.5s eruption, then back to work'
 end
 function thermal --description 'thermal-scan gauge card for a name'
     $HOME/.local/share/gtheme/assets/magma/bin/magma-thermal $argv
+end
+function doomfire --description 'the classic fire, molten (any key quits)'
+    $HOME/.local/share/gtheme/assets/magma/bin/magma-doomfire $argv
+end
+function fissure --description 'obsidian glass cracks open (any key quits)'
+    $HOME/.local/share/gtheme/assets/magma/bin/magma-fissure $argv
+end
+function vitals --description 'the greeting card again: live machine vitals'
+    $HOME/.local/share/gtheme/assets/magma/bin/magma-vitals $argv
+end
+
+# The chamber menu — one door to every animation
+function magma --description 'chamber menu — pick a magma animation'
+    set -l entries \
+        'lavalamp — metaball fluid, the showpiece' \
+        'doomfire — the classic fire, molten' \
+        'fissure — obsidian glass cracks open' \
+        'embers — rising ember drift (transparent)' \
+        'erupt — ~3.5s eruption, then back to work' \
+        'thermal — thermal-scan gauge card' \
+        'vitals — the greeting card: live machine vitals'
+    set -l pick
+    if type -q fzf
+        set pick (printf '%s\n' $entries | fzf --prompt='chamber ❯ ' --height=40% | string split -f1 -m1 ' — ')
+    else
+        for i in (seq (count $entries))
+            printf '  %d) %s\n' $i $entries[$i]
+        end
+        read -P 'chamber ❯ ' -l n
+        if string match -qr '^[1-7]$' -- $n
+            set pick (string split -f1 -m1 ' — ' -- $entries[$n])
+        end
+    end
+    test -n "$pick"; and $pick
 end

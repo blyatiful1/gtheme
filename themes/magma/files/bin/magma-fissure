@@ -1,0 +1,388 @@
+#!/usr/bin/env python3
+"""magma-fissure — obsidian glass cracking open over the magma chamber.
+
+The screen is untouched dark glass: nothing is painted over your
+terminal's own (translucent) background, so the wallpaper glows through.
+Cracks nucleate at a few fixed points and wander outward as biased
+random-walks, branching as they go (╱ ╲ ─ │ ┼, heavier strokes on the
+primary fissures). Each crack tip burns white-hot; behind it the fissure
+cools through the MAGMA ramp (gold -> lava -> crimson -> maroon -> plum)
+over ~8 s, then keeps a faint ember shimmer. Once ~60% of the columns
+are touched the glass stops breaking — and every ~20 s one healed crack
+RE-IGNITES, a pulse of heat racing from its origin to its tip. Sparse
+sparks (· ˚ ✦) rise from live tips and vanish. Pure stdlib ANSI,
+deterministic (no RNG), any key quits, Ctrl-C safe, adapts to resize.
+
+    magma-fissure                 # 3 nucleation sites
+    magma-fissure --cracks 7      # a shattering
+    magma-fissure --speed 2       # geology on fast-forward
+    magma-fissure --fps 24        # smoother (default 18, max 30)
+
+Without a TTY (piped/CI) it plays a 5-second demo and exits by itself.
+"""
+import argparse
+import os
+import select
+import shutil
+import sys
+import time
+
+ESC = "\x1b"
+ALT_ON = ESC + "[?1049h" + ESC + "[?25l"
+ALT_OFF = ESC + "[?25h" + ESC + "[?1049l"
+
+# Shared MAGMA heat ramp. Foreground only — the glass itself is never
+# painted, so the terminal's translucent background stays visible.
+STOPS = (
+    (0.00, (13, 10, 15)),      # bg obsidian
+    (0.30, (38, 16, 34)),      # cooling plum
+    (0.46, (96, 24, 40)),      # maroon crust
+    (0.60, (224, 48, 78)),     # crimson
+    (0.72, (255, 109, 58)),    # molten orange (accent)
+    (0.84, (255, 193, 69)),    # lava gold
+    (0.94, (255, 238, 190)),   # near-white
+    (1.00, (255, 252, 235)),   # core
+)
+RAMP_N = 128
+
+
+def _build_ramp():
+    """RAMP_N foreground SGR sequences along the heat gradient."""
+    fgs = []
+    for i in range(RAMP_N):
+        t = i / (RAMP_N - 1)
+        r = g = b = 0
+        for (t0, c0), (t1, c1) in zip(STOPS, STOPS[1:]):
+            if t <= t1:
+                k = 0.0 if t1 == t0 else (t - t0) / (t1 - t0)
+                r = int(c0[0] + (c1[0] - c0[0]) * k)
+                g = int(c0[1] + (c1[1] - c0[1]) * k)
+                b = int(c0[2] + (c1[2] - c0[2]) * k)
+                break
+        fgs.append(ESC + "[38;2;%d;%d;%dm" % (r, g, b))
+    return fgs
+
+
+FG = _build_ramp()
+DIM = ESC + "[38;2;122;100;112m"        # ash hint text, fg only
+
+COOL = 8.0                # sim-seconds from white-hot back to ember
+EMBER_LO, EMBER_HI = 32, 46             # the two dim shimmer shades
+PEAK_BIRTH = RAMP_N - 1   # a fresh tip clips white-hot
+PEAK_PULSE = 114          # re-ignition runs gold, a notch below birth
+STEP = 0.11               # base sim-seconds per crack step
+PULSE_V = 34.0            # cells/second a re-ignition pulse travels
+PULSE_EVERY = 20.0        # ~seconds between re-ignitions
+SPARK_V = 5.0             # rows/second sparks rise
+SPARK_GLYPHS = "···˚˚✦"
+
+DIRS = ((1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1))
+HORIZ = (0, 1, 3, 4, 5, 7)              # headings with a horizontal component
+
+
+def jitter(n):
+    """Deterministic pseudo-random 0..2^32 from an integer."""
+    return (n * 2654435761 + 1013904223) & 0xFFFFFFFF
+
+
+def glyph_for(d, heavy):
+    dx, dy = DIRS[d]
+    if dy == 0:
+        return "━" if heavy else "─"
+    if dx == 0:
+        return "┃" if heavy else "│"
+    return "╲" if dx == dy else "╱"
+
+
+def cross_glyph(old, new, heavy):
+    if old == new:
+        return old
+    if old in "╱╲" and new in "╱╲":
+        return "╳"
+    return "╋" if heavy else "┼"
+
+
+class Tip:
+    """One live crack front walking across the glass."""
+
+    __slots__ = ("x", "y", "d", "depth", "left", "next_t", "seed", "step",
+                 "path", "alive")
+
+    def __init__(self, x, y, d, depth, left, when, seed):
+        self.x, self.y, self.d = x, y, d
+        self.depth = depth        # 0 = primary fissure (heavy strokes)
+        self.left = left          # steps remaining
+        self.next_t = when
+        self.seed = seed
+        self.step = 0
+        self.path = []            # cells in birth order, for re-ignition
+        self.alive = True
+
+
+class Fissure:
+    """The whole crack network: cells, live tips, healed paths, sparks."""
+
+    def __init__(self, cols, rows, n, t):
+        self.cols, self.rows = cols, rows
+        self.cells = {}           # (x,y) -> [glyph, hot_time, peak_idx]
+        self.tips = []
+        self.paths = []           # healed cracks eligible for re-ignition
+        self.touched = set()      # columns containing any crack cell
+        self.goal = max(3, int(cols * 0.60))
+        self.sealed = False
+        self.nuc_i = 0
+        self.requeue_t = t
+        self.pulse = None         # [path, t0, next_index_to_reheat]
+        self.pulse_i = 0
+        self.next_pulse = 0.0
+        self.sparks = []          # (x, y0, t0, rise, seed)
+        for i in range(n):
+            self.nucleate(t + i * 1.3)
+
+    def nucleate(self, when):
+        """Seed a new primary crack at the next low-discrepancy point."""
+        i = self.nuc_i
+        self.nuc_i += 1
+        fx = (0.13 + i * 0.6180339887) % 1.0
+        fy = (0.37 + i * 0.7548776662) % 1.0
+        x = 2 + int(fx * max(self.cols - 5, 1))
+        y = 1 + int(fy * max(self.rows - 3, 1))
+        s = jitter(i * 7919 + 101)
+        d = HORIZ[s % 6]
+        left = max(12, int(self.cols * (0.35 + ((s >> 8) % 40) / 100.0)))
+        self.tips.append(Tip(x, y, d, 0, left, when, s))
+
+    def _spark(self, x, y, ts, s):
+        if y <= 0 or len(self.sparks) >= 12:
+            return
+        self.sparks.append((x, y, ts, 1 + jitter(s + 17) % 3, jitter(s + 41)))
+
+    def _carve(self, tip, glyph, ts, s):
+        """Burn the tip's cell; returns True if it crossed an old fissure."""
+        key = (tip.x, tip.y)
+        cur = self.cells.get(key)
+        crossed = cur is not None
+        if crossed:
+            cur[0] = cross_glyph(cur[0], glyph, tip.depth == 0)
+            cur[1] = ts
+            cur[2] = PEAK_BIRTH
+        else:
+            self.cells[key] = [glyph, ts, PEAK_BIRTH]
+        tip.path.append(key)
+        self.touched.add(tip.x)
+        if (s >> 22) % 100 < 10:
+            self._spark(tip.x, tip.y, ts, s)
+        return crossed
+
+    def _die(self, tip):
+        tip.alive = False
+        if len(tip.path) >= 5:
+            self.paths.append(tip.path)
+            if len(self.paths) > 24:          # keep the grandest fissures
+                self.paths.sort(key=len, reverse=True)
+                del self.paths[24:]
+        if not self.sealed:
+            self.requeue_t = tip.next_t + 0.9
+
+    def _step(self, tip, ts):
+        s = jitter(tip.seed + tip.step * 197)
+        tip.step += 1
+        if tip.step == 1:                     # glow at the nucleus first
+            self._carve(tip, glyph_for(tip.d, tip.depth == 0), ts, s)
+            tip.next_t = ts + STEP
+            return
+        r = s % 100                           # biased to keep heading
+        if r >= 94:
+            tip.d = (tip.d + (2 if s & 0x100 else -2)) % 8   # rare hard kink
+        elif r >= 72:
+            tip.d = (tip.d - 1) % 8
+        elif r >= 50:
+            tip.d = (tip.d + 1) % 8
+        dx, dy = DIRS[tip.d]
+        nx, ny = tip.x + dx, tip.y + dy
+        if not (0 <= nx < self.cols and 0 <= ny < self.rows):
+            self._die(tip)                    # ran off the pane
+            return
+        tip.x, tip.y = nx, ny
+        crossed = self._carve(tip, glyph_for(tip.d, tip.depth == 0), ts, s)
+        if crossed and (s >> 10) % 100 < 45:  # old fissures arrest new ones
+            self._die(tip)
+            return
+        if (not self.sealed and tip.depth < 3 and tip.step > 3
+                and len(self.tips) < 28 and (s >> 16) % 100 < 11):
+            bd = (tip.d + (2 if (s >> 6) & 1 else -2)) % 8
+            self.tips.append(Tip(nx, ny, bd, tip.depth + 1,
+                                 max(6, tip.left // 2), ts + STEP * 2,
+                                 jitter(s + 977)))
+        tip.left -= 1
+        if tip.left <= 0:
+            self._die(tip)
+            return
+        tip.next_t = ts + STEP * (0.7 + ((s >> 24) & 63) / 64.0 * 0.6)
+
+    def update(self, t):
+        for tip in list(self.tips):           # snapshot: branches append
+            guard = 0
+            while tip.alive and t >= tip.next_t and guard < 6:
+                self._step(tip, tip.next_t)
+                guard += 1
+        self.tips = [tp for tp in self.tips if tp.alive]
+
+        if not self.sealed:
+            if len(self.touched) >= self.goal:
+                self.sealed = True            # the glass has given all it will
+                self.next_pulse = t + 6.0
+                for tp in self.tips:
+                    tp.left = min(tp.left, 5)
+            elif not self.tips and t >= self.requeue_t:
+                self.nucleate(t)              # glass keeps failing elsewhere
+
+        if self.pulse is None and self.sealed and self.paths \
+                and t >= self.next_pulse:
+            p = self.paths[jitter(self.pulse_i * 613 + 29) % len(self.paths)]
+            self.pulse = [p, t, 0]
+            self.pulse_i += 1
+        if self.pulse is not None:
+            path, t0, applied = self.pulse
+            front = int((t - t0) * PULSE_V)
+            for i in range(applied, min(front + 1, len(path))):
+                c = self.cells.get(path[i])
+                if c is not None:             # reheat exactly once per cell
+                    c[1] = t0 + i / PULSE_V
+                    c[2] = PEAK_PULSE
+            self.pulse[2] = min(front + 1, len(path))
+            if front >= len(path):
+                self.pulse = None
+                self.next_pulse = t + PULSE_EVERY * (
+                    0.75 + (jitter(self.pulse_i * 887 + 5) % 50) / 100.0)
+            elif front >= 0 and (jitter(self.pulse_i * 331 + front) % 100) < 7:
+                x, y = path[front]            # the racing front spits sparks
+                self._spark(x, y, t, jitter(front * 53 + self.pulse_i))
+
+        self.sparks = [sp for sp in self.sparks
+                       if (t - sp[2]) * SPARK_V < sp[3]]
+
+
+def render(out, sim, t, cols, rows):
+    """Compose one frame; emit an SGR only when the colour changes."""
+    chars = [[" "] * cols for _ in range(rows)]
+    hues = [[0] * cols for _ in range(rows)]
+    tick = int(t * 2.0)                       # ember shimmer clock
+    for (x, y), (glyph, hot, peak) in sim.cells.items():
+        age = t - hot
+        if age < 0.0:
+            age = 0.0
+        if age >= COOL:                       # healed: breathe between shades
+            h = jitter(x * 7349 + y * 911 + tick * 577)
+            idx = EMBER_HI if (h >> 5) & 1 else EMBER_LO
+        else:                                 # cooling: slide down the ramp
+            k = (1.0 - age / COOL) ** 1.6
+            idx = int(EMBER_LO + (peak - EMBER_LO) * k)
+        chars[y][x] = glyph
+        hues[y][x] = idx
+    for x, y0, t0, rise, sd in sim.sparks:
+        risen = int((t - t0) * SPARK_V)
+        if risen >= rise:
+            continue
+        sy = y0 - 1 - risen
+        if 0 <= sy < rows and chars[sy][x] == " ":
+            fr = (t - t0) * SPARK_V / rise    # gold fading to crimson
+            chars[sy][x] = SPARK_GLYPHS[sd % len(SPARK_GLYPHS)]
+            hues[sy][x] = int(104 - 40 * fr)
+
+    buf = [ESC + "[H"]
+    push = buf.append
+    last = -1
+    for y in range(rows):
+        rowc = chars[y]
+        rowh = hues[y]
+        for x in range(cols):
+            ch = rowc[x]
+            if ch == " ":
+                push(" ")                     # bare space: bg stays untouched
+            else:
+                i = rowh[x]
+                if i != last:
+                    push(FG[i])
+                    last = i
+                push(ch)
+        if y != rows - 1:
+            push("\r\n")
+    if cols > 6:                              # unobtrusive corner hint
+        push(ESC + "[%d;2H" % rows + DIM
+             + " magma · any key to quit "[: cols - 2] + ESC + "[0m")
+    out.write("".join(buf))
+    out.flush()
+
+
+def main():
+    ap = argparse.ArgumentParser(
+        description="obsidian glass cracking open over live magma")
+    ap.add_argument("--speed", type=float, default=1.0,
+                    help="time multiplier (0.25-4)")
+    ap.add_argument("--fps", type=float, default=18.0,
+                    help="target frames/second (max 30)")
+    ap.add_argument("--cracks", type=int, default=3,
+                    help="initial nucleation sites (1-9)")
+    args = ap.parse_args()
+    speed = max(0.25, min(args.speed, 4.0))
+    target = 1.0 / max(1.0, min(args.fps, 30.0))
+    n = max(1, min(args.cracks, 9))
+
+    out = sys.stdout
+    interactive = out.isatty() and sys.stdin.isatty()
+    deadline = None if interactive else time.monotonic() + 5.0
+    if not out.isatty():
+        out.write(ESC + "[38;2;255;109;58m"
+                  + "magma-fissure: no TTY — playing a 5 s demo"
+                  + ESC + "[0m\n")
+    saved = None
+    if interactive:
+        import termios
+        import tty as _tty
+        fd = sys.stdin.fileno()
+        saved = termios.tcgetattr(fd)
+        _tty.setcbreak(fd)
+
+    out.write(ALT_ON)
+    try:
+        t0 = time.monotonic()
+        size = shutil.get_terminal_size()
+        cols, rows = max(size.columns, 8), max(size.lines, 4)
+        sim = Fissure(cols, rows, n, 0.0)
+        while True:
+            start = time.monotonic()
+            if deadline and start > deadline:
+                break
+            t = (start - t0) * speed
+            size = shutil.get_terminal_size()
+            ncols, nrows = max(size.columns, 8), max(size.lines, 4)
+            if (ncols, nrows) != (cols, rows):
+                cols, rows = ncols, nrows     # fresh pane of glass
+                sim = Fissure(cols, rows, n, t)
+            sim.update(t)
+            render(out, sim, t, cols, rows)
+            wait = max(0.0, target - (time.monotonic() - start))
+            if interactive:
+                r, _, _ = select.select([sys.stdin], [], [], wait)
+                if r and sys.stdin.read(1):
+                    break
+            else:
+                time.sleep(wait)
+    except KeyboardInterrupt:
+        pass
+    except BrokenPipeError:
+        pass                                  # reader hung up mid-demo
+    finally:
+        try:
+            out.write(ESC + "[0m" + ALT_OFF)
+            out.flush()
+        except BrokenPipeError:               # keep interpreter exit quiet
+            os.dup2(os.open(os.devnull, os.O_WRONLY), out.fileno())
+        if saved is not None:
+            import termios
+            termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, saved)
+
+
+if __name__ == "__main__":
+    main()

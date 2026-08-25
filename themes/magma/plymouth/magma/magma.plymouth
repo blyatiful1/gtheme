@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Magma
+Description=MAGMA obsidian boot splash: slim lava progress bar with a pulsing ember glow
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/magma
+ScriptFile=/usr/share/plymouth/themes/magma/magma.script

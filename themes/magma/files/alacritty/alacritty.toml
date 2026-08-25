@@ -9,6 +9,8 @@ opacity = 0.82
 blur = true
 dynamic_padding = true
 padding = { x = 16, y = 14 }
+# "None" removed ALL window buttons — user wants close/min/max reachable.
+decorations = "Full"
 decorations_theme_variant = "Dark"
 
 [font]

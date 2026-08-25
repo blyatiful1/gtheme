@@ -1,0 +1,52 @@
+# NETRUNNER — Jack In. ~14 named roles drive the render engine.
+#
+# Doctrine (distilled from the clean CP2077 rices; it IS the theme):
+#   - the void is desaturated NAVY (#0A111F), never pure black — pure #000
+#     under max-saturation neon is the toy-store failure mode.
+#   - HUD cyan is the WORKHORSE: text accents, prompt, selection, gauges.
+#   - cyber-yellow #FCEE0A appears ONCE per surface (cursor, dock dots,
+#     emblem) — a signature, not a wash.
+#   - Edgerunners hot-pink is the terminal's second vein (lavat duotone,
+#     git segment, cava gradient) and stays out of the shell chrome.
+#   - red is strictly semantic (errors/danger). Never decoration.
+#   - neons pulled back ~10-15% from full saturation; no glow on text.
+bg = "#0A111F"
+surface1 = "#111A2C"
+surface2 = "#19243A"
+fg = "#D8E7F0"
+fg_bright = "#F0F9FF"
+fg_dim = "#9AACC0"
+accent = "#10C8D8"
+accent_bright = "#63EDF8"
+warn = "#EFDF33"
+error = "#FF3D5E"
+info = "#4D9EF0"
+selection = "#14324A"
+comment = "#5F7396"
+cursor = "#FCEE0A"
+# street materials (consumed by hand-authored files; the render templates
+# ignore extras — nothing decorative rides for free):
+cyber_yellow = "#FCEE0A"
+hot_pink = "#FF2E97"
+danger = "#FF003C"
+chrome = "#B8C6D8"
+void = "#060B14"
+ice = "#A8F0FA"
+
+# ANSI terminal hues (drive the generated alacritty/ptyxis/btop palettes)
+ansi_black = "#142036"
+red = "#FF3D5E"
+green = "#2BE8A8"
+yellow = "#EFDF33"
+blue = "#4D9EF0"
+magenta = "#EE4BA5"
+cyan = "#26D5E5"
+ansi_white = "#C6D5E4"
+bright_black = "#3E5578"
+bright_red = "#FF7088"
+bright_green = "#71F5C7"
+bright_yellow = "#FCEE0A"
+bright_blue = "#82BDF8"
+bright_magenta = "#FF80C8"
+bright_cyan = "#85F2FB"
+bright_white = "#F0F9FF"

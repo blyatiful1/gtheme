@@ -1,0 +1,201 @@
+# MAGMA Plymouth theme (script plugin)
+# Pure obsidian background, slim 2px lava progress bar over a dim plum track,
+# pulsing ember glow while waiting, cream password prompt for LUKS.
+# Kept deliberately simple: every image load is checked before use.
+
+# ---- palette (0..1 floats) --------------------------------------------------
+# obsidian #0D0A0F
+bg.r = 0.0510; bg.g = 0.0392; bg.b = 0.0588;
+# cream   #F2E5D5
+fg.r = 0.9490; fg.g = 0.8980; fg.b = 0.8353;
+
+Window.SetBackgroundTopColor(bg.r, bg.g, bg.b);
+Window.SetBackgroundBottomColor(bg.r, bg.g, bg.b);
+
+screen.w = Window.GetWidth();
+screen.h = Window.GetHeight();
+screen.cx = screen.w / 2;
+
+# ---- progress bar (track #3A2030, fill #FF6D3A, 2px tall) -------------------
+bar.w = Math.Int(screen.w / 3);
+if (bar.w < 120)
+    bar.w = 120;
+bar.h = 2;
+bar.x = Math.Int(screen.cx - bar.w / 2);
+bar.y = Math.Int(screen.h * 0.72);
+
+track_image = Image("track.png");
+fill_image  = Image("bar.png");
+
+if (track_image)
+  {
+    track_sprite = Sprite(track_image.Scale(bar.w, bar.h));
+    track_sprite.SetPosition(bar.x, bar.y, 10);
+  }
+
+if (fill_image)
+  {
+    fill_sprite = Sprite(fill_image.Scale(1, bar.h));
+    fill_sprite.SetPosition(bar.x, bar.y, 11);
+  }
+
+# ---- pulsing ember glow above the bar ---------------------------------------
+glow_image = Image("glow.png");
+if (glow_image)
+  {
+    glow_sprite = Sprite(glow_image);
+    glow_sprite.SetPosition(Math.Int(screen.cx - glow_image.GetWidth() / 2),
+                            Math.Int(bar.y - glow_image.GetHeight() - 18),
+                            12);
+    glow_sprite.SetOpacity(0.4);
+  }
+
+bullet_image = Image("bullet.png");
+
+tick = 0;
+dialog_active = 0;
+
+# ---- refresh: sine pulse on the glow dot (~50 calls/sec) --------------------
+fun refresh_callback ()
+  {
+    global.tick++;
+    if (global.glow_sprite)
+      {
+        if (global.dialog_active)
+            global.glow_sprite.SetOpacity(0);
+        else
+            global.glow_sprite.SetOpacity(0.35 + 0.25 * Math.Sin(global.tick * 2 * Math.Pi / 100));
+      }
+  }
+Plymouth.SetRefreshFunction(refresh_callback);
+
+# ---- boot progress: grow the lava fill --------------------------------------
+fun progress_callback (duration, progress)
+  {
+    if (!global.fill_sprite || !global.fill_image)
+        return;
+    w = Math.Int(global.bar.w * progress);
+    if (w < 1)
+        w = 1;
+    if (w > global.bar.w)
+        w = global.bar.w;
+    global.fill_sprite.SetImage(global.fill_image.Scale(w, global.bar.h));
+  }
+Plymouth.SetBootProgressFunction(progress_callback);
+
+# ---- dialog helpers ----------------------------------------------------------
+fun hide_dialog ()
+  {
+    global.dialog_active = 0;
+    if (global.prompt_sprite)
+        global.prompt_sprite.SetOpacity(0);
+    if (global.bullet_sprites)
+      {
+        for (i = 0; global.bullet_sprites[i]; i++)
+            global.bullet_sprites[i].SetOpacity(0);
+      }
+  }
+
+fun display_normal_callback ()
+  {
+    hide_dialog();
+  }
+Plymouth.SetDisplayNormalFunction(display_normal_callback);
+
+# ---- password prompt (LUKS): cream text + bullet dots ------------------------
+fun display_password_callback (prompt, bullets)
+  {
+    global.dialog_active = 1;
+
+    if (!prompt || prompt == "")
+        prompt = "Enter passphrase";
+
+    prompt_image = Image.Text(prompt, global.fg.r, global.fg.g, global.fg.b);
+    if (prompt_image)
+      {
+        if (!global.prompt_sprite)
+            global.prompt_sprite = Sprite();
+        global.prompt_sprite.SetImage(prompt_image);
+        global.prompt_sprite.SetPosition(Math.Int(global.screen.cx - prompt_image.GetWidth() / 2),
+                                         Math.Int(global.screen.h * 0.42),
+                                         20);
+        global.prompt_sprite.SetOpacity(1);
+      }
+
+    if (bullets > 24)
+        bullets = 24;
+
+    spacing = 14;
+    if (global.bullet_image)
+      {
+        row_w = bullets * spacing;
+        row_x = Math.Int(global.screen.cx - row_w / 2);
+        row_y = Math.Int(global.screen.h * 0.42) + 28;
+        for (i = 0; i < bullets; i++)
+          {
+            if (!global.bullet_sprites[i])
+                global.bullet_sprites[i] = Sprite(global.bullet_image);
+            global.bullet_sprites[i].SetPosition(row_x + i * spacing, row_y, 21);
+            global.bullet_sprites[i].SetOpacity(1);
+          }
+        # hide leftover bullets from a longer previous entry
+        for (i = bullets; global.bullet_sprites[i]; i++)
+            global.bullet_sprites[i].SetOpacity(0);
+      }
+  }
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
+
+# ---- plain question prompt (rare; fsck etc.) ---------------------------------
+fun display_question_callback (prompt, entry)
+  {
+    global.dialog_active = 1;
+    if (!prompt || prompt == "")
+        prompt = "?";
+    text = prompt + " " + entry;
+    q_image = Image.Text(text, global.fg.r, global.fg.g, global.fg.b);
+    if (q_image)
+      {
+        if (!global.prompt_sprite)
+            global.prompt_sprite = Sprite();
+        global.prompt_sprite.SetImage(q_image);
+        global.prompt_sprite.SetPosition(Math.Int(global.screen.cx - q_image.GetWidth() / 2),
+                                         Math.Int(global.screen.h * 0.42),
+                                         20);
+        global.prompt_sprite.SetOpacity(1);
+      }
+  }
+Plymouth.SetDisplayQuestionFunction(display_question_callback);
+
+# ---- status / fsck messages in cream near the bottom -------------------------
+fun display_message_callback (text)
+  {
+    if (!text || text == "")
+        return;
+    m_image = Image.Text(text, global.fg.r, global.fg.g, global.fg.b);
+    if (m_image)
+      {
+        if (!global.message_sprite)
+            global.message_sprite = Sprite();
+        global.message_sprite.SetImage(m_image);
+        global.message_sprite.SetPosition(Math.Int(global.screen.cx - m_image.GetWidth() / 2),
+                                          Math.Int(global.screen.h * 0.90),
+                                          15);
+        global.message_sprite.SetOpacity(1);
+      }
+  }
+Plymouth.SetDisplayMessageFunction(display_message_callback);
+
+fun hide_message_callback (text)
+  {
+    if (global.message_sprite)
+        global.message_sprite.SetOpacity(0);
+  }
+Plymouth.SetHideMessageFunction(hide_message_callback);
+
+# ---- fill the bar on quit so shutdown/boot end looks finished -----------------
+fun quit_callback ()
+  {
+    if (global.fill_sprite && global.fill_image)
+        global.fill_sprite.SetImage(global.fill_image.Scale(global.bar.w, global.bar.h));
+  }
+Plymouth.SetQuitFunction(quit_callback);

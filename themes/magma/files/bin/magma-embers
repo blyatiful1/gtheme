@@ -1,16 +1,69 @@
 #!/usr/bin/env python3
-"""magma-embers — full-screen ember drift.
+"""magma-embers — embers drifting up from a bed of coals.
 
-Sparks rise from the floor of the terminal, sway on the updraft, and cool
-from white-gold through orange and red to ash as they climb — a campfire
-seen from above the coals. ~14 fps, quits on any keypress. Ctrl-C safe.
+Sparks are born white-hot on a pulsing coal bed along the bottom row, ride
+triangle-wave updrafts and cool through the MAGMA heat ramp as they climb —
+white-hot ✦, gold *, lava •, crimson ·, ash ˚ — then wink out. 24-bit
+colour, pure stdlib ANSI: no curses, no numpy, no RNG (deterministic hash
+jitter). Paints NO background at all, so a translucent terminal keeps its
+wallpaper glowing behind the drift.
+
+    magma-embers                  # default drift
+    magma-embers --density 2.0    # a busier fire (0.3-3.0 multiplier)
+    magma-embers --fps 20         # smoother updraft (max 30)
+
+Any key quits; Ctrl-C safe; adapts to resize live (deterministic re-seed).
+Without a TTY (piped/CI) it plays a 5-second demo and exits by itself.
 """
-import curses
+import argparse
+import os
+import select
+import shutil
 import sys
+import time
 
-# 256-color heat ladder: newborn spark -> cooling ember -> ash. Index by age.
-HEAT = (230, 220, 214, 208, 202, 166, 160, 88, 240, 238)
-GLYPHS = ("✦", "*", "•", "·", "˚", "·")     # bright sparks get the fancy glyphs
+ESC = "\x1b"
+RESET = ESC + "[0m"
+ALT_ON = ESC + "[?1049h" + ESC + "[?25l"
+ALT_OFF = ESC + "[?25h" + ESC + "[?1049l"
+
+# Heat ramp: obsidian -> plum -> maroon -> crimson -> lava -> gold -> white-hot.
+STOPS = (
+    (0.00, (13, 10, 15)),      # bg obsidian
+    (0.30, (38, 16, 34)),      # cooling plum
+    (0.46, (96, 24, 40)),      # maroon crust
+    (0.60, (224, 48, 78)),     # crimson
+    (0.72, (255, 109, 58)),    # molten orange (accent)
+    (0.84, (255, 193, 69)),    # lava gold
+    (0.94, (255, 238, 190)),   # near-white
+    (1.00, (255, 252, 235)),   # core
+)
+RAMP_N = 128
+
+
+def _build_ramp():
+    """RAMP_N foreground SGR sequences along the heat gradient (fg only —
+    the background is never touched, that's the whole point)."""
+    fgs = []
+    for i in range(RAMP_N):
+        t = i / (RAMP_N - 1)
+        r = g = b = 0
+        for (t0, c0), (t1, c1) in zip(STOPS, STOPS[1:]):
+            if t <= t1:
+                k = 0.0 if t1 == t0 else (t - t0) / (t1 - t0)
+                r = int(c0[0] + (c1[0] - c0[0]) * k)
+                g = int(c0[1] + (c1[1] - c0[1]) * k)
+                b = int(c0[2] + (c1[2] - c0[2]) * k)
+                break
+        fgs.append(ESC + "[38;2;%d;%d;%dm" % (r, g, b))
+    return fgs
+
+
+FG = _build_ramp()
+DIM = ESC + "[38;2;122;100;112m"                  # ash, for the corner hint
+GLYPHS = ("✦", "*", "•", "·", "˚")                # newborn -> ash, by age
+HINT = " embers rise… any key to quit "
+BED_LO, BED_HI = 40, 70                           # coal pulse: dim lava band
 
 
 class Ember:
@@ -21,14 +74,14 @@ class Ember:
     def __init__(self, seed, w, h, scatter_y=True):
         self.seed = (seed * 2654435761 + 1013904223) & 0xFFFFFFFF
         s = self.seed
-        self.x = float(s % max(w - 1, 1))
+        self.x = float(s % max(w, 1))
         self.y = float(h - 1 - ((s >> 8) % h if scatter_y else (s >> 8) % 3))
         self.vy = 0.25 + ((s >> 16) % 100) / 220.0        # 0.25 .. ~0.70 up
         self.sway = ((s >> 10) % 200 - 100) / 260.0       # sideways drift
         self.swayk = 0.08 + ((s >> 22) % 100) / 900.0     # sway wobble rate
         self.life = h * (0.55 + ((s >> 12) % 100) / 160.0)  # rows before ash-out
         self.age = 0.0
-        self.flare = (s >> 6) % 11 == 0                   # 1-in-11 burns bold
+        self.flare = (s >> 6) % 11 == 0                   # 1-in-11 burns hotter
 
     def step(self, w, h, tick):
         self.y -= self.vy
@@ -36,65 +89,137 @@ class Ember:
         ph = (tick * self.swayk + (self.seed >> 3) % 7) % 2.0
         self.x += self.sway * (1.0 - abs(ph - 1.0) * 2.0)
         self.age += self.vy
-        if self.y < 0 or self.age >= self.life or not (0 <= self.x < w - 1):
+        if self.y < 0 or self.age >= self.life or not (0.0 <= self.x < w):
             self.__init__(self.seed + tick, w, h, scatter_y=False)
 
 
-def main(stdscr):
-    curses.curs_set(0)
-    stdscr.nodelay(True)
-    stdscr.timeout(70)                        # ~14 fps
-    curses.start_color()
-    curses.use_default_colors()
-    for i, c in enumerate(HEAT, start=1):
-        curses.init_pair(i, c, -1)
-    dim_pair = len(HEAT)
+def render(out, embers, tick, cols, rows):
+    """Paint one frame: ember field, then the coal bed on the bottom row.
 
-    h, w = stdscr.getmaxyx()
-    embers = [Ember(i * 6151 + 29, w, h) for i in range(max(10, (w * h) // 110))]
-    tick = 0
+    Foreground SGRs only, elided when unchanged across cells; empty cells
+    are bare spaces and each line ends in erase-to-EOL, so the terminal's
+    own (translucent) background is never painted over.
+    """
+    w = max(cols - 1, 2)                          # drawable width
+    h = max(rows - 1, 1)                          # ember field height
+    top = RAMP_N - 1
+    chars = [[" "] * w for _ in range(h)]
+    keys = [[None] * w for _ in range(h)]
+    for e in embers:
+        yi, xi = int(e.y), int(e.x)
+        if 0 <= yi < h and 0 <= xi < w:
+            a = min(e.age / max(e.life, 1.0), 1.0)
+            hi = int((0.18 + 0.82 * (1.0 - a)) * top)
+            if e.flare and a < 0.4:               # flares run a notch hotter
+                hi = min(hi + 12, top)
+            chars[yi][xi] = GLYPHS[min(int(a * len(GLYPHS)), len(GLYPHS) - 1)]
+            keys[yi][xi] = FG[hi]
+        e.step(w, h, tick)
 
-    while True:
-        nh, nw = stdscr.getmaxyx()
-        if (nh, nw) != (h, w):
-            h, w = nh, nw
-            embers = [Ember(i * 6151 + 29, w, h) for i in range(max(10, (w * h) // 110))]
-        stdscr.erase()
-        # the coal bed: a flickering baseline along the bottom row
-        coals = "▂" * (w - 1)
+    buf = [ESC + "[H", RESET]
+    write = buf.append
+    last = None
+    for y in range(h):
+        rc, rk = chars[y], keys[y]
+        end = w - 1
+        while end >= 0 and rc[end] == " ":
+            end -= 1
+        for x in range(end + 1):
+            k = rk[x]
+            if k is not None and k != last:
+                write(k)
+                last = k
+            write(rc[x])
+        write(ESC + "[K\r\n")
+    # the coal bed: each coal pulses on its own deterministic triangle wave
+    for x in range(w):
+        s = (x * 2654435761 + 1013904223) & 0xFFFFFFFF
+        rate = 0.05 + ((s >> 9) % 100) / 1400.0
+        tri = 1.0 - abs((tick * rate + ((s >> 16) % 200) / 100.0) % 2.0 - 1.0)
+        k = FG[BED_LO + int(tri * (BED_HI - BED_LO))]
+        if k != last:
+            write(k)
+            last = k
+        write("▂")
+    # unobtrusive corner hint
+    if w >= len(HINT) + 2:
+        write(ESC + "[%d;2H" % rows + DIM + HINT)
+    write(RESET)
+    out.write("".join(buf))
+    out.flush()
+
+
+def main():
+    ap = argparse.ArgumentParser(description="embers drifting over your wallpaper")
+    ap.add_argument("--density", type=float, default=1.0,
+                    help="ember density multiplier (0.3-3.0)")
+    ap.add_argument("--fps", type=float, default=14.0,
+                    help="target frames/second (max 30)")
+    args = ap.parse_args()
+    density = max(0.3, min(args.density, 3.0))
+    target = 1.0 / max(1.0, min(args.fps, 30.0))
+
+    out = sys.stdout
+    live = out.isatty() and sys.stdin.isatty()
+    deadline = None
+    if not live:                                  # demo mode when piped
+        deadline = time.monotonic() + 5.0
+        if not out.isatty():
+            print("magma-embers: no TTY — playing a 5-second demo.")
+    saved = None
+    if live:
+        import termios
+        import tty as _tty
+        fd = sys.stdin.fileno()
+        saved = termios.tcgetattr(fd)
+        _tty.setcbreak(fd)
+
+    out.write(ALT_ON)
+    try:
+        cols = rows = -1
+        embers = []
+        tick = 0
+        while True:
+            start = time.monotonic()
+            if deadline and start > deadline:
+                break
+            size = shutil.get_terminal_size()
+            ncols, nrows = max(size.columns, 4), max(size.lines, 3)
+            if (ncols, nrows) != (cols, rows):    # deterministic re-seed
+                cols, rows = ncols, nrows
+                n = max(10, int(cols * rows / 110.0 * density))
+                embers = [Ember(i * 6151 + 29, max(cols - 1, 2),
+                                max(rows - 1, 1)) for i in range(n)]
+                out.write(ESC + "[2J")
+            render(out, embers, tick, cols, rows)
+            tick += 1
+            wait = max(0.0, target - (time.monotonic() - start))
+            if live:
+                r, _, _ = select.select([sys.stdin], [], [], wait)
+                if r and sys.stdin.read(1):
+                    break
+            else:
+                time.sleep(wait)
+    except KeyboardInterrupt:
+        pass
+    finally:
         try:
-            stdscr.addstr(h - 1, 0, coals, curses.color_pair(5) | curses.A_DIM)
-        except curses.error:
+            out.write(RESET + ALT_OFF)
+            out.flush()
+        except OSError:
             pass
-        for e in embers:
-            yi, xi = int(e.y), int(e.x)
-            if 0 <= yi < h - 1 and 0 <= xi < w - 1:
-                heat = min(int(e.age / max(e.life, 1.0) * len(HEAT)), len(HEAT) - 1)
-                glyph = GLYPHS[min(heat, len(GLYPHS) - 1)]
-                attr = curses.A_BOLD if (e.flare and heat < 4) else 0
-                if heat >= len(HEAT) - 2:
-                    attr = curses.A_DIM
-                try:
-                    stdscr.addstr(yi, xi, glyph, curses.color_pair(heat + 1) | attr)
-                except curses.error:
-                    pass
-            e.step(w, h, tick)
-        try:
-            stdscr.addstr(h - 1, 1, " embers rise… any key to quit ",
-                          curses.color_pair(dim_pair) | curses.A_DIM)
-        except curses.error:
-            pass
-        stdscr.refresh()
-        tick += 1
-        if stdscr.getch() != -1:
-            return
+        if saved is not None:
+            import termios
+            termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, saved)
 
 
 if __name__ == "__main__":
-    if not sys.stdout.isatty():
-        print("magma-embers needs a TTY (it draws full-screen).")
-        sys.exit(0)
     try:
-        curses.wrapper(main)
-    except KeyboardInterrupt:
-        pass
+        main()
+    except BrokenPipeError:
+        # reader (head, a closed pipe) went away: exit quietly
+        try:
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        except OSError:
+            pass
+        sys.exit(0)

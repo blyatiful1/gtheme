@@ -28,7 +28,30 @@
     {
       "name": "magma",
       "title": "MAGMA \u2014 Obsidian Flow",
-      "description": "Obsidian glass over a living magma chamber: ember orange, lava gold, one cool teal vein. Ships a real lava-lamp fluid sim for the terminal.",
+      "description": "Obsidian glass over a living magma chamber: ember orange, lava gold, one cool teal vein. Molten-glass blur and a terminal full of fluid sims \u2014 lava lamp, DOOM fire, cracking obsidian.",
+      "author": "blyatiful1",
+      "version": "2.0.0",
+      "components": [
+        "wallpaper",
+        "terminal",
+        "prompt",
+        "shell",
+        "monitor",
+        "editor",
+        "fastfetch",
+        "gtk",
+        "visualizer",
+        "shell-cfg",
+        "commands",
+        "ascii",
+        "desktop",
+        "dock"
+      ]
+    },
+    {
+      "name": "netrunner",
+      "title": "NETRUNNER \u2014 Jack In",
+      "description": "A netrunner's deck in Night City: HUD cyan on desaturated navy void, one cyber-yellow signature per surface, Edgerunners hot-pink in the terminal's veins. Ships a live Night City wallpaper (Hanabi), the lavat ICE lamp, and a Breach Protocol greeting. Strictly border-free.",
       "author": "blyatiful1",
       "version": "1.0.0",
       "components": [
@@ -38,8 +61,10 @@
         "monitor",
         "editor",
         "fastfetch",
+        "visualizer",
         "gtk",
         "shell",
+        "shell-theme",
         "shell-cfg",
         "commands",
         "ascii",

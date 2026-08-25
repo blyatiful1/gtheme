@@ -1,0 +1,457 @@
+# NETRUNNER — Jack In.
+# Palette in palette.toml; terminal/monitor/editor render from it.
+#
+# The conceit: the desktop is a netrunner's deck. The shell chrome is the
+# HUD (navy glass, cyan interactions), the wallpaper is the view of Night
+# City from the bluff, and the terminal is the jack-in port — lavat runs
+# the ICE, the greeting breaches, the prompt stays cold.
+#
+# BORDER-FREE by doctrine: tilingshell window border pinned off, dock dots
+# borderless, popover/OSD borders made transparent in the shell theme.
+
+[meta]
+name = "netrunner"
+title = "NETRUNNER — Jack In"
+description = "A netrunner's deck in Night City: HUD cyan on desaturated navy void, one cyber-yellow signature per surface, Edgerunners hot-pink in the terminal's veins. Ships a live Night City wallpaper (Hanabi), the lavat ICE lamp, and a Breach Protocol greeting. Strictly border-free."
+author = "blyatiful1"
+version = "1.0.0"
+
+[requires]
+packages = ["alacritty", "starship", "btop", "micro", "fastfetch", "cava", "papirus-icon-theme", "ptyxis", "lavat"]
+extensions = ["blur-my-shell@aunetx", "just-perfection-desktop@just-perfection", "logomenu@aryan_k", "tilingshell@ferrarodomenico.com", "dash-to-dock@micxgx.gmail.com", "hanabi-extension@jeffshee.github.io", "hotedge@jonathan.jdoda.ca", "impatience@gfxmonk.net", "user-theme@gnome-shell-extensions.gcampax.github.com"]
+fonts = ["Iosevka Nerd Font", "Rajdhani"]
+
+[build]
+# gtk is deliberately NOT managed: gtk3/gtk4.css are hand-authored
+# (accent overrides only) and must survive `gtheme build`.
+managed = ["terminal", "monitor", "editor"]
+
+# ── Wallpaper: Night City from the bluff ──────────────────────────────────
+
+[[files]]
+component = "wallpaper"
+src = "files/wallpaper/netrunner-still.png"
+dest = "~/.local/share/backgrounds/netrunner/netrunner-still.png"
+
+[[files]]
+component = "wallpaper"
+# 57 s seamless loop (1 s crossfade folded into the source's own tail),
+# 2560x1440 h264 — played by Hanabi; the still above is the graceful-
+# degrade gsettings background if Hanabi is ever disabled.
+src = "files/wallpaper/netrunner-loop.mp4"
+dest = "~/.local/share/backgrounds/netrunner/netrunner-loop.mp4"
+
+[[files]]
+component = "wallpaper"
+src = "files/wallpaper/netrunner-slideshow.xml"
+dest = "~/.local/share/backgrounds/netrunner/netrunner-slideshow.xml"
+# Rendered through {{ home }} substitution at apply time.
+template = true
+
+# ── Terminal: the jack-in port ─────────────────────────────────────────────
+
+[[files]]
+component = "terminal"
+src = "files/ptyxis/Netrunner.palette"
+dest = "~/.local/share/org.gnome.Ptyxis/palettes/Netrunner.palette"
+
+[[files]]
+component = "terminal"
+src = "files/alacritty/netrunner.toml"
+dest = "~/.config/alacritty/netrunner.toml"
+
+[[files]]
+component = "terminal"
+src = "files/alacritty/alacritty.toml"
+dest = "~/.config/alacritty/alacritty.toml"
+
+[[files]]
+component = "prompt"
+src = "files/starship/starship.toml"
+dest = "~/.config/starship.toml"
+
+[[files]]
+component = "monitor"
+src = "files/btop/netrunner.theme"
+dest = "~/.config/btop/themes/netrunner.theme"
+
+[[files]]
+component = "monitor"
+src = "files/btop/btop.conf"
+dest = "~/.config/btop/btop.conf"
+
+[[files]]
+component = "editor"
+src = "files/micro/netrunner.micro"
+dest = "~/.config/micro/colorschemes/netrunner.micro"
+
+[[files]]
+component = "editor"
+src = "files/micro/settings.json"
+dest = "~/.config/micro/settings.json"
+
+[[files]]
+component = "fastfetch"
+src = "files/fastfetch/netrunner-logo.txt"
+dest = "~/.config/fastfetch/netrunner-logo.txt"
+
+[[files]]
+component = "fastfetch"
+src = "files/fastfetch/config.jsonc"
+dest = "~/.config/fastfetch/config.jsonc"
+
+[[files]]
+component = "visualizer"
+src = "files/cava/config"
+dest = "~/.config/cava/config"
+
+[[files]]
+component = "gtk"
+src = "files/gtk/gtk4.css"
+dest = "~/.config/gtk-4.0/gtk.css"
+
+[[files]]
+component = "gtk"
+src = "files/gtk/gtk3.css"
+dest = "~/.config/gtk-3.0/gtk.css"
+
+# ── Shell chrome ───────────────────────────────────────────────────────────
+
+[[files]]
+component = "shell"
+src = "files/shell/netrunner-emblem.svg"
+dest = "~/.local/share/gtheme/assets/netrunner/netrunner-emblem.svg"
+
+[[files]]
+component = "shell-theme"
+# Loaded by the user-theme extension; overrides-only sheet cascading over
+# stock gnome-shell-dark.css (navy glass, cyan pills, borderless popovers).
+src = "files/shell-theme/gnome-shell.css"
+dest = "~/.local/share/themes/Netrunner/gnome-shell/gnome-shell.css"
+
+[[files]]
+component = "shell-cfg"
+src = "files/fish/config.fish"
+dest = "~/.config/fish/config.fish"
+
+# NOTE: runtime payload lives under assets/, NOT ~/.local/share/gtheme/themes/
+# — that namespace is owned by `gtheme install` and is rmtree'd on update.
+[[files]]
+component = "commands"
+src = "files/bin"
+dest = "~/.local/share/gtheme/assets/netrunner/bin"
+mode = "755"
+
+[[files]]
+component = "ascii"
+src = "files/ascii"
+dest = "~/.local/share/gtheme/assets/netrunner/ascii"
+
+# ── Desktop interface ──────────────────────────────────────────────────────
+
+[[settings]]
+component = "desktop"
+backend = "gsettings"
+# GNOME has no cyan accent enum; teal is the nearest HUD tone. The exact
+# #10C8D8 lives in gtk4/gtk3.css and the shell theme.
+key = "org.gnome.desktop.interface accent-color"
+value = "'teal'"
+
+[[settings]]
+component = "desktop"
+backend = "gsettings"
+# Dark design; without prefer-dark the theme looks half-applied.
+key = "org.gnome.desktop.interface color-scheme"
+value = "'prefer-dark'"
+
+[[settings]]
+component = "desktop"
+backend = "gsettings"
+key = "org.gnome.desktop.interface icon-theme"
+value = "'Papirus-Dark'"
+
+[[settings]]
+component = "desktop"
+backend = "gsettings"
+# Legacy GTK3 apps follow the dark libadwaita look (needs adw-gtk-theme).
+key = "org.gnome.desktop.interface gtk-theme"
+value = "'adw-gtk3-dark'"
+
+[[settings]]
+component = "desktop"
+backend = "gsettings"
+# Rajdhani: condensed technical grotesk — the free stand-in for CP2077's
+# Blender Pro. Medium weight keeps small UI text legible.
+key = "org.gnome.desktop.interface font-name"
+value = "'Rajdhani Medium 11'"
+
+[[settings]]
+component = "desktop"
+backend = "gsettings"
+key = "org.gnome.desktop.interface monospace-font-name"
+value = "'Iosevka Nerd Font Mono 11'"
+
+# ── Wallpaper settings ─────────────────────────────────────────────────────
+
+[[settings]]
+component = "wallpaper"
+backend = "gsettings"
+key = "org.gnome.desktop.background picture-uri"
+value = "'file://{{ home }}/.local/share/backgrounds/netrunner/netrunner-slideshow.xml'"
+
+[[settings]]
+component = "wallpaper"
+backend = "gsettings"
+key = "org.gnome.desktop.background picture-uri-dark"
+value = "'file://{{ home }}/.local/share/backgrounds/netrunner/netrunner-slideshow.xml'"
+
+[[settings]]
+component = "wallpaper"
+backend = "gsettings"
+key = "org.gnome.desktop.background picture-options"
+value = "'zoom'"
+
+[[settings]]
+component = "wallpaper"
+backend = "gsettings"
+key = "org.gnome.desktop.background primary-color"
+value = "'#060B14'"
+
+# Hanabi: the live Night City loop. Plain filesystem path, NOT file:// URI.
+[[settings]]
+component = "wallpaper"
+backend = "dconf"
+key = "/io/github/jeffshee/hanabi-extension/video-path"
+value = "'{{ home }}/.local/share/backgrounds/netrunner/netrunner-loop.mp4'"
+
+[[settings]]
+component = "wallpaper"
+backend = "dconf"
+key = "/io/github/jeffshee/hanabi-extension/mute"
+value = "true"
+
+[[settings]]
+component = "wallpaper"
+backend = "dconf"
+# Gtk.ContentFit 2 = COVER (crop-to-fill; correct for both monitors).
+key = "/io/github/jeffshee/hanabi-extension/content-fit"
+value = "2"
+
+[[settings]]
+component = "wallpaper"
+backend = "dconf"
+# Let the shell settle at login before playback starts.
+key = "/io/github/jeffshee/hanabi-extension/startup-delay"
+value = "2000"
+
+[[settings]]
+component = "wallpaper"
+backend = "dconf"
+# 2 = pause while any window is fullscreen — no GPU spent unseen.
+key = "/io/github/jeffshee/hanabi-extension/pause-on-maximize-or-fullscreen"
+value = "2"
+
+# ── Terminal settings ──────────────────────────────────────────────────────
+
+[[settings]]
+component = "terminal"
+backend = "dconf"
+key = "/org/gnome/Ptyxis/Profiles/{{ ptyxis_default_profile }}/palette"
+value = "'Netrunner'"
+
+[[settings]]
+component = "terminal"
+backend = "dconf"
+# Glass depth: enough wallpaper bleed for the blur to matter, enough ink
+# for code to stay readable.
+key = "/org/gnome/Ptyxis/Profiles/{{ ptyxis_default_profile }}/opacity"
+value = "0.88"
+
+[[settings]]
+component = "terminal"
+backend = "gsettings"
+key = "org.gnome.Ptyxis use-system-font"
+value = "false"
+
+[[settings]]
+component = "terminal"
+backend = "gsettings"
+key = "org.gnome.Ptyxis font-name"
+value = "'Iosevka Nerd Font Mono 11'"
+
+# ── Dock: borderless call strip ────────────────────────────────────────────
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/dock-position"
+value = "'BOTTOM'"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/transparency-mode"
+value = "'FIXED'"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/custom-background-color"
+value = "true"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/background-color"
+value = "'#0A111F'"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/background-opacity"
+value = "0.55"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/running-indicator-style"
+value = "'DOTS'"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/custom-theme-customize-running-dots"
+value = "true"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+# The dock's one cyber-yellow signature: running dots. Borderless.
+key = "/org/gnome/shell/extensions/dash-to-dock/custom-theme-running-dots-color"
+value = "'#FCEE0A'"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/custom-theme-running-dots-border-width"
+value = "0"
+
+# ── Shell extensions ───────────────────────────────────────────────────────
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/dash-to-dock/override-background"
+value = "false"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/applications/blur"
+value = "true"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/applications/enable-all"
+value = "false"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+# Terminals only — Nautilus and everything else stay opaque and calm.
+key = "/org/gnome/shell/extensions/blur-my-shell/applications/whitelist"
+value = "['Alacritty', 'org.gnome.Ptyxis']"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/applications/sigma"
+value = "30"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/applications/static-blur"
+value = "false"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/applications/dynamic-opacity"
+value = "false"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/applications/corner-radius"
+value = "12"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/Logo-menu/use-custom-icon"
+value = "true"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+# The panel's one cyber-yellow signature: the breach-hex emblem.
+key = "/org/gnome/shell/extensions/Logo-menu/custom-icon-path"
+value = "'{{ home }}/.local/share/gtheme/assets/netrunner/netrunner-emblem.svg'"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/Logo-menu/symbolic-icon"
+value = "false"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+# Boot straight to the desktop, not the overview.
+key = "/org/gnome/shell/extensions/just-perfection/startup-status"
+value = "0"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/just-perfection/animation"
+value = "4"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+# Faster, not flashier.
+key = "/org/gnome/shell/extensions/net/gfxmonk/impatience/speed-factor"
+value = "0.6"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+# Staggered above dash-to-dock's ~100 so the dock reveals before overview.
+key = "/org/gnome/shell/extensions/hotedge/pressure-threshold"
+value = "uint32 200"
+
+# THE BORDER-FREE MANDATE: no focused-window outline, ever.
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/tilingshell/enable-window-border"
+value = "false"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/user-theme/name"
+value = "'Netrunner'"
+
+[[settings]]
+component = "shell"
+backend = "gsettings"
+# MERGED on apply (union, user's order preserved first); diff compares
+# order-sensitively, so keep this in the live merged order. The live list
+# was EMPTY when netrunner shipped, so merged order == this order.
+# user-theme stays last by collection convention.
+key = "org.gnome.shell enabled-extensions"
+value = "['blur-my-shell@aunetx', 'just-perfection-desktop@just-perfection', 'logomenu@aryan_k', 'tilingshell@ferrarodomenico.com', 'dash-to-dock@micxgx.gmail.com', 'hanabi-extension@jeffshee.github.io', 'hotedge@jonathan.jdoda.ca', 'impatience@gfxmonk.net', 'user-theme@gnome-shell-extensions.gcampax.github.com']"

@@ -1,0 +1,218 @@
+#!/usr/bin/env python3
+"""magma-doomfire — the PSX DOOM fire, molten MAGMA edition.
+
+The classic 1993 cellular automaton: a white-hot bed seeded along the
+bottom edge, every cell cooling as its heat climbs, leaning with a slow
+sinusoidal wind, the source flaring in a surge every ~7 s. Full-screen
+24-bit colour at double vertical resolution (each cell is two pixels via
+the '▀' half-block). Pure stdlib ANSI — no curses, no numpy, no RNG
+(deterministic hash). Any key quits; Ctrl-C safe; adapts to resize live.
+
+    magma-doomfire                  # defaults: 20 fps, auto-oscillating wind
+    magma-doomfire --fps 30         # smoother (max 30)
+    magma-doomfire --wind 0.6       # constant lean to the right (-1..1)
+    magma-doomfire --height 0.5     # lazier, lower flames (0.3-1.0)
+
+Without a TTY (piped/CI) it plays a 5-second demo and exits by itself.
+"""
+import argparse
+import math
+import os
+import select
+import shutil
+import sys
+import time
+
+ESC = "\x1b"
+ALT_ON = ESC + "[?1049h" + ESC + "[?25l"
+ALT_OFF = ESC + "[?25h" + ESC + "[?1049l"
+
+# Heat ramp: obsidian -> plum -> maroon -> crimson -> lava -> gold -> white-hot.
+STOPS = (
+    (0.00, (13, 10, 15)),      # bg obsidian
+    (0.30, (38, 16, 34)),      # cooling plum
+    (0.46, (96, 24, 40)),      # maroon crust
+    (0.60, (224, 48, 78)),     # crimson
+    (0.72, (255, 109, 58)),    # molten orange (accent)
+    (0.84, (255, 193, 69)),    # lava gold
+    (0.94, (255, 238, 190)),   # near-white
+    (1.00, (255, 252, 235)),   # core
+)
+RAMP_N = 128
+# Heat is fixed-point: 8 fractional bits per ramp step, so cooling can be
+# arbitrarily gentle while the ramp index is just `heat >> 8`.
+MAXH = RAMP_N * 256 - 1
+SURGE_PERIOD = 7.0             # seconds between source flares
+WIND_PERIOD = 17.0             # seconds per auto-wind oscillation
+
+
+def _build_ramp():
+    """RAMP_N (fg, bg) SGR sequences along the heat gradient."""
+    fgs, bgs = [], []
+    for i in range(RAMP_N):
+        t = i / (RAMP_N - 1)
+        r = g = b = 0
+        for (t0, c0), (t1, c1) in zip(STOPS, STOPS[1:]):
+            if t <= t1:
+                k = 0.0 if t1 == t0 else (t - t0) / (t1 - t0)
+                r = int(c0[0] + (c1[0] - c0[0]) * k)
+                g = int(c0[1] + (c1[1] - c0[1]) * k)
+                b = int(c0[2] + (c1[2] - c0[2]) * k)
+                break
+        fgs.append(ESC + "[38;2;%d;%d;%dm" % (r, g, b))
+        bgs.append(ESC + "[48;2;%d;%d;%dm" % (r, g, b))
+    return fgs, bgs
+
+
+FG, BG = _build_ramp()
+DIM = ESC + "[38;2;122;100;112m" + ESC + "[48;2;13;10;15m"
+HINT = " magma · any key to quit "
+
+
+def build(cols, px_h, height, seed):
+    """Fresh grid pre-seeded near the automaton's steady state (a linear
+    heat gradient plus hash noise) so startup and resizes don't flash dark."""
+    reach = max(height * px_h, 1.0)
+    grid = []
+    for y in range(px_h):
+        base = int(MAXH * 0.92) - int((px_h - 1 - y) * MAXH / reach)
+        row = []
+        for _ in range(cols):
+            seed = (seed * 2654435761 + 1013904223) & 0xFFFFFFFF
+            h = base + (seed & 2047) - 1024
+            row.append(0 if h < 0 else (MAXH if h > MAXH else h))
+        grid.append(row)
+    return grid, seed
+
+
+def stoke(row, cols, t, seed):
+    """Refresh the bottom (source) row: white-hot with a per-column shimmer,
+    flaring to full white once every SURGE_PERIOD seconds."""
+    p = math.sin(2.0 * math.pi * t / SURGE_PERIOD)
+    p = p ** 10 if p > 0.0 else 0.0          # brief, sharp pulse
+    level = int(MAXH * (0.92 + 0.08 * p))
+    for x in range(cols):
+        seed = (seed * 2654435761 + 1013904223) & 0xFFFFFFFF
+        row[x] = level - (seed & 1023)       # ~3% shimmer, never below gold
+    return seed
+
+
+def step(grid, cols, px_h, cool, wind, seed):
+    """One generation: each pixel pulls heat from the row below, drifting
+    sideways by hash jitter plus the wind bias, and loses a hash-random
+    amount of heat (0..cool). Top-down order so heat climbs one row/frame."""
+    push = int(abs(wind) * 255.0)            # P(extra sideways step) per row
+    lean = 1 if wind > 0.0 else -1
+    last = cols - 1
+    for y in range(px_h - 1):
+        src = grid[y + 1]
+        dst = grid[y]
+        for x in range(cols):
+            seed = (seed * 2654435761 + 1013904223) & 0xFFFFFFFF
+            off = (seed >> 4) % 3 - 1
+            if (seed >> 8 & 255) < push:
+                off += lean
+            sx = x - off
+            if sx < 0:
+                sx = 0
+            elif sx > last:
+                sx = last
+            h = src[sx] - ((seed & 255) * cool >> 8)
+            dst[x] = h if h > 0 else 0
+    return seed
+
+
+def render(out, grid, cols, rows):
+    """Paint rows*2 half-block pixels, emitting SGR only on colour change."""
+    buf = [ESC + "[H"]
+    write = buf.append
+    last = None
+    for cy in range(rows):
+        top = grid[2 * cy]
+        bot = grid[2 * cy + 1]
+        for cx in range(cols):
+            pair = (top[cx] >> 8, bot[cx] >> 8)
+            if pair != last:
+                write(FG[pair[0]])
+                write(BG[pair[1]])
+                last = pair
+            write("▀")
+        if cy != rows - 1:
+            write("\r\n")
+    # unobtrusive corner hint, up top where the fire rarely reaches
+    buf.append(ESC + "[1;2H" + DIM + HINT[: max(cols - 2, 0)] + ESC + "[0m")
+    out.write("".join(buf))
+    out.flush()
+
+
+def main():
+    ap = argparse.ArgumentParser(description="the PSX DOOM fire for your terminal")
+    ap.add_argument("--fps", type=float, default=20.0,
+                    help="target frames/second (1-30, default 20)")
+    ap.add_argument("--wind", type=float, default=0.0,
+                    help="lean bias, -1 (left) to 1 (right); 0 = slow auto-oscillation")
+    ap.add_argument("--height", type=float, default=0.75,
+                    help="fraction of the screen the flames reach (0.3-1.0)")
+    args = ap.parse_args()
+    target = 1.0 / max(1.0, min(args.fps, 30.0))
+    wind_bias = max(-1.0, min(args.wind, 1.0))
+    height = max(0.3, min(args.height, 1.0))
+
+    out = sys.stdout
+    interactive = sys.stdin.isatty() and out.isatty()
+    deadline = None if interactive else time.monotonic() + 5.0  # demo mode when piped
+    saved = None
+    if interactive:
+        import termios
+        import tty as _tty
+        fd = sys.stdin.fileno()
+        saved = termios.tcgetattr(fd)
+        _tty.setcbreak(fd)
+    else:
+        out.write("magma-doomfire: not a tty — playing a 5-second demo.\n")
+
+    seed = 0x2545F491                       # fixed start: fully deterministic
+    grid, shape, cool = None, None, 1
+    out.write(ALT_ON)
+    try:
+        t0 = time.monotonic()
+        while True:
+            start = time.monotonic()
+            if deadline and start > deadline:
+                break
+            t = start - t0
+            size = shutil.get_terminal_size()
+            cols = max(size.columns, 4)
+            rows = max(size.lines, 4)
+            px_h = rows * 2
+            if (cols, px_h) != shape:       # live resize: rebuild pre-warmed
+                shape = (cols, px_h)
+                cool = max(int(2 * MAXH / (height * px_h)), 1)
+                grid, seed = build(cols, px_h, height, seed)
+            wind = wind_bias if wind_bias else \
+                0.6 * math.sin(2.0 * math.pi * t / WIND_PERIOD)
+            seed = stoke(grid[px_h - 1], cols, t, seed)
+            seed = step(grid, cols, px_h, cool, wind, seed)
+            render(out, grid, cols, rows)
+            wait = max(0.0, target - (time.monotonic() - start))
+            if interactive:
+                r, _, _ = select.select([sys.stdin], [], [], wait)
+                if r and sys.stdin.read(1):
+                    break
+            else:
+                time.sleep(wait)
+    except (KeyboardInterrupt, BrokenPipeError):
+        pass
+    finally:
+        try:
+            out.write(ESC + "[0m" + ALT_OFF)
+            out.flush()
+        except BrokenPipeError:             # downstream (head, etc.) is gone
+            os.dup2(os.open(os.devnull, os.O_WRONLY), out.fileno())
+        if saved is not None:
+            import termios
+            termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, saved)
+
+
+if __name__ == "__main__":
+    main()

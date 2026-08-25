@@ -1,0 +1,32 @@
+/* MAGMA — Obsidian Flow — GTK3 accent fallback. */
+@define-color accent_color #FFA05C;
+@define-color accent_bg_color #FF6D3A;
+@define-color accent_fg_color #0D0A0F;
+
+/* Headerbars fade out until hovered — mirrors gtk4.css: fast 150ms fade-in,
+ * 500ms linger before a 250ms fade-out, hovered bar reads as plum glass.
+ * adw-gtk3-dark paints headerbar as a flat same-color gradient IMAGE over
+ * @headerbar_bg_color (#2e2e32), so the base rule drops the image once
+ * (visually identical — the gradient is flat) and the hover glass only has
+ * to animate background-color. Dialogs stay visible and native; their
+ * :hover variants outrank the generic glass rule. */
+headerbar {
+  opacity: 0;
+  background-image: none;
+  transition: opacity 250ms ease 500ms, background-color 250ms ease 500ms;
+}
+headerbar:hover {
+  opacity: 1;
+  background-color: rgba(24, 16, 25, 0.72);
+  transition: opacity 150ms ease, background-color 150ms ease;
+}
+dialog headerbar,
+window.dialog headerbar {
+  opacity: 1;
+  transition: background-color 200ms ease-out;
+}
+dialog headerbar:hover,
+window.dialog headerbar:hover {
+  background-color: #2e2e32; /* adw-gtk3-dark @headerbar_bg_color — dialogs never go glassy */
+  transition: background-color 200ms ease-out;
+}

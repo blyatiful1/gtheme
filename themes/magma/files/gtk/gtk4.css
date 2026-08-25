@@ -1,0 +1,72 @@
+/* MAGMA — Obsidian Flow — GTK4/libadwaita. Hand-tuned: this component is NOT
+ * in [build].managed, so `gtheme build` will never overwrite it. */
+
+:root {
+  --accent-bg-color: #FF6D3A;
+  /* text ON accent-filled widgets: both bundled accents are mid-light, so the
+     theme's own dark bg is the readable pairing (ivory-on-accent is ~2.2:1) */
+  --accent-fg-color: #0D0A0F;
+  --accent-color: #FFA05C;
+}
+
+/* ── Obsidian glass: Nautilus ────────────────────────────────────────────
+ * blur-my-shell whitelists org.gnome.Nautilus, so the wallpaper is blurred
+ * behind the window; these rgba surfaces let it glow through. Scoped to the
+ * .nautilus-window class — other GTK4 apps stay opaque. */
+window.nautilus-window {
+  --window-bg-color: rgba(13, 10, 15, 0.78);
+  --sidebar-bg-color: rgba(24, 16, 25, 0.42);
+  --sidebar-backdrop-color: rgba(18, 12, 19, 0.34);
+  --headerbar-bg-color: rgba(24, 16, 25, 0.30);
+  --headerbar-backdrop-color: rgba(18, 12, 19, 0.24);
+  --view-bg-color: rgba(13, 10, 15, 0.35);
+}
+
+/* ── Headerbars fade out until hovered (Zen-browser compact feel) ────────
+ * opacity hides the pixels but keeps the strip's height and input: the
+ * invisible bar still drags/double-click-maximizes; controls fade back in
+ * on hover. (GTK CSS has no display/height, and a negative-margin slide
+ * would put the bar out of the pointer's reach forever.)
+ * Timing: the DESTINATION state's transition applies, so the 500ms linger
+ * delay lives on this base rule (pointer leaves → bar waits, then melts)
+ * and the hover rule below carries the fast, undelayed fade-in.
+ * background-color shares the delay so the glass tint doesn't pop back to
+ * a solid slab while the bar is still lingering. */
+headerbar {
+  opacity: 0;
+  transition: opacity 250ms ease 500ms, background-color 250ms ease 500ms;
+}
+/* Revealed bar reads as translucent glass. libadwaita 1.9 paints headerbar
+ * as `background-color: var(--headerbar-bg-color)`, so mix the app's OWN
+ * headerbar color down to 72% instead of hardcoding a slab — per-app
+ * coloring survives, it just turns glassy. Fallback #181019 (MAGMA plum)
+ * covers plain-GTK4 apps that never define the variable. */
+headerbar:hover {
+  opacity: 1;
+  background-color: color-mix(in srgb, var(--headerbar-bg-color, #181019) 72%, transparent);
+  transition: opacity 150ms ease, background-color 150ms ease;
+}
+
+/* Nautilus' --headerbar-bg-color above is already translucent glass tuned
+ * for blur-my-shell — don't fade it a second time, use it as-is. */
+window.nautilus-window headerbar:hover {
+  background-color: var(--headerbar-bg-color);
+}
+
+/* Dialogs keep their bars: Save/Open/Cancel must stay visible AND native.
+ * AdwDialog/AdwAlertDialog = node "dialog"; GtkDialog and the portal
+ * file chooser = window with .dialog class. The :hover variants outrank
+ * the generic glass rule ((0,1,2)/(0,2,2) vs (0,1,1)) and re-state
+ * libadwaita's own background formula, so dialog bars never go glassy;
+ * `background-color 200ms ease-out` mirrors libadwaita's native headerbar
+ * transition and shields dialogs from the 500ms linger delay above. */
+dialog headerbar,
+window.dialog headerbar {
+  opacity: 1;
+  transition: background-color 200ms ease-out;
+}
+dialog headerbar:hover,
+window.dialog headerbar:hover {
+  background-color: var(--headerbar-bg-color, #2b2b2b);
+  transition: background-color 200ms ease-out;
+}
