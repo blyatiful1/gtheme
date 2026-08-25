@@ -1,0 +1,138 @@
+# Just Perfection — a switchboard for hiding or resizing parts of the desktop.
+id = "just-perfection"
+
+[target]
+uuids = ["just-perfection-desktop@just-perfection"]
+ego_pk = 3843
+schema_id = "org.gnome.shell.extensions.just-perfection"
+category = "looks"
+summary = "Lets you hide or resize almost any piece of the desktop you do not want: the top bar, the clock, the search box, the row of app icons."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.just-perfection"
+key = "panel"
+title = "Show the bar at the top"
+subtitle = "Turn this off and the bar across the top of the screen disappears completely."
+synonyms = ["top bar", "hide top bar", "menu bar"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.just-perfection"
+key = "panel-size"
+title = "Height of the top bar"
+subtitle = "How tall the bar across the top is. Zero leaves it at whatever your chosen look uses."
+kind = "slider"
+clamp_min = 0
+clamp_max = 64
+step = 1
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.just-perfection"
+key = "dash"
+title = "Show the row of app icons"
+subtitle = "The strip of favourite apps you see when you open the app view."
+synonyms = ["dock", "dash", "favourites", "favorites"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.just-perfection"
+key = "activities-button"
+title = "Show the Activities button"
+subtitle = "The word in the top-left corner that opens the app view when you click it."
+synonyms = ["activities"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.just-perfection"
+key = "search"
+title = "Show the search box"
+subtitle = "The box at the top of the app view that searches your apps and files."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.just-perfection"
+key = "clock-menu"
+title = "Show the clock"
+subtitle = "The date and time in the middle of the top bar, which also opens your notifications."
+synonyms = ["time", "date", "calendar"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.just-perfection"
+key = "quick-settings"
+title = "Show the settings menu"
+subtitle = "The cluster of icons at the top right that holds sound, network and the power button."
+synonyms = ["system menu", "volume", "wifi"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.just-perfection"
+key = "animation"
+title = "How fast things move"
+subtitle = "Speeds up or switches off the sliding and fading you see when windows open and close."
+synonyms = ["animation", "speed", "faster", "no animation"]
+kind = "choice"
+[[rows.choices]]
+value = "0"
+label = "No movement at all"
+subtitle = "Everything appears instantly."
+[[rows.choices]]
+value = "1"
+label = "Normal"
+[[rows.choices]]
+value = "2"
+label = "Fast"
+[[rows.choices]]
+value = "3"
+label = "Faster"
+[[rows.choices]]
+value = "4"
+label = "Fastest"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.just-perfection"
+key = "startup-status"
+title = "What you see when you log in"
+subtitle = "Start on your empty desktop, or start with all your apps laid out in front of you."
+kind = "choice"
+[[rows.choices]]
+value = "0"
+label = "The desktop"
+[[rows.choices]]
+value = "1"
+label = "The app view"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.just-perfection"
+key = "workspace-switcher-should-show"
+title = "Show the strip of desktops"
+subtitle = "The row of small pictures at the top of the app view, one for each desktop you have."
+synonyms = ["workspaces", "desktops"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.just-perfection"
+key = "panel-icon-size"
+title = "Size of the top bar icons"
+subtitle = "How big the little icons in the top bar are drawn. Zero leaves them as your chosen look draws them."
+kind = "slider"
+clamp_min = 0
+clamp_max = 60
+step = 1
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.just-perfection"
+key = "background-menu"
+title = "Right-click menu on the desktop"
+subtitle = "Whether right-clicking your background picture opens a small menu."
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.just-perfection"
+key = "osd"
+title = "Show the volume and brightness pop-up"
+subtitle = "The little box that appears in the middle of the screen when you change the volume."
+kind = "toggle"
+advanced = true

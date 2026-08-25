@@ -1,0 +1,57 @@
+# Compiz alike magic lamp effect — the genie minimise.
+id = "magic-lamp"
+
+[target]
+uuids = ["compiz-alike-magic-lamp-effect@hermes83.github.com"]
+ego_pk = 3740
+schema_id = "org.gnome.shell.extensions.com.github.hermes83.compiz-alike-magic-lamp-effect"
+category = "looks"
+summary = "Tucking a window away sucks it down into the row of app icons like a genie going into a lamp."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.com.github.hermes83.compiz-alike-magic-lamp-effect"
+key = "effect"
+title = "Shape of the movement"
+subtitle = "How the window bends on its way down."
+kind = "choice"
+[[rows.choices]]
+value = "'default'"
+label = "Genie"
+subtitle = "Stretches to a point, the way the original did."
+[[rows.choices]]
+value = "'sine'"
+label = "Wave"
+subtitle = "A softer, more rippling version."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.com.github.hermes83.compiz-alike-magic-lamp-effect"
+key = "duration"
+title = "How long it takes"
+subtitle = "Measured in thousandths of a second. Lower is snappier."
+synonyms = ["speed", "duration"]
+kind = "slider"
+clamp_min = 100
+clamp_max = 2000
+step = 50
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.com.github.hermes83.compiz-alike-magic-lamp-effect"
+key = "x-tiles"
+title = "Detail across"
+subtitle = "How finely the window is cut up sideways while it bends. Higher looks smoother and asks more of the graphics card."
+kind = "slider"
+clamp_min = 2
+clamp_max = 50
+step = 1
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.com.github.hermes83.compiz-alike-magic-lamp-effect"
+key = "y-tiles"
+title = "Detail down"
+subtitle = "How finely the window is cut up top to bottom while it bends."
+kind = "slider"
+clamp_min = 2
+clamp_max = 50
+step = 1
+advanced = true

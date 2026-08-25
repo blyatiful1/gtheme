@@ -1,0 +1,142 @@
+# TopHat — graph-style system readings in the top bar.
+id = "tophat"
+
+[target]
+uuids = ["tophat@fflewddur.github.io"]
+ego_pk = 5219
+schema_id = "org.gnome.shell.extensions.tophat"
+conflicts = ["Vitals@CoreCoding.com"]
+category = "system readings"
+summary = "A prettier system monitor for the top bar, with small live graphs for the processor, memory, disk and network."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tophat"
+key = "show-cpu"
+title = "Show the processor meter"
+subtitle = "How hard the computer's brain is working."
+synonyms = ["cpu", "processor"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tophat"
+key = "show-mem"
+title = "Show the memory meter"
+subtitle = "How much of the computer's working memory is in use."
+synonyms = ["ram", "memory"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tophat"
+key = "show-disk"
+title = "Show the disk meter"
+subtitle = "How much is being read from and written to your drive."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tophat"
+key = "show-net"
+title = "Show the network meter"
+subtitle = "How much is being sent and received over your internet connection."
+synonyms = ["internet", "network"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tophat"
+key = "show-fs"
+title = "Show free space"
+subtitle = "How much room is left on the drive."
+synonyms = ["storage", "free space"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tophat"
+key = "cpu-display"
+title = "How the processor meter looks"
+subtitle = "A little moving graph, a plain number, or both together."
+kind = "choice"
+[[rows.choices]]
+value = "'chart'"
+label = "Moving graph"
+[[rows.choices]]
+value = "'numeric'"
+label = "Just the number"
+[[rows.choices]]
+value = "'both'"
+label = "Both"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tophat"
+key = "mem-display"
+title = "How the memory meter looks"
+subtitle = "A little moving graph, a plain number, or both together."
+kind = "choice"
+[[rows.choices]]
+value = "'chart'"
+label = "Moving graph"
+[[rows.choices]]
+value = "'numeric'"
+label = "Just the number"
+[[rows.choices]]
+value = "'both'"
+label = "Both"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tophat"
+key = "refresh-rate"
+title = "How often the meters refresh"
+subtitle = "Faster meters feel more alive and ask a little more of the computer."
+kind = "choice"
+[[rows.choices]]
+value = "'slow'"
+label = "Slow"
+[[rows.choices]]
+value = "'medium'"
+label = "Medium"
+[[rows.choices]]
+value = "'fast'"
+label = "Fast"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tophat"
+key = "position-in-panel"
+title = "Where the meters sit"
+subtitle = "Which part of the bar at the top the meters appear in."
+kind = "choice"
+[[rows.choices]]
+value = "'leftedge'"
+label = "Far left"
+[[rows.choices]]
+value = "'left'"
+label = "Left"
+[[rows.choices]]
+value = "'center'"
+label = "Middle"
+[[rows.choices]]
+value = "'right'"
+label = "Right"
+[[rows.choices]]
+value = "'rightedge'"
+label = "Far right"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tophat"
+key = "use-system-accent"
+title = "Colour the meters to match the desktop"
+subtitle = "Draws the graphs in your chosen highlight colour instead of a fixed one."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tophat"
+key = "meter-fg-color"
+title = "Meter colour"
+subtitle = "The colour the graphs are drawn in when they are not matching the desktop."
+kind = "color"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tophat"
+key = "show-icons"
+title = "Show a small icon next to each meter"
+subtitle = "Helps tell the meters apart at a glance."
+kind = "toggle"
+advanced = true

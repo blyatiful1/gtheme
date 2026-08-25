@@ -1,0 +1,168 @@
+# Burn My Windows — animated window opening and closing.
+#
+# This is the hardest add-on in the curated set. Its real settings live in a
+# second, repeatable set of settings: one copy per "profile" file the add-on
+# keeps, addressed by the location template below. There are 163 settings in
+# a copy. gtheme deliberately shows a handful: pick an effect, set how long
+# it takes, say which windows it applies to. Everything else stays with the
+# add-on's own window.
+#
+# Rows below leave their location empty on purpose: the app fills in whichever
+# profile is currently active, using the template in [target].
+id = "burn-my-windows"
+
+[target]
+uuids = ["burn-my-windows@schneegans.github.com"]
+ego_pk = 4679
+schema_id = "org.gnome.shell.extensions.burn-my-windows"
+child_schemas = ["org.gnome.shell.extensions.burn-my-windows-profile"]
+relocatable_path_template = "/org/gnome/shell/extensions/burn-my-windows/profiles/{profile}/"
+category = "looks"
+summary = "Windows catch fire, dissolve into pixels or flicker away like an old television when you close them."
+warn = "These effects are drawn by your graphics card on every window that opens or closes. On an older machine they can feel slow."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
+key = "fire-enable-effect"
+title = "Burn away"
+subtitle = "The window goes up in flames when it closes."
+synonyms = ["fire", "burn", "flame"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
+key = "matrix-enable-effect"
+title = "Rain of green letters"
+subtitle = "The window falls apart into a curtain of glowing characters."
+synonyms = ["matrix", "code", "green"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
+key = "tv-enable-effect"
+title = "Old television switch-off"
+subtitle = "The window collapses into a thin bright line and blinks out."
+synonyms = ["tv", "television", "retro"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
+key = "glide-enable-effect"
+title = "Glide away"
+subtitle = "The window simply slides and fades. The calmest of the lot."
+synonyms = ["glide", "fade", "subtle"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
+key = "pixelate-enable-effect"
+title = "Break into blocks"
+subtitle = "The window turns into bigger and bigger coloured squares until it is gone."
+synonyms = ["pixelate", "blocks", "8-bit"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
+key = "broken-glass-enable-effect"
+title = "Shatter like glass"
+subtitle = "The window breaks into shards that fall out of view."
+synonyms = ["glass", "shatter", "break"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
+key = "profile-window-type"
+title = "Which windows this applies to"
+subtitle = "Ordinary app windows, the small pop-up boxes, or both."
+kind = "choice"
+[[rows.choices]]
+value = "0"
+label = "Both"
+[[rows.choices]]
+value = "1"
+label = "Ordinary windows only"
+[[rows.choices]]
+value = "2"
+label = "Pop-up boxes only"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
+key = "profile-animation-type"
+title = "When to play the effect"
+subtitle = "As windows open, as they close, or both."
+kind = "choice"
+[[rows.choices]]
+value = "0"
+label = "Opening and closing"
+[[rows.choices]]
+value = "1"
+label = "Only when opening"
+[[rows.choices]]
+value = "2"
+label = "Only when closing"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
+key = "fire-animation-time"
+title = "How long the burn takes"
+subtitle = "Measured in thousandths of a second. Lower is snappier."
+kind = "slider"
+clamp_min = 100
+clamp_max = 5000
+step = 50
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
+key = "matrix-animation-time"
+title = "How long the letters take to fall"
+subtitle = "Measured in thousandths of a second. Lower is snappier."
+kind = "slider"
+clamp_min = 100
+clamp_max = 5000
+step = 50
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
+key = "tv-animation-time"
+title = "How long the television switch-off takes"
+subtitle = "Measured in thousandths of a second. Lower is snappier."
+kind = "slider"
+clamp_min = 100
+clamp_max = 5000
+step = 50
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
+key = "glide-animation-time"
+title = "How long the glide takes"
+subtitle = "Measured in thousandths of a second. Lower is snappier."
+kind = "slider"
+clamp_min = 100
+clamp_max = 5000
+step = 50
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
+key = "pixelate-animation-time"
+title = "How long the blocks take"
+subtitle = "Measured in thousandths of a second. Lower is snappier."
+kind = "slider"
+clamp_min = 100
+clamp_max = 5000
+step = 50
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
+key = "broken-glass-animation-time"
+title = "How long the shatter takes"
+subtitle = "Measured in thousandths of a second. Lower is snappier."
+kind = "slider"
+clamp_min = 100
+clamp_max = 5000
+step = 50
+advanced = true

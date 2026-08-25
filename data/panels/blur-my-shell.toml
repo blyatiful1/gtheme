@@ -1,0 +1,119 @@
+# Blur my Shell — frosted-glass looks for the bar, the app view and windows.
+#
+# Every (schema_id, key) below is verified against
+# tests/fixtures/schemas/blur-my-shell@aunetx/. This add-on splits its
+# settings across one child schema per surface, which is exactly why rows
+# are addressed by (schema_id, key) and never by key alone: ".panel/blur"
+# and ".overview/blur" are different settings with the same key name.
+id = "blur-my-shell"
+
+[target]
+uuids = ["blur-my-shell@aunetx"]
+ego_pk = 3193
+schema_id = "org.gnome.shell.extensions.blur-my-shell"
+child_schemas = [
+  "org.gnome.shell.extensions.blur-my-shell.panel",
+  "org.gnome.shell.extensions.blur-my-shell.overview",
+  "org.gnome.shell.extensions.blur-my-shell.dash-to-dock",
+  "org.gnome.shell.extensions.blur-my-shell.applications",
+  "org.gnome.shell.extensions.blur-my-shell.lockscreen",
+]
+category = "looks"
+summary = "Makes the bar at the top, the app view and app windows look like frosted glass instead of flat colour."
+warn = "On this computer, frosting the top bar at the same time as hiding it has been seen to stop screen recording from working."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.blur-my-shell.panel"
+key = "blur"
+title = "Frost the top bar"
+subtitle = "Makes the bar across the top of the screen look like frosted glass, so the picture behind shows through."
+synonyms = ["blur", "top bar", "transparent", "see-through", "glass"]
+kind = "toggle"
+warn = "On this computer, turning this on while the top bar is also set to slide away has been seen to stop screen recording from working. If recording stops working, turn this off first."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.blur-my-shell.panel"
+key = "sigma"
+title = "How frosted the top bar is"
+subtitle = "Higher settings make what is behind the top bar softer and harder to make out."
+synonyms = ["blur strength", "blurriness"]
+kind = "slider"
+clamp_min = 0
+clamp_max = 100
+step = 1
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.blur-my-shell.panel"
+key = "brightness"
+title = "How bright the top bar is"
+subtitle = "Lower settings make the frosted top bar darker, which helps white text stand out."
+synonyms = ["darkness", "brightness"]
+kind = "slider"
+clamp_min = 0.0
+clamp_max = 1.0
+step = 0.05
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.blur-my-shell.panel"
+key = "static-blur"
+title = "Use the cheaper frosting"
+subtitle = "Frosts the background picture once instead of following whatever moves underneath. Looks crisper and asks less of your graphics card."
+synonyms = ["performance", "static"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.blur-my-shell.panel"
+key = "corner-radius"
+title = "Round the top bar corners"
+subtitle = "Rounds off the bottom corners of the frosted top bar. Zero leaves them square."
+synonyms = ["rounded corners"]
+kind = "slider"
+clamp_min = 0
+clamp_max = 40
+step = 1
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.blur-my-shell.overview"
+key = "blur"
+title = "Frost the app view"
+subtitle = "Softens your background picture while you are looking at all your open windows and apps."
+synonyms = ["activities", "app view", "blur"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.blur-my-shell.overview"
+key = "sigma"
+title = "How frosted the app view is"
+subtitle = "Higher settings soften the background picture more while the app view is open."
+kind = "slider"
+clamp_min = 0
+clamp_max = 100
+step = 1
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.blur-my-shell.dash-to-dock"
+key = "blur"
+title = "Frost the row of app icons"
+subtitle = "Makes the strip of app icons look like frosted glass. Only does anything if you use the add-on that turns it into a permanent bar."
+synonyms = ["dock", "taskbar", "dash"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.blur-my-shell.applications"
+key = "blur"
+title = "Frost app windows"
+subtitle = "Frosts what is behind see-through app windows. This one is the most demanding on your graphics card."
+synonyms = ["windows", "transparency"]
+kind = "toggle"
+advanced = true
+warn = "This works on every window at once and can make dragging windows feel slower on older computers."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.blur-my-shell.lockscreen"
+key = "blur"
+title = "Frost the lock screen"
+subtitle = "Softens the background picture on the screen you see when the computer is locked."
+kind = "toggle"
+advanced = true

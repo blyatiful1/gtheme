@@ -1,0 +1,106 @@
+# GSConnect — link an Android phone to the desktop.
+#
+# Most of this add-on's settings are per-paired-phone. This panel covers the
+# handful that apply to the computer as a whole and leaves the rest to the
+# add-on's own window.
+id = "gsconnect"
+
+[target]
+uuids = ["gsconnect@andyholmes.github.io"]
+ego_pk = 1319
+schema_id = "org.gnome.Shell.Extensions.GSConnect"
+child_schemas = [
+  "org.gnome.Shell.Extensions.GSConnect.Device",
+  "org.gnome.Shell.Extensions.GSConnect.Plugin.Clipboard",
+  "org.gnome.Shell.Extensions.GSConnect.Plugin.Notification",
+  "org.gnome.Shell.Extensions.GSConnect.Plugin.Share",
+  "org.gnome.Shell.Extensions.GSConnect.Plugin.Battery",
+  "org.gnome.Shell.Extensions.GSConnect.Plugin.SFTP",
+]
+category = "phones and devices"
+summary = "Links your Android phone to this computer, so texts and notifications arrive here and files can be sent both ways."
+
+[[rows]]
+schema_id = "org.gnome.Shell.Extensions.GSConnect"
+key = "name"
+title = "What your phone calls this computer"
+subtitle = "The name that shows up on your phone when it looks for this computer."
+synonyms = ["computer name", "device name"]
+kind = "text"
+
+[[rows]]
+schema_id = "org.gnome.Shell.Extensions.GSConnect"
+key = "discoverable"
+title = "Let phones find this computer"
+subtitle = "Turn this on while you are pairing a new phone. It only reaches phones on the same network."
+synonyms = ["pair", "discover"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.Shell.Extensions.GSConnect"
+key = "show-indicators"
+title = "Show each phone in the top bar"
+subtitle = "Gives every linked phone its own small icon at the top of the screen."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.Shell.Extensions.GSConnect"
+key = "keep-alive-when-locked"
+title = "Stay linked while the screen is locked"
+subtitle = "Keeps talking to your phone even when you have stepped away from the computer."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.Shell.Extensions.GSConnect.Plugin.Clipboard"
+key = "send-content"
+title = "Send what you copy to your phone"
+subtitle = "Anything you copy here can then be pasted on the phone."
+synonyms = ["clipboard", "copy paste"]
+kind = "toggle"
+warn = "Anything you copy on this computer, passwords included, will be sent to the linked phone."
+
+[[rows]]
+schema_id = "org.gnome.Shell.Extensions.GSConnect.Plugin.Clipboard"
+key = "receive-content"
+title = "Receive what you copy on your phone"
+subtitle = "Anything you copy on the phone can then be pasted here."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.Shell.Extensions.GSConnect.Plugin.Notification"
+key = "send-notifications"
+title = "Send this computer's notifications to your phone"
+subtitle = "Messages that pop up here also appear on the phone."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.Shell.Extensions.GSConnect.Plugin.Share"
+key = "receive-files"
+title = "Accept files from your phone"
+subtitle = "Lets the phone send pictures and documents over to this computer."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.Shell.Extensions.GSConnect.Plugin.Share"
+key = "receive-directory"
+title = "Where files from your phone are saved"
+subtitle = "Leave this empty to use your Downloads folder."
+synonyms = ["downloads", "folder"]
+kind = "text"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.Shell.Extensions.GSConnect.Plugin.Battery"
+key = "low-battery-notification"
+title = "Warn me when the phone is nearly flat"
+subtitle = "Shows a message here when the phone's battery is running low."
+synonyms = ["battery", "charge"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.Shell.Extensions.GSConnect.Plugin.SFTP"
+key = "automount"
+title = "Open the phone's storage automatically"
+subtitle = "Makes the phone's files appear in your file manager as soon as it connects."
+kind = "toggle"
+advanced = true

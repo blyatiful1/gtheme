@@ -1,0 +1,60 @@
+# Rounded Window Corners Reborn.
+#
+# The headline control — corner radius — does not live in a key of its own.
+# It sits inside a dictionary value, which is why these rows use the
+# dict_slider kind and name the entry inside it.
+id = "rounded-window-corners"
+
+[target]
+uuids = ["rounded-window-corners@fxgn"]
+ego_pk = 7048
+schema_id = "org.gnome.shell.extensions.rounded-window-corners-reborn"
+category = "looks"
+summary = "Rounds off the corners of every window, including the apps that insist on drawing square ones."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.rounded-window-corners-reborn"
+key = "global-rounded-corner-settings"
+dict_key = "borderRadius"
+title = "How round the corners are"
+subtitle = "Zero leaves windows square. Higher settings cut a bigger curve out of each corner."
+synonyms = ["rounded corners", "radius", "curve"]
+kind = "dict_slider"
+clamp_min = 0
+clamp_max = 40
+step = 1
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.rounded-window-corners-reborn"
+key = "border-width"
+title = "Line around the window"
+subtitle = "Draws a thin line along the rounded edge. Zero leaves the edge bare, which is how gtheme leaves it."
+synonyms = ["border", "outline"]
+kind = "slider"
+clamp_min = 0
+clamp_max = 10
+step = 1
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.rounded-window-corners-reborn"
+key = "skip-libadwaita-app"
+title = "Leave modern apps alone"
+subtitle = "Apps built for this desktop already round their own corners, so this skips them instead of rounding twice."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.rounded-window-corners-reborn"
+key = "keep-shadow-for-maximized-fullscreen"
+title = "Keep the shadow on full-screen windows"
+subtitle = "Leaves the soft dark edge in place even when a window fills the screen."
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.rounded-window-corners-reborn"
+key = "tweak-kitty-terminal"
+title = "Work around one stubborn terminal"
+subtitle = "Fixes the corners of the Kitty terminal, which needs a nudge the others do not."
+kind = "toggle"
+advanced = true

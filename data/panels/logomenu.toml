@@ -1,0 +1,96 @@
+# Logo Menu — a distro logo button at the top left.
+id = "logomenu"
+
+[target]
+uuids = ["logomenu@aryan_k"]
+ego_pk = 4451
+schema_id = "org.gnome.shell.extensions.logo-menu"
+category = "looks"
+summary = "Puts a small logo button in the top-left corner that opens a quick menu of common actions."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.logo-menu"
+key = "menu-button-icon-image"
+title = "Which logo to show"
+subtitle = "Steps through the logos this add-on comes with. Slide until you see the one you like."
+synonyms = ["logo", "icon", "distro"]
+kind = "slider"
+clamp_min = 0
+clamp_max = 40
+step = 1
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.logo-menu"
+key = "menu-button-icon-size"
+title = "Logo size"
+subtitle = "How big the logo button is drawn in the top bar."
+kind = "slider"
+clamp_min = 8
+clamp_max = 64
+step = 1
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.logo-menu"
+key = "symbolic-icon"
+title = "Draw it as a plain outline"
+subtitle = "Uses a single-colour outline instead of the full-colour logo, which sits better in a tidy top bar."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.logo-menu"
+key = "show-activities-button"
+title = "Keep the Activities button as well"
+subtitle = "Leaves the word in the top-left corner where it is, next to the logo."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.logo-menu"
+key = "show-power-options"
+title = "Offer shut down and restart"
+subtitle = "Adds the power actions to the bottom of the logo menu."
+synonyms = ["shutdown", "restart", "power"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.logo-menu"
+key = "show-lockscreen"
+title = "Offer lock screen"
+subtitle = "Adds a way to lock the computer to the logo menu."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.logo-menu"
+key = "hide-icon-shadow"
+title = "Drop the shadow behind the logo"
+subtitle = "Removes the soft dark edge drawn under the logo."
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.logo-menu"
+key = "use-custom-icon"
+title = "Use a picture of your own"
+subtitle = "Show your own image instead of one of the built-in logos."
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.logo-menu"
+key = "custom-icon-path"
+title = "Your own logo picture"
+subtitle = "Point this at an image file on your computer. Only used while the option above is on."
+kind = "text"
+advanced = true
+[[rows.requires_first]]
+schema_id = "org.gnome.shell.extensions.logo-menu"
+key = "use-custom-icon"
+value = "true"
+explain = "To use your own picture, gtheme also needs to switch the logo button over from the built-in logos."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.logo-menu"
+key = "hide-forcequit"
+title = "Hide the force-quit entry"
+subtitle = "Takes the entry that kills a stuck app out of the menu."
+kind = "toggle"
+advanced = true

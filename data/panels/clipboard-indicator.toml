@@ -1,0 +1,100 @@
+# Clipboard Indicator — a history of everything you have copied.
+id = "clipboard-indicator"
+
+[target]
+uuids = ["clipboard-indicator@tudmotu.com"]
+ego_pk = 779
+schema_id = "org.gnome.shell.extensions.clipboard-indicator"
+conflicts = ["clipboard-history@alexsaveau.dev"]
+category = "getting things done"
+summary = "Keeps a list of everything you have copied, so you can paste something from ten copies ago."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.clipboard-indicator"
+key = "history-size"
+title = "How many copies to remember"
+subtitle = "Once the list is full, the oldest thing you copied is forgotten."
+synonyms = ["history", "clipboard"]
+kind = "slider"
+clamp_min = 1
+clamp_max = 500
+step = 1
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.clipboard-indicator"
+key = "display-mode"
+title = "What to keep"
+subtitle = "Remember copied text, copied pictures, or both."
+kind = "choice"
+[[rows.choices]]
+value = "0"
+label = "Text and pictures"
+[[rows.choices]]
+value = "1"
+label = "Text only"
+[[rows.choices]]
+value = "2"
+label = "Pictures only"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.clipboard-indicator"
+key = "paste-on-select"
+title = "Paste as soon as you pick something"
+subtitle = "Picking an item from the list drops it straight into whatever you are typing in."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.clipboard-indicator"
+key = "preview-size"
+title = "How much of each item to show"
+subtitle = "The number of letters shown for each remembered item in the list."
+kind = "slider"
+clamp_min = 10
+clamp_max = 100
+step = 1
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.clipboard-indicator"
+key = "cache-images"
+title = "Remember copied pictures too"
+subtitle = "Keeping pictures uses more room on your drive than keeping text."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.clipboard-indicator"
+key = "show-private-mode"
+title = "Offer a pause switch"
+subtitle = "Adds a switch that stops anything being remembered until you switch it back."
+synonyms = ["private", "incognito", "pause"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.clipboard-indicator"
+key = "show-search-bar"
+title = "Show a search box in the list"
+subtitle = "Lets you type to find something you copied earlier."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.clipboard-indicator"
+key = "notify-on-copy"
+title = "Say something each time you copy"
+subtitle = "Shows a short message whenever something new is added to the list."
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.clipboard-indicator"
+key = "confirm-clear"
+title = "Ask before emptying the list"
+subtitle = "Checks with you first when you choose to forget everything."
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.clipboard-indicator"
+key = "enable-keybindings"
+title = "Allow keyboard shortcuts"
+subtitle = "Turns on the key combinations that open the list and step through it."
+kind = "toggle"
+advanced = true

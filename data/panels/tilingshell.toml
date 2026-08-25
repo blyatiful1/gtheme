@@ -1,0 +1,114 @@
+# Tiling Shell — drag windows into neat tiled layouts.
+#
+# The window-outline rows are deliberately kept out of the way: this app's
+# house taste is calm window edges, so they sit behind "more settings" and
+# gtheme never turns them on for you.
+id = "tilingshell"
+
+[target]
+uuids = ["tilingshell@ferrarodomenico.com"]
+ego_pk = 7065
+schema_id = "org.gnome.shell.extensions.tilingshell"
+category = "layout"
+summary = "Snaps windows into tidy halves, quarters and columns when you drag them, the way Windows does."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tilingshell"
+key = "enable-tiling-system"
+title = "Snap windows into place"
+subtitle = "Hold the key it suggests while dragging a window and it drops into a neat slot."
+synonyms = ["tiling", "snap", "arrange windows"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tilingshell"
+key = "enable-snap-assist"
+title = "Show the slots while you drag"
+subtitle = "Draws the available slots at the top of the screen as soon as you pick a window up."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tilingshell"
+key = "enable-autotiling"
+title = "Arrange new windows automatically"
+subtitle = "Every window you open is fitted into the layout without you dragging it."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tilingshell"
+key = "active-screen-edges"
+title = "Snap by pushing a window to an edge"
+subtitle = "Dragging a window against the side of the screen fills that half."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tilingshell"
+key = "inner-gaps"
+title = "Space between windows"
+subtitle = "How many dots of empty space sit between two tiled windows."
+synonyms = ["gaps", "spacing", "padding"]
+kind = "slider"
+clamp_min = 0
+clamp_max = 64
+step = 1
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tilingshell"
+key = "outer-gaps"
+title = "Space around the edge"
+subtitle = "How much empty space is left between the tiled windows and the edge of the screen."
+synonyms = ["gaps", "margin"]
+kind = "slider"
+clamp_min = 0
+clamp_max = 64
+step = 1
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tilingshell"
+key = "restore-window-original-size"
+title = "Put windows back when you pull them out"
+subtitle = "A window dragged out of its slot returns to the size it was before."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tilingshell"
+key = "top-edge-maximize"
+title = "Fill the screen from the top edge"
+subtitle = "Dragging a window to the very top makes it fill the whole screen."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tilingshell"
+key = "enable-window-border"
+title = "Draw an outline around the window you are using"
+subtitle = "Adds a coloured line around whichever window has your attention. gtheme leaves this off, because it puts a hard edge on every window."
+synonyms = ["border", "outline", "focus"]
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tilingshell"
+key = "window-border-color"
+title = "Colour of that outline"
+subtitle = "Only does anything while the outline above is turned on."
+kind = "color"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tilingshell"
+key = "window-border-width"
+title = "Thickness of that outline"
+subtitle = "Only does anything while the outline above is turned on."
+kind = "slider"
+clamp_min = 1
+clamp_max = 10
+step = 1
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.tilingshell"
+key = "enable-blur-snap-assistant"
+title = "Frost the slot picker"
+subtitle = "Gives the strip of slots a frosted-glass look while you drag."
+kind = "toggle"
+advanced = true

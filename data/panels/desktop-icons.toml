@@ -1,0 +1,136 @@
+# Desktop Icons — one panel, two add-ons.
+#
+# DING and its successor Gtk4-DING do the same job with the same key names.
+# They must never run at the same time, so they share one panel and are
+# offered as an either/or. Prefer the newer one on a machine this modern.
+id = "desktop-icons"
+
+[target]
+uuids = ["ding@rastersoft.com", "gtk4-ding@smedius.gitlab.com"]
+alternates = ["gtk4-ding@smedius.gitlab.com", "ding@rastersoft.com"]
+ego_pk = 2087
+schema_id = "org.gnome.shell.extensions.ding"
+child_schemas = ["org.gnome.shell.extensions.gtk4-ding"]
+conflicts = ["ding@rastersoft.com", "gtk4-ding@smedius.gitlab.com"]
+category = "layout"
+summary = "Puts your files, folders and the wastebasket back onto the desktop background, where you can drop things on them."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.ding"
+key = "icon-size"
+title = "Icon size"
+subtitle = "How big the icons on your desktop background are drawn."
+synonyms = ["desktop icons", "size"]
+kind = "choice"
+[[rows.choices]]
+value = "'tiny'"
+label = "Tiny"
+[[rows.choices]]
+value = "'small'"
+label = "Small"
+[[rows.choices]]
+value = "'standard'"
+label = "Normal"
+[[rows.choices]]
+value = "'large'"
+label = "Large"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.ding"
+key = "show-home"
+title = "Show your home folder"
+subtitle = "Puts a shortcut to all your own files on the desktop."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.ding"
+key = "show-trash"
+title = "Show the wastebasket"
+subtitle = "Puts the wastebasket on the desktop so you can drag things into it."
+synonyms = ["trash", "bin", "recycle bin"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.ding"
+key = "show-volumes"
+title = "Show plugged-in drives"
+subtitle = "Adds an icon for each memory stick or external drive you plug in."
+synonyms = ["usb", "drives", "disks"]
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.ding"
+key = "start-corner"
+title = "Which corner icons start from"
+subtitle = "New icons are laid out beginning at this corner of the screen."
+kind = "choice"
+[[rows.choices]]
+value = "'top-left'"
+label = "Top left"
+[[rows.choices]]
+value = "'top-right'"
+label = "Top right"
+[[rows.choices]]
+value = "'bottom-left'"
+label = "Bottom left"
+[[rows.choices]]
+value = "'bottom-right'"
+label = "Bottom right"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.ding"
+key = "keep-arranged"
+title = "Keep icons tidy on their own"
+subtitle = "Re-sorts the desktop every time something is added, instead of leaving icons where you dropped them."
+kind = "toggle"
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.ding"
+key = "arrangeorder"
+title = "How to sort them"
+subtitle = "Only does anything while icons are being kept tidy automatically."
+kind = "choice"
+[[rows.choices]]
+value = "'NAME'"
+label = "By name, A to Z"
+[[rows.choices]]
+value = "'DESCENDINGNAME'"
+label = "By name, Z to A"
+[[rows.choices]]
+value = "'MODIFIEDTIME'"
+label = "Most recently changed first"
+[[rows.choices]]
+value = "'KIND'"
+label = "By what kind of file it is"
+[[rows.choices]]
+value = "'SIZE'"
+label = "By how big it is"
+[[rows.requires_first]]
+schema_id = "org.gnome.shell.extensions.ding"
+key = "keep-arranged"
+value = "true"
+explain = "To sort your desktop this way, gtheme also needs to let it tidy itself up."
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.ding"
+key = "show-drop-place"
+title = "Show where a dragged file will land"
+subtitle = "Highlights the spot on the desktop as you drag something over it."
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.ding"
+key = "dark-text-in-labels"
+title = "Use dark text under the icons"
+subtitle = "Better on a light background picture; the usual white text disappears against one."
+kind = "toggle"
+advanced = true
+
+[[rows]]
+schema_id = "org.gnome.shell.extensions.ding"
+key = "show-link-emblem"
+title = "Mark shortcuts with a small arrow"
+subtitle = "Makes it obvious which desktop icons only point at a file somewhere else."
+kind = "toggle"
+advanced = true
