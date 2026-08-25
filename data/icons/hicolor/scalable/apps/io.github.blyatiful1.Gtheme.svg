@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- PLACEHOLDER app icon. A designed icon replaces this before release; the
+     filename must keep matching the app-id so the .desktop Icon= key resolves. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#62a0ea"/>
+      <stop offset="1" stop-color="#3584e4"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="26" fill="url(#g)"/>
+  <rect x="24" y="30" width="80" height="14" rx="7" fill="#ffffff" opacity="0.95"/>
+  <rect x="24" y="57" width="56" height="14" rx="7" fill="#ffffff" opacity="0.72"/>
+  <rect x="24" y="84" width="34" height="14" rx="7" fill="#ffffff" opacity="0.5"/>
+  <circle cx="95" cy="64" r="11" fill="#f9f06b"/>
+  <circle cx="95" cy="91" r="11" fill="#ff7800"/>
+</svg>

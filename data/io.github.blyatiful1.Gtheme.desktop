@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Gtheme
+GenericName=Desktop Customization
+Comment=Change how your desktop looks — safely
+Exec=gtheme gui
+Icon=io.github.blyatiful1.Gtheme
+Terminal=false
+StartupNotify=true
+StartupWMClass=io.github.blyatiful1.Gtheme
+Categories=GNOME;GTK;Settings;DesktopSettings;
+Keywords=theme;wallpaper;background;icons;fonts;colours;colors;appearance;customize;customise;add-ons;extensions;dark mode;

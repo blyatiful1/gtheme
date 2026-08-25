@@ -1,0 +1,102 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gtheme"
+dynamic = ["version"]
+description = "Change how your GNOME desktop looks — safely, with one-click undo"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "blyatiful1" }]
+keywords = ["gnome", "theme", "wallpaper", "extensions", "desktop", "customization"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Environment :: X11 Applications :: GTK",
+    "Operating System :: POSIX :: Linux",
+]
+
+# SYSTEM DEPENDENCIES — deliberately NOT pip-pinned.
+#
+# gtheme is a GTK4/libadwaita app. Its UI half needs these from the distro's
+# package manager, never from pip (the pip wheels either do not exist, or
+# shadow the system typelibs and break):
+#
+#   * PyGObject      (Arch: python-gobject   Debian/Ubuntu: python3-gi)
+#   * GTK 4          (Arch: gtk4             Debian/Ubuntu: libgtk-4-1)
+#   * libadwaita 1.9 (Arch: libadwaita       Debian/Ubuntu: libadwaita-1-0)
+#   * GLib/GIO + gsettings/dconf tooling (Arch: glib2 dconf)
+#   * libsoup3       (Arch: libsoup3) — used by the extensions.gnome.org client
+#
+# Because of this, every virtualenv gtheme runs in MUST be created with
+# --system-site-packages so `import gi` resolves to the distro's PyGObject:
+#
+#   uv venv --system-site-packages .venv && uv pip install -e '.[dev]'
+#
+# The pure-Python half below is the only thing pip is asked to provide.
+dependencies = [
+    "jinja2>=3.1",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+
+[project.scripts]
+gtheme = "gtheme.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/blyatiful1/gtheme"
+Issues = "https://github.com/blyatiful1/gtheme/issues"
+
+# Version is single-sourced from src/gtheme/__init__.py.
+[tool.hatch.version]
+path = "src/gtheme/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gtheme"]
+
+# packaging.md §1B: data files land in the wheel via force-include, so
+# `python -m installer --destdir=$pkgdir dist/*.whl` places them correctly with
+# no custom PKGBUILD code (the waypaper precedent). Two groups:
+#   1. runtime data the app reads (bundled INSIDE the package)
+#   2. desktop-integration files (installed to share/)
+[tool.hatch.build.targets.wheel.force-include]
+"themes" = "gtheme/_bundled_themes"
+"data/domains" = "gtheme/_bundled_data/domains"
+"data/panels" = "gtheme/_bundled_data/panels"
+"data/io.github.blyatiful1.Gtheme.desktop" = "share/applications/io.github.blyatiful1.Gtheme.desktop"
+"data/io.github.blyatiful1.Gtheme.metainfo.xml" = "share/metainfo/io.github.blyatiful1.Gtheme.metainfo.xml"
+"data/icons/hicolor" = "share/icons/hicolor"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [".venv", "tests/fixtures"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4"]
+ignore = [
+    "E501",    # line length is enforced by the formatter, not the linter
+    "B008",    # function call in default arg — Gtk idioms use it
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The sandbox tier boots a real headless GNOME Shell and is LOCAL ONLY; it is
+# never part of a plain `pytest` run and never runs in CI. `verify.sh --full`
+# opts into it explicitly.
+addopts = '-m "not sandbox"'
+markers = [
+    "gtk: needs GTK4/libadwaita and a usable display (offscreen is fine)",
+    "sandbox: needs a private dbus-run-session + headless gnome-shell (LOCAL ONLY, never CI)",
+    "mutating: writes real settings/files — SKIPPED unless an isolation seam is active",
+]

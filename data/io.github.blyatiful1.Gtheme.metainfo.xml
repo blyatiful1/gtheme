@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppStream metadata. Validate with `appstreamcli validate` before release.
+     The <screenshots> block is a stub until the real page screenshots exist
+     under docs/media/screenshots/ — do NOT ship a release with fake URLs. -->
+<component type="desktop-application">
+  <id>io.github.blyatiful1.Gtheme</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <name>Gtheme</name>
+  <summary>Change how your desktop looks — safely</summary>
+
+  <description>
+    <p>
+      Gtheme puts your wallpaper, colours, icons, fonts, top bar and add-ons in
+      one window, in plain language, with a picture of what each thing does.
+    </p>
+    <p>
+      Before it changes anything, it saves how your desktop looked. If you do
+      not like a change, one click puts it back.
+    </p>
+    <p>
+      Looks only change settings. They can't run programs on your computer.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">io.github.blyatiful1.Gtheme.desktop</launchable>
+
+  <categories>
+    <category>Settings</category>
+    <category>DesktopSettings</category>
+  </categories>
+
+  <keywords>
+    <keyword>theme</keyword>
+    <keyword>wallpaper</keyword>
+    <keyword>appearance</keyword>
+    <keyword>add-ons</keyword>
+  </keywords>
+
+  <url type="homepage">https://github.com/blyatiful1/gtheme</url>
+  <url type="bugtracker">https://github.com/blyatiful1/gtheme/issues</url>
+
+  <developer id="io.github.blyatiful1">
+    <name>blyatiful1</name>
+  </developer>
+
+  <content_rating type="oars-1.1"/>
+
+  <releases>
+    <release version="2.0.0" type="development" date="2026-08-25">
+      <description>
+        <p>The v2 rebuild: gtheme becomes a graphical app.</p>
+      </description>
+    </release>
+  </releases>
+</component>

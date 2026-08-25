@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# gtheme launcher — works straight out of a source checkout.
+#
+# ~/.local/bin/gtheme is a symlink to this file, so this shim must keep working
+# across every rebuild of the repo (DESIGN.md F1). It resolves the repo root
+# through the symlink and prefers the project's own virtualenv:
+#
+#   1. <repo>/.venv/bin/gtheme          — the normal, installed case
+#   2. PYTHONPATH=<repo>/src python3 -m gtheme  — a bare checkout with the
+#      system's jinja2/pydantic/PyGObject
+#
+set -euo pipefail
+
+# Resolve this script through any chain of symlinks to find the repo root.
+_self="${BASH_SOURCE[0]}"
+while [ -L "$_self" ]; do
+    _target="$(readlink "$_self")"
+    case "$_target" in
+        /*) _self="$_target" ;;
+        *)  _self="$(dirname "$_self")/$_target" ;;
+    esac
+done
+REPO_ROOT="$(cd "$(dirname "$_self")/.." && pwd)"
+
+if [ -x "$REPO_ROOT/.venv/bin/gtheme" ]; then
+    exec "$REPO_ROOT/.venv/bin/gtheme" "$@"
+fi
+
+if [ -x "$REPO_ROOT/.venv/bin/python" ]; then
+    exec "$REPO_ROOT/.venv/bin/python" -m gtheme "$@"
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+    echo "gtheme: python3 is not installed." >&2
+    echo "  Arch:          sudo pacman -S python python-gobject" >&2
+    echo "  Debian/Ubuntu: sudo apt install python3 python3-gi" >&2
+    exit 1
+fi
+
+export PYTHONPATH="$REPO_ROOT/src${PYTHONPATH:+:$PYTHONPATH}"
+exec python3 -m gtheme "$@"

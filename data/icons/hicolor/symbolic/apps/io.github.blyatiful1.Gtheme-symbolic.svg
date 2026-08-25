@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- PLACEHOLDER symbolic icon. Symbolic icons are single-colour: every shape
+     must inherit the recolouring fill, so do not add explicit colours here. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <g fill="#222222">
+    <rect x="2" y="3" width="12" height="2" rx="1"/>
+    <rect x="2" y="7" width="8" height="2" rx="1"/>
+    <rect x="2" y="11" width="5" height="2" rx="1"/>
+    <circle cx="12.5" cy="8" r="1.5"/>
+    <circle cx="12.5" cy="12" r="1.5"/>
+  </g>
+</svg>

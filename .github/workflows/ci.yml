@@ -2,74 +2,62 @@ name: ci
 
 on:
   push:
+    branches: [main]
   pull_request:
 
+# What CI proves is strictly LESS than what ./verify.sh --full proves locally.
+# The sandbox tier boots a real headless GNOME Shell and touches a private
+# dbus session; it is deliberately never run here. See docs/testing.md.
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install package + test deps
-        # Install the package itself (src-layout) so `python -m gtheme` and the
-        # bundled themes resolve; jinja2/pydantic come in as declared deps.
-        run: python -m pip install --upgrade pip && python -m pip install .[dev]
-
-      - name: Compile sources
-        run: python -m compileall src
-
-      - name: Run tests
-        run: python -m pytest -q
-
-      - name: Validate bundled themes
-        run: python -m gtheme validate all
-
-      - name: Check themes/index.json is fresh
-        # `gtheme index` regenerates it; a hand-edited theme merged without
-        # re-running it must fail the PR. PYTHONPATH=src runs it from the
-        # checkout (a writable source tree) — the pip-installed copy would
-        # refuse to write into site-packages by design.
-        run: PYTHONPATH=src python -m gtheme index && git diff --exit-code themes/index.json
-
-  lint:
+  lint-and-unit:
+    name: ruff + unit tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
-      - name: Ruff (CI-only tool; runtime deps stay jinja2+pydantic)
-        run: pipx run ruff check src tests
-
-  package:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - name: Build sdist + wheel
-        run: python -m pip install build twine && python -m build
-      - name: Check metadata
-        run: python -m twine check --strict dist/*
-      - name: Wheel must ship the bundled themes and templates
-        # Guards the pyproject force-include: silently dropping the bundled
-        # collection from the wheel would only surface at install time.
+          python-version: "3.12"
+      # F10: core/ may import Gio/GLib (a guard test forbids Gtk/Adw there), so
+      # the unit tier needs PyGObject with the GLib typelib. libglib2.0-bin
+      # provides glib-compile-schemas, which the settings-backend tests use to
+      # build a throwaway schema.
+      - name: Install GLib bindings
         run: |
-          python - <<'EOF'
-          import glob, sys, zipfile
-          whl = glob.glob("dist/*.whl")[0]
-          names = zipfile.ZipFile(whl).namelist()
-          need = ["gtheme/_bundled_themes/index.json", "gtheme/templates/_templates.toml"]
-          missing = [n for n in need if n not in names]
-          sys.exit(f"wheel is missing: {missing}" if missing else 0)
-          EOF
+          sudo apt-get update
+          sudo apt-get install -y python3-gi gir1.2-glib-2.0 libglib2.0-bin
+      - name: Install gtheme
+        run: |
+          python -m venv --system-site-packages .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install -e '.[dev]'
+      - name: ruff
+        run: .venv/bin/ruff check .
+      - name: pytest
+        # Ubuntu runners ship libadwaita 1.5; gtheme targets 1.9. No Adw code
+        # may run here — that is the archlinux job's task.
+        run: .venv/bin/python -m pytest -q -m "not gtk and not sandbox"
+
+  gtk:
+    name: GTK/libadwaita tests (Arch container)
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install system packages
+        run: |
+          pacman -Syu --noconfirm \
+            python python-gobject gtk4 libadwaita glib2 dconf libsoup3 \
+            python-pip python-hatchling dbus git
+      - uses: actions/checkout@v4
+      - name: Install gtheme
+        run: |
+          python -m venv --system-site-packages .venv
+          .venv/bin/python -m pip install -e '.[dev]'
+      - name: pytest -m gtk
+        # gtk4-broadwayd is an offscreen GDK backend: no X server, no
+        # compositor, no Xvfb needed. dbus-run-session gives the tests a
+        # private session bus so nothing reaches a real one.
+        run: |
+          gtk4-broadwayd :5 &
+          sleep 2
+          GDK_BACKEND=broadway BROADWAY_DISPLAY=:5 \
+            dbus-run-session -- .venv/bin/python -m pytest -q -m gtk
