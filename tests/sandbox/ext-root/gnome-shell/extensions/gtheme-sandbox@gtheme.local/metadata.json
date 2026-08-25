@@ -1,0 +1,7 @@
+{
+  "uuid": "gtheme-sandbox@gtheme.local",
+  "name": "gtheme sandbox control",
+  "description": "TEST-ONLY. Enables unsafe mode inside a private headless GNOME Shell so the harness can drive the shell via org.gnome.Shell.Eval (hide the overview, inspect theme state, screenshot). Never install this into a real session: unsafe mode lets any bus client run arbitrary JS in the shell. It lives in the harness ext-root and is reachable only via XDG_DATA_DIRS set by sandbox-proof.sh.",
+  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "session-modes": ["user", "unlock-dialog"]
+}
