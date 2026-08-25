@@ -1,0 +1,25 @@
+{
+  "created": "2020-06-07T16:08:37",
+  "creator": {
+    "display_name": "aunetx",
+    "id": 151946,
+    "username": "aunetx"
+  },
+  "description": "Adds a blur look to different parts of the GNOME Shell, including the top panel, dash and overview.\n\nYou can support my work by sponsoring me on:\n- github: https://github.com/sponsors/aunetx\n- ko-fi: https://ko-fi.com/aunetx\n\nIf you use Ubuntu, you may want to change the radius of the corner effect for Dash-to-Dock in preferences, else you may see unpleasantly mixed radii in your dock.\n\nNote: if the extension shows an error after updating, please make sure to restart your session to see if it persists. This is due to a bug in gnome shell, which I can't fix by myself.",
+  "donation_urls": [
+    "https://github.com/sponsors/aunetx",
+    "https://ko-fi.com/aunetx"
+  ],
+  "downloads": 4990369,
+  "icon": "https://extensions.gnome.org/extension-data/icons/icon_3193_QedHJZY.png",
+  "id": 3193,
+  "link": "/extension/3193/blur-my-shell/",
+  "name": "Blur my Shell",
+  "popularity": -36,
+  "rated": 338,
+  "rating": 3.896449704142012,
+  "screenshot": "https://extensions.gnome.org/extension-data/screenshots/screenshot_3193_7GUGlUq.png",
+  "updated": "2023-11-09T14:28:46.246000",
+  "url": "https://github.com/aunetx/blur-my-shell",
+  "uuid": "blur-my-shell@aunetx"
+}

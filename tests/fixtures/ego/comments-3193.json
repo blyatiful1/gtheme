@@ -1,0 +1,72 @@
+[
+  {
+    "author": {
+      "url": "/accounts/profile/jentyle",
+      "username": "jentyle"
+    },
+    "comment": "<p>Please add compatibility for Compiz Magic Lamp Effect and Compiz Windows Effect for regular apps! Also auto-hiding dash to dock doesn&#x27;t blur when hides or unhides.</p>",
+    "date": {
+      "standard": "August 23, 2026",
+      "timestamp": "2026-08-23T18:18:57.441695"
+    },
+    "gravatar": "https://secure.gravatar.com/avatar/275f3b7ad7282823439fac7a56deed61?d=mm&s=70",
+    "is_extension_creator": false,
+    "rating": 0
+  },
+  {
+    "author": {
+      "url": "/accounts/profile/drdrummie",
+      "username": "Kivi"
+    },
+    "comment": "<p>Great work!</p>",
+    "date": {
+      "standard": "August 21, 2026",
+      "timestamp": "2026-08-21T10:15:20.164125"
+    },
+    "gravatar": "https://secure.gravatar.com/avatar/46212dc34b15a4794cbea29abbc28102?d=mm&s=70",
+    "is_extension_creator": false,
+    "rating": 5
+  },
+  {
+    "author": {
+      "url": "/accounts/profile/EthAfroSamurai",
+      "username": "EthAfroSamurai"
+    },
+    "comment": "<p>when will the pop up blur effects update be available</p>",
+    "date": {
+      "standard": "August 16, 2026",
+      "timestamp": "2026-08-16T19:19:36.335592"
+    },
+    "gravatar": "https://secure.gravatar.com/avatar/7c5f9afc38c4f33292bdcd7c5e77af28?d=mm&s=70",
+    "is_extension_creator": false,
+    "rating": 0
+  },
+  {
+    "author": {
+      "url": "/accounts/profile/rekt0ro",
+      "username": "rekt0ro"
+    },
+    "comment": "<p>ty.</p>",
+    "date": {
+      "standard": "August 13, 2026",
+      "timestamp": "2026-08-13T21:35:09.158546"
+    },
+    "gravatar": "https://secure.gravatar.com/avatar/c9f4cbe48a12f6d8291f987f4761603a?d=mm&s=70",
+    "is_extension_creator": false,
+    "rating": 5
+  },
+  {
+    "author": {
+      "url": "/accounts/profile/RuKsu",
+      "username": "RuKsu"
+    },
+    "comment": "<p>Outstanding, I love GNOME DE it is modern but it lacks off some futuristic effects. Now this extension can fill that gap and make our DE even more modern. Thank you!</p>",
+    "date": {
+      "standard": "August 9, 2026",
+      "timestamp": "2026-08-09T18:24:00.984224"
+    },
+    "gravatar": "https://secure.gravatar.com/avatar/77f52bc6e6687ea34e47f907b2b2446f?d=mm&s=70",
+    "is_extension_creator": false,
+    "rating": 5
+  }
+]

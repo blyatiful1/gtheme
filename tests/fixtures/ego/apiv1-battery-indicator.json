@@ -1,0 +1,22 @@
+{
+  "created": "2011-12-01T21:58:21",
+  "creator": {
+    "display_name": "paravoid",
+    "id": 13,
+    "username": "paravoid"
+  },
+  "description": "Puts a percentage label next to the battery panel icon",
+  "donation_urls": [],
+  "downloads": 50176,
+  "icon": null,
+  "id": 23,
+  "link": "/extension/23/battery-percentage-indicator/",
+  "name": "Battery Percentage Indicator",
+  "popularity": 0,
+  "rated": 55,
+  "rating": 3.7454545454545456,
+  "screenshot": "https://extensions.gnome.org/extension-data/screenshots/screenshot_23.png",
+  "updated": "2020-12-29T14:09:44.378000",
+  "url": "http://git.tty.gr/battery-indicator@tty.gr",
+  "uuid": "battery-indicator@tty.gr"
+}
