@@ -3,7 +3,24 @@
 All notable changes to gtheme are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
-## [Unreleased]
+## v2 (in development)
+
+gtheme is being rebuilt from the ground up as a GTK4/libadwaita desktop app.
+The v1 command-line tool is preserved in full on the `legacy-v1` branch and at
+the `v1-final` tag; nothing from it is lost. Notable v2 changes so far:
+
+- **The app is a window, not a terminal.** v1's CLI is replaced by a native
+  GNOME app; a small `gtheme` command remains for the headless rescue path.
+- **Looks are declarative only.** Preset format v2 has no hooks section and the
+  engine has no script-execution machinery. A Look can change settings and
+  write files it owns — it can never run a program on your computer. v1 presets
+  are imported by a converter that warns, per hook, about what it dropped.
+- **`themes/index.json` stays where it is.** The community registry path and
+  the repo name are load-bearing and do not change. The index gains fields
+  (`format`, `screenshots`, `min_shell`, provenance) as a superset, so v1
+  clients reading it may need updating.
+
+## [Unreleased] (v1)
 
 - **Shared render templates: readable text on accent fills.** The GTK accent
   override now puts the theme's dark `bg` on accent-filled widgets instead of
