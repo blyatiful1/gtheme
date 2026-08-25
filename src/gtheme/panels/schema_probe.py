@@ -43,11 +43,14 @@ __all__ = [
     "Availability",
     "ExtensionSchemas",
     "KEPT_IN_OWN_FILE",
+    "OwnFileStore",
     "Presence",
     "SchemaProbe",
     "extension_roots",
     "probe_rows_idle",
+    "resolve_row",
     "schema_ids_in",
+    "settings_file_for",
 ]
 
 #: Colon-separated override for the directories searched for add-ons. The test
@@ -150,8 +153,8 @@ REASONS: dict[Presence, str] = {
     ),
     Presence.UNREADABLE: "This setting is installed but can't be read on this computer.",
     Presence.STORED_ELSEWHERE: (
-        "This add-on keeps this setting in a file of its own, so it has to be "
-        "changed in the add-on's own window."
+        "This add-on keeps this setting in a file of its own, and there is no "
+        "such file yet."
     ),
 }
 
@@ -168,12 +171,113 @@ REASONS: dict[Presence, str] = {
 #: machine: the profile file exists and holds real values, while
 #: ``dconf dump /org/gnome/shell/extensions/burn-my-windows-profile/`` is empty.
 #: A row that wrote to that path would report success, change nothing, and be
-#: undiagnosable. So the row says where the setting really lives instead.
-KEPT_IN_OWN_FILE: dict[str, str] = {
-    "org.gnome.shell.extensions.burn-my-windows-profile": (
-        "~/.config/burn-my-windows/profiles/"
+#: undiagnosable.
+#:
+#: gtheme opens the file itself now — see the ``keyfile:`` key form in
+#: ``core.settings_backend`` and :func:`resolve_row` below — so these rows are
+#: live rather than greyed. They still grey honestly when the add-on has no
+#: profile file at all, which is the state of a fresh install.
+@dataclass(frozen=True)
+class OwnFileStore:
+    """Where an add-on that bypasses the settings store actually keeps values.
+
+    Args:
+        active_key: the backend key holding which file is currently in use.
+            burn-my-windows keeps this in its MAIN schema, as a string.
+        profiles_dir: where those files live, for the case where
+            ``active_key`` holds a bare name rather than a full location.
+        root_path: the root the add-on hands
+            ``Gio.keyfile_settings_backend_new``. Everything below it becomes a
+            group name in the file, which is how the schema path
+            ``/org/gnome/shell/extensions/burn-my-windows-profile/`` becomes
+            the group ``[burn-my-windows-profile]``.
+        explain: the sentence a row shows when there is no file to read.
+    """
+
+    active_key: str
+    profiles_dir: str
+    root_path: str
+    explain: str
+
+
+KEPT_IN_OWN_FILE: dict[str, OwnFileStore] = {
+    "org.gnome.shell.extensions.burn-my-windows-profile": OwnFileStore(
+        active_key="gsettings:org.gnome.shell.extensions.burn-my-windows active-profile",
+        profiles_dir="~/.config/burn-my-windows/profiles/",
+        root_path="/org/gnome/shell/extensions/",
+        explain=(
+            "This add-on has no effect settings saved yet. Open its own window "
+            "once to create some, and these will start working."
+        ),
     ),
 }
+
+
+def settings_file_for(schema_id: str, backend: Any) -> Path | None:
+    """The file an own-file add-on is currently reading, if there is one.
+
+    Returns None when the add-on is not one of these, when the setting naming
+    the file cannot be read (the add-on is not installed), or when it names a
+    file that is not there — which is the ordinary state of a fresh install,
+    and the reason the rows grey honestly instead of writing into nothing.
+
+    burn-my-windows' ``active-profile`` holds a full absolute location on this
+    machine, and the add-on's own code treats it as a location too
+    (``src/ProfileManager.js`` hands it straight to
+    ``Gio.keyfile_settings_backend_new``). A bare name is accepted as well and
+    resolved under :attr:`OwnFileStore.profiles_dir`, because a value written
+    by an older version of the add-on has no business breaking the row.
+    """
+    store = KEPT_IN_OWN_FILE.get(schema_id)
+    if store is None:
+        return None
+    from ..core.confine import expand_dest
+    from ..core.settings_backend import BackendError
+
+    try:
+        raw = backend.get(store.active_key)
+    except BackendError:
+        return None
+    name = raw.strip()
+    if len(name) >= 2 and name[0] == name[-1] and name[0] in "'\"":
+        name = name[1:-1]
+    if not name:
+        return None
+    try:
+        path = expand_dest(name) if name.startswith(("~", "/")) else (
+            expand_dest(store.profiles_dir) / name
+        )
+    except Exception:  # pragma: no cover - an unusable destination root
+        return None
+    return path if path.is_file() else None
+
+
+def resolve_row(row: Row, backend: Any) -> Row:
+    """Address ``row`` at the file its value really lives in, when there is one.
+
+    For every row in the corpus but burn-my-windows' this returns the row
+    unchanged. For those, it fills in the settings file and the keyfile root,
+    which is what turns
+    ``gsettings:org.gnome.shell.extensions.burn-my-windows-profile fire-enable-effect``
+    — a key that reads and writes a dconf path nothing ever looks at — into a
+    ``keyfile:`` key that reads and writes the profile the add-on is actually
+    using.
+
+    Returns the row unchanged when there is no file, so the caller still gets a
+    row and :meth:`SchemaProbe.availability` still greys it honestly.
+
+    A row that already names a file is returned untouched. That is not a
+    micro-optimisation: re-resolving would silently redirect an explicitly
+    addressed row to whatever the live desktop happens to be using, which is
+    how a test aimed at a throwaway file writes into the real one.
+    """
+    if row.keyfile is not None or row.schema_id not in KEPT_IN_OWN_FILE:
+        return row
+    path = settings_file_for(row.schema_id, backend)
+    if path is None:
+        return row
+    store = KEPT_IN_OWN_FILE[row.schema_id]
+    return row.model_copy(update={"keyfile": str(path), "path": store.root_path})
 
 
 @dataclass(frozen=True)
@@ -312,10 +416,29 @@ class SchemaProbe:
 
     # -- the verdict -------------------------------------------------------
 
-    def availability(self, row: Row) -> Availability:
-        """Whether this descriptor can be honoured on this computer."""
+    def availability(self, row: Row, backend: Any | None = None) -> Availability:
+        """Whether this descriptor can be honoured on this computer.
+
+        Args:
+            row: the descriptor.
+            backend: needed only for the add-ons that keep their settings in a
+                file of their own — it is what reads which file is in use. With
+                no backend, such a row is reported the pessimistic way, because
+                claiming a row works when nobody checked is the one answer this
+                method must never give.
+        """
+        if row.schema_id is None:
+            # A link row reads nothing, so there is nothing to be missing.
+            return Availability.of(Presence.AVAILABLE)
         if row.schema_id in KEPT_IN_OWN_FILE:
-            return Availability.of(Presence.STORED_ELSEWHERE)
+            store = KEPT_IN_OWN_FILE[row.schema_id]
+            path = settings_file_for(row.schema_id, backend) if backend is not None else None
+            if path is None:
+                # No file to read: the add-on has never been opened, or is not
+                # installed. Honestly greyed, with the reason.
+                return Availability(Presence.STORED_ELSEWHERE, store.explain)
+            # There IS a file, and gtheme can open it. Carry on to the ordinary
+            # schema check — the row is live.
         try:
             schema = self.lookup(row.schema_id)
         except Exception:  # pragma: no cover - defensive; a lookup must not throw
@@ -330,10 +453,12 @@ class SchemaProbe:
             return Availability.of(Presence.MISSING_SETTING)
         return Availability.of(Presence.AVAILABLE)
 
-    def probe(self, rows: Iterable[Row]) -> Iterator[tuple[Row, Availability]]:
+    def probe(
+        self, rows: Iterable[Row], backend: Any | None = None
+    ) -> Iterator[tuple[Row, Availability]]:
         """Verdicts for many rows, lazily. The synchronous half of the probe."""
         for row in rows:
-            yield row, self.availability(row)
+            yield row, self.availability(row, backend)
 
 
 def probe_rows_idle(

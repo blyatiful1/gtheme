@@ -44,13 +44,20 @@ canary = _load_canary()
 
 
 def test_the_watched_paths_are_the_ones_the_design_names():
-    """DESIGN.md F6 lists five trees. Losing one would be a silent hole."""
+    """DESIGN.md F6 lists five trees. Losing one would be a silent hole.
+
+    The sixth was added by the gate: add-ons that keep their settings in a file
+    of their own are invisible to the dconf half of this canary, and one of
+    them — burn-my-windows — was written into by a unit test before anyone
+    noticed. A tree may be added here; none may be removed.
+    """
     assert canary.LIVE_TREES == (
         ".local/share/gnome-shell/extensions",
         ".local/share/gnome-shell/extension-updates",
         ".local/share/backgrounds",
         ".local/state/gtheme",
         "nightbloom/ghostty",
+        ".config/burn-my-windows",
     )
 
 

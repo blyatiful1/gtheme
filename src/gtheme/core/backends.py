@@ -72,9 +72,25 @@ class AutoBackend(SettingsBackend):
         self._subprocess = SubprocessBackend(schema_source)
 
     def _pick(self, key: str) -> SettingsBackend:
+        """Which backend can address this key at all.
+
+        Two forms decide it, in opposite directions. ``dconf:`` names a
+        location with no schema, which ``Gio.Settings`` cannot open, so it goes
+        to the child process. ``keyfile:`` names a setting kept in an add-on's
+        own file rather than in the settings store, which no command-line tool
+        can open, so it must go to Gio. Everything else prefers Gio because it
+        is faster and its failures are typed rather than translated.
+
+        With no PyGObject at all — the rescue path — a ``keyfile:`` key reaches
+        the subprocess backend and comes back as a typed refusal. That is the
+        truth, and better than a silent no-op.
+        """
         if self._gio is None:
             return self._subprocess
-        return self._subprocess if parse_key(key).kind is KeyKind.DCONF else self._gio
+        kind = parse_key(key).kind
+        if kind is KeyKind.DCONF:
+            return self._subprocess
+        return self._gio
 
     def get(self, key: str) -> str:
         return self._pick(key).get(key)

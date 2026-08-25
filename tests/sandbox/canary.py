@@ -49,6 +49,11 @@ LIVE_TREES: tuple[str, ...] = (
     ".local/share/backgrounds",
     ".local/state/gtheme",
     "nightbloom/ghostty",
+    # An add-on that keeps its settings in a file of its own rather than in
+    # dconf: the dconf half of this canary cannot see it at all. Added after a
+    # unit test wrote into the real one — see the note in
+    # tests/unit/test_descriptors_widgets.py.
+    ".config/burn-my-windows",
 )
 
 #: Marker recorded for a tree that does not exist. Distinct from any hash, so a

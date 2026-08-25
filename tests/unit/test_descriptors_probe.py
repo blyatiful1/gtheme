@@ -162,6 +162,9 @@ def test_settings_an_add_on_keeps_in_its_own_file_are_not_pretended_to_work(prob
     verdict = probe.availability(row)
     assert verdict.presence is Presence.STORED_ELSEWHERE
     assert row.schema_id in KEPT_IN_OWN_FILE
+    # gtheme opens that file itself now, so the reason has to be about the file
+    # being absent — not about the setting being out of reach.
+    assert verdict.reason == KEPT_IN_OWN_FILE[row.schema_id].explain
 
 
 def test_every_reason_is_in_plain_words():
@@ -226,3 +229,90 @@ def test_rows_are_probed_on_idle_time_and_all_of_them_arrive(probe: SchemaProbe)
 
     assert [row_id for row_id, _ in seen] == [row.id for row in rows]
     assert seen[2][1] is Presence.MISSING_ADDON
+
+
+# -- add-ons that keep their settings in a file of their own ---------------
+#
+# The greying above is what happens when nobody can say WHICH file. Given the
+# file, gtheme opens it, and the rows are live.
+
+
+BMW_UUID = "burn-my-windows@schneegans.github.com"
+BMW_PROFILE = "org.gnome.shell.extensions.burn-my-windows-profile"
+BMW_ACTIVE = "gsettings:org.gnome.shell.extensions.burn-my-windows active-profile"
+
+
+@pytest.fixture
+def bmw_backend():
+    """A memory backend that can read burn-my-windows' main schema."""
+    pytest.importorskip("gi")
+    from gi.repository import Gio
+
+    from gtheme.core.settings_backend import MemoryBackend
+
+    source = Gio.SettingsSchemaSource.new_from_directory(
+        str(CORPUS / BMW_UUID / "schemas"), Gio.SettingsSchemaSource.get_default(), False
+    )
+    return MemoryBackend(schema_source=source)
+
+
+def test_with_no_profile_file_the_row_is_still_honestly_greyed(probe, bmw_backend):
+    from gtheme.panels.schema_probe import settings_file_for
+
+    assert settings_file_for(BMW_PROFILE, bmw_backend) is None
+    row = _row(BMW_PROFILE, "fire-enable-effect")
+    verdict = probe.availability(row, bmw_backend)
+    assert verdict.presence is Presence.STORED_ELSEWHERE
+    assert verdict.reason, "a greyed row that does not say why is worse than no row"
+
+
+def test_with_a_profile_file_the_row_becomes_available(probe, bmw_backend, tmp_path):
+    profile = tmp_path / "1787167433969725.conf"
+    profile.write_text("[burn-my-windows-profile]\n", encoding="utf-8")
+    bmw_backend.set(BMW_ACTIVE, f"'{profile}'")
+
+    row = _row(BMW_PROFILE, "fire-enable-effect")
+    assert probe.availability(row, bmw_backend).presence is Presence.AVAILABLE
+
+
+def test_a_named_profile_that_is_not_there_stays_greyed(probe, bmw_backend, tmp_path):
+    """Naming a file is not the same as having one."""
+    bmw_backend.set(BMW_ACTIVE, f"'{tmp_path / 'never-created.conf'}'")
+    row = _row(BMW_PROFILE, "fire-enable-effect")
+    assert probe.availability(row, bmw_backend).presence is Presence.STORED_ELSEWHERE
+
+
+def test_resolving_a_row_addresses_the_file_the_add_on_is_using(bmw_backend, tmp_path):
+    from gtheme.panels.schema_probe import resolve_row
+    from gtheme.ui.widgets.rows import key_for
+
+    profile = tmp_path / "1787167433969725.conf"
+    profile.write_text("[burn-my-windows-profile]\n", encoding="utf-8")
+    bmw_backend.set(BMW_ACTIVE, f"'{profile}'")
+
+    resolved = resolve_row(_row(BMW_PROFILE, "fire-enable-effect"), bmw_backend)
+    assert resolved.keyfile == str(profile)
+    assert resolved.path == "/org/gnome/shell/extensions/"
+    assert key_for(resolved) == (
+        f"keyfile:{profile}:{BMW_PROFILE}:/org/gnome/shell/extensions/ fire-enable-effect"
+    )
+
+
+def test_a_bare_profile_name_is_resolved_under_the_add_ons_own_folder(
+    bmw_backend, tmp_dest_root
+):
+    """On this machine the setting holds a full location; older ones held a name."""
+    from gtheme.panels.schema_probe import settings_file_for
+
+    profiles = tmp_dest_root / ".config" / "burn-my-windows" / "profiles"
+    profiles.mkdir(parents=True)
+    (profiles / "123.conf").write_text("[burn-my-windows-profile]\n", encoding="utf-8")
+    bmw_backend.set(BMW_ACTIVE, "'123.conf'")
+    assert settings_file_for(BMW_PROFILE, bmw_backend) == profiles / "123.conf"
+
+
+def test_an_ordinary_row_is_never_rewritten(bmw_backend):
+    from gtheme.panels.schema_probe import resolve_row
+
+    row = _row("org.gnome.desktop.interface", "color-scheme")
+    assert resolve_row(row, bmw_backend) is row

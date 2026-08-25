@@ -7,8 +7,12 @@
 # it takes, say which windows it applies to. Everything else stays with the
 # add-on's own window.
 #
-# Rows below leave their location empty on purpose: the app fills in whichever
-# profile is currently active, using the template in [target].
+# Rows below leave their location empty on purpose. The add-on does not keep
+# these values in the desktop's settings store at all — it writes them into
+# whichever profile file is named by its own "active-profile" setting, under
+# ~/.config/burn-my-windows/profiles/. The app fills that location in at
+# runtime (gtheme.panels.schema_probe.resolve_row); a row written against the
+# store would report success and change nothing.
 id = "burn-my-windows"
 
 [target]
@@ -23,52 +27,121 @@ warn = "These effects are drawn by your graphics card on every window that opens
 
 [[rows]]
 schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
+# The anchor. This row does not write one setting: it writes all 26 of the
+# effect switches below, one true and the rest false, in a single action. The
+# key here is what the app checks to decide whether the row can work at all.
 key = "fire-enable-effect"
-title = "Burn away"
-subtitle = "The window goes up in flames when it closes."
-synonyms = ["fire", "burn", "flame"]
-kind = "toggle"
-
-[[rows]]
-schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
-key = "matrix-enable-effect"
-title = "Rain of green letters"
-subtitle = "The window falls apart into a curtain of glowing characters."
-synonyms = ["matrix", "code", "green"]
-kind = "toggle"
-
-[[rows]]
-schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
-key = "tv-enable-effect"
-title = "Old television switch-off"
-subtitle = "The window collapses into a thin bright line and blinks out."
-synonyms = ["tv", "television", "retro"]
-kind = "toggle"
-
-[[rows]]
-schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
-key = "glide-enable-effect"
-title = "Glide away"
-subtitle = "The window simply slides and fades. The calmest of the lot."
-synonyms = ["glide", "fade", "subtle"]
-kind = "toggle"
-
-[[rows]]
-schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
-key = "pixelate-enable-effect"
-title = "Break into blocks"
-subtitle = "The window turns into bigger and bigger coloured squares until it is gone."
-synonyms = ["pixelate", "blocks", "8-bit"]
-kind = "toggle"
-
-[[rows]]
-schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
-key = "broken-glass-enable-effect"
-title = "Shatter like glass"
-subtitle = "The window breaks into shards that fall out of view."
-synonyms = ["glass", "shatter", "break"]
-kind = "toggle"
-
+title = "Effect"
+subtitle = "The animation played when a window opens or closes. Only one runs at a time."
+synonyms = ["effect", "animation", "fire", "matrix", "glass", "pixel", "tv"]
+kind = "effect-picker"
+# Nothing sensible to put back: this row is 26 settings at once, and the
+# per-row button undoes one.
+reset = false
+[[rows.choices]]
+value = "fire-enable-effect"
+label = "Burn away"
+subtitle = "The window goes up in flames."
+[[rows.choices]]
+value = "glide-enable-effect"
+label = "Glide away"
+subtitle = "It slides and fades. The calmest of the lot."
+[[rows.choices]]
+value = "focus-enable-effect"
+label = "Blur out of focus"
+subtitle = "It softens until there is nothing left to see."
+[[rows.choices]]
+value = "aura-glow-enable-effect"
+label = "Glow and fade"
+subtitle = "It brightens for a moment, then goes."
+[[rows.choices]]
+value = "wisps-enable-effect"
+label = "Drift away as wisps"
+subtitle = "It comes apart into slow trails of light."
+[[rows.choices]]
+value = "snap-enable-effect"
+label = "Crumble to dust"
+subtitle = "It falls apart into a cloud of specks."
+[[rows.choices]]
+value = "mushroom-enable-effect"
+label = "Puff of smoke"
+subtitle = "It disappears in a small burst of cloud."
+[[rows.choices]]
+value = "apparition-enable-effect"
+label = "Vanish like a ghost"
+subtitle = "It stretches, wavers and is gone."
+[[rows.choices]]
+value = "portal-enable-effect"
+label = "Spiral away"
+subtitle = "It winds down into a single point and is gone."
+[[rows.choices]]
+value = "incinerate-enable-effect"
+label = "Burn from the edges in"
+subtitle = "The edges char first, then the middle."
+[[rows.choices]]
+value = "energize-a-enable-effect"
+label = "Beam out upwards"
+subtitle = "It rises away in bands of light."
+[[rows.choices]]
+value = "energize-b-enable-effect"
+label = "Beam out sideways"
+subtitle = "It slides away in bands of light."
+[[rows.choices]]
+value = "hexagon-enable-effect"
+label = "Dissolve into hexagons"
+subtitle = "It breaks into a honeycomb that fades out."
+[[rows.choices]]
+value = "broken-glass-enable-effect"
+label = "Shatter like glass"
+subtitle = "It breaks into shards that fall out of view."
+[[rows.choices]]
+value = "pixelate-enable-effect"
+label = "Break into blocks"
+subtitle = "It turns into bigger and bigger coloured squares."
+[[rows.choices]]
+value = "pixel-wipe-enable-effect"
+label = "Wipe away in pixels"
+subtitle = "A wave of squares crosses it and takes it with them."
+[[rows.choices]]
+value = "pixel-wheel-enable-effect"
+label = "Sweep away in a circle"
+subtitle = "A line sweeps round like a clock hand, clearing it."
+[[rows.choices]]
+value = "matrix-enable-effect"
+label = "Rain of green letters"
+subtitle = "It falls apart into a curtain of glowing characters."
+[[rows.choices]]
+value = "tv-enable-effect"
+label = "Old television switch-off"
+subtitle = "It collapses into a thin bright line and blinks out."
+[[rows.choices]]
+value = "tv-glitch-enable-effect"
+label = "Television interference"
+subtitle = "It tears and rolls like a bad signal, then goes."
+[[rows.choices]]
+value = "glitch-enable-effect"
+label = "Glitch out"
+subtitle = "It stutters and breaks into coloured bands."
+[[rows.choices]]
+value = "doom-enable-effect"
+label = "Melt downwards"
+subtitle = "It runs down the screen like wet paint."
+[[rows.choices]]
+value = "paint-brush-enable-effect"
+label = "Painted out"
+subtitle = "A brush sweeps across and paints over it."
+[[rows.choices]]
+value = "trex-enable-effect"
+label = "Bitten in half"
+subtitle = "Something takes a bite out of it and it drops away."
+[[rows.choices]]
+value = "rgbwarp-enable-effect"
+label = "Warp through colours"
+subtitle = "It twists through the whole spectrum on its way out."
+[[rows.choices]]
+value = "team-rocket-enable-effect"
+label = "Blast off"
+subtitle = "It shoots away into the distance with a twinkle."
 [[rows]]
 schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
 key = "profile-window-type"
@@ -103,66 +176,14 @@ label = "Only when closing"
 
 [[rows]]
 schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
+# Another anchor row. Each effect has its own duration setting; this row reads
+# and writes whichever one belongs to the effect currently chosen above, so
+# there is one speed control rather than twenty-six that are mostly inert.
 key = "fire-animation-time"
-title = "How long the burn takes"
-subtitle = "Measured in thousandths of a second. Lower is snappier."
-kind = "slider"
+title = "How long it takes"
+subtitle = "How long the effect runs for, in thousandths of a second. Lower is snappier."
+synonyms = ["speed", "duration", "how long", "fast", "slow"]
+kind = "effect-speed"
 clamp_min = 100
 clamp_max = 5000
 step = 50
-advanced = true
-
-[[rows]]
-schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
-key = "matrix-animation-time"
-title = "How long the letters take to fall"
-subtitle = "Measured in thousandths of a second. Lower is snappier."
-kind = "slider"
-clamp_min = 100
-clamp_max = 5000
-step = 50
-advanced = true
-
-[[rows]]
-schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
-key = "tv-animation-time"
-title = "How long the television switch-off takes"
-subtitle = "Measured in thousandths of a second. Lower is snappier."
-kind = "slider"
-clamp_min = 100
-clamp_max = 5000
-step = 50
-advanced = true
-
-[[rows]]
-schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
-key = "glide-animation-time"
-title = "How long the glide takes"
-subtitle = "Measured in thousandths of a second. Lower is snappier."
-kind = "slider"
-clamp_min = 100
-clamp_max = 5000
-step = 50
-advanced = true
-
-[[rows]]
-schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
-key = "pixelate-animation-time"
-title = "How long the blocks take"
-subtitle = "Measured in thousandths of a second. Lower is snappier."
-kind = "slider"
-clamp_min = 100
-clamp_max = 5000
-step = 50
-advanced = true
-
-[[rows]]
-schema_id = "org.gnome.shell.extensions.burn-my-windows-profile"
-key = "broken-glass-animation-time"
-title = "How long the shatter takes"
-subtitle = "Measured in thousandths of a second. Lower is snappier."
-kind = "slider"
-clamp_min = 100
-clamp_max = 5000
-step = 50
-advanced = true

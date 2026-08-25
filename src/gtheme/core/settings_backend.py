@@ -9,11 +9,12 @@ go through the integration agent.
 
 Three things are frozen here.
 
-**1. The key grammar.** One string addresses one setting, in three forms::
+**1. The key grammar.** One string addresses one setting, in four forms::
 
     gsettings:org.gnome.desktop.interface color-scheme
     dconf:/org/gnome/shell/extensions/blur-my-shell/panel/blur
     gsettings-path:org.gnome.shell.extensions.burn-my-windows-profile:/org/gnome/shell/extensions/burn-my-windows/profiles/1/ name
+    keyfile:/home/you/.config/burn-my-windows/profiles/123.conf:org.gnome.shell.extensions.burn-my-windows-profile:/burn-my-windows/profile/ fire-enable-effect
 
 The third form is for *relocatable* schemas — schemas with no fixed path, of
 which burn-my-windows' 163-key per-profile schema is the reason this form
@@ -21,6 +22,20 @@ exists. Note the shape: ``schema`` and ``path`` are colon-separated, then a
 space, then the key. The ``dconf:`` form addresses a path with no schema at all
 and is the last resort: without a schema there is no type information, so
 values are handled purely as text.
+
+The fourth form addresses a setting that has a perfectly ordinary schema and
+does not live in the settings store at all. burn-my-windows keeps each of its
+effect profiles in its own ``.conf`` file under
+``~/.config/burn-my-windows/profiles/`` and reads it through
+``Gio.keyfile_settings_backend_new`` (its ``src/ProfileManager.js``). Verified
+on this machine: the profile file holds real values while
+``dconf dump /org/gnome/shell/extensions/burn-my-windows-profile/`` is empty. A
+row written in the ``gsettings-path:`` form would report success, change
+nothing, and be undiagnosable — so the file is named in the key, and the
+backend opens it. Shape: ``keyfile:<file>:<schema>:<root-path>/`` then a space
+and the key. Only :class:`GioBackend` can address this form; ``gsettings`` and
+``dconf`` have no way to reach it, so :class:`SubprocessBackend` returns a
+typed refusal and ``core.backends.AutoBackend`` routes it to Gio.
 
 **2. Values are GVariant text, always.** ``get`` returns, and ``set`` accepts,
 the exact string ``GLib.Variant.print_(True)`` produces — ``'true'``,
@@ -106,22 +121,27 @@ class KeyKind(enum.Enum):
     GSETTINGS = "gsettings"
     DCONF = "dconf"
     GSETTINGS_PATH = "gsettings-path"
+    KEYFILE = "keyfile"
 
 
 @dataclass(frozen=True)
 class SettingsKey:
     """A parsed key string.
 
-    ``schema`` and ``key`` are set for the two schema-backed forms; ``path`` is
-    set for :attr:`KeyKind.DCONF` (the full dconf path) and for
-    :attr:`KeyKind.GSETTINGS_PATH` (the schema's instance path, which always
-    ends in ``/``).
+    ``schema`` and ``key`` are set for the three schema-backed forms; ``path``
+    is set for :attr:`KeyKind.DCONF` (the full dconf path), for
+    :attr:`KeyKind.GSETTINGS_PATH` (the schema's instance path) and for
+    :attr:`KeyKind.KEYFILE` (the root path inside the file), and always ends in
+    ``/`` for the latter two. ``file`` is set only for
+    :attr:`KeyKind.KEYFILE`: the absolute path of the ``.conf`` the values
+    actually live in.
     """
 
     kind: KeyKind
     schema: str | None = None
     key: str | None = None
     path: str | None = None
+    file: str | None = None
 
     def as_text(self) -> str:
         """Render back to the canonical key string. Round-trips ``parse_key``."""
@@ -129,6 +149,8 @@ class SettingsKey:
             return f"gsettings:{self.schema} {self.key}"
         if self.kind is KeyKind.DCONF:
             return f"dconf:{self.path}"
+        if self.kind is KeyKind.KEYFILE:
+            return f"keyfile:{self.file}:{self.schema}:{self.path} {self.key}"
         return f"gsettings-path:{self.schema}:{self.path} {self.key}"
 
 
@@ -172,6 +194,35 @@ def parse_key(text: str) -> SettingsKey:
                 key=text,
             )
         return SettingsKey(KeyKind.GSETTINGS, schema=schema, key=key)
+
+    if prefix == KeyKind.KEYFILE.value:
+        # keyfile:<absolute file>:<schema>:<root path>/ KEY
+        # The file path is absolute, so it starts with "/" and may itself
+        # contain no colon; splitting from the right on the schema separator
+        # would be wrong for a path with a colon in it, and a settings file
+        # with a colon in its name is not a thing worth supporting.
+        file_path, sep2, tail = rest.partition(":")
+        schema, sep3, tail2 = tail.partition(":")
+        path, space, key = tail2.partition(" ")
+        if (
+            not sep2
+            or not sep3
+            or not space
+            or not file_path.startswith("/")
+            or not _SCHEMA_RE.match(schema)
+            or not _KEY_RE.match(key)
+            or not path.startswith("/")
+            or not path.endswith("/")
+        ):
+            raise BackendError(
+                BackendErrorKind.OTHER,
+                "expected 'keyfile:/absolute/file.conf:SCHEMA:/root/path/ KEY' "
+                f"(file must be absolute, path must start and end with '/'), got {text!r}",
+                key=text,
+            )
+        return SettingsKey(
+            KeyKind.KEYFILE, schema=schema, key=key, path=path, file=file_path
+        )
 
     if prefix == KeyKind.GSETTINGS_PATH.value:
         schema, sep2, tail = rest.partition(":")
@@ -262,7 +313,7 @@ class MemoryBackend(SettingsBackend):
     def __init__(self, schema_source: Any | None = None) -> None:
         super().__init__(schema_source)
         self._backend: Any | None = None
-        self._settings: dict[tuple[str, str | None], tuple[Any, Any]] = {}
+        self._settings: dict[tuple[str, str | None, str | None], tuple[Any, Any]] = {}
 
     def _gio(self) -> tuple[Any, Any]:
         from gi.repository import Gio, GLib
@@ -311,11 +362,25 @@ class MemoryBackend(SettingsBackend):
                 key=key,
             )
         Gio, _ = self._gio()
-        cache_key = (parsed.schema or "", parsed.path)
+        cache_key = (parsed.schema or "", parsed.path, parsed.file)
         cached = self._settings.get(cache_key)
         if cached is None:
             schema = self._schema(parsed)
-            if parsed.kind is KeyKind.GSETTINGS_PATH:
+            if parsed.kind is KeyKind.KEYFILE:
+                # A ``keyfile:`` key names a real file on disk. This backend
+                # exists so that tests reach nothing real, so the values are
+                # held in memory at the schema's own path instead — the seam
+                # doing what a seam is for. A test that has to prove the file
+                # itself is written uses GioBackend and a throwaway file.
+                if not schema.get_path():
+                    raise BackendError(
+                        BackendErrorKind.NO_SCHEMA,
+                        f"schema {parsed.schema!r} has no path of its own, so it "
+                        "cannot be addressed inside a settings file",
+                        key=key,
+                    )
+                settings = Gio.Settings.new_full(schema, self._make_backend(), None)
+            elif parsed.kind is KeyKind.GSETTINGS_PATH:
                 settings = Gio.Settings.new_full(schema, self._make_backend(), parsed.path)
             else:
                 if not schema.get_path():
@@ -401,6 +466,28 @@ def _gio_settings_for(
             f"schema {parsed.schema!r} is not installed",
             key=parsed.as_text(),
         )
+    if parsed.kind is KeyKind.KEYFILE:
+        # The values live in a file the add-on owns, not in the settings store,
+        # so `store` (memory backend or dconf) is not the backend to use here —
+        # the whole point of the form is that it is a different store.
+        #
+        # Two different paths are in play and confusing them silently writes to
+        # the wrong group of the file. ``parsed.path`` is the keyfile
+        # backend's ROOT: everything below it becomes a group name in the file,
+        # so root ``/org/gnome/shell/extensions/`` turns the schema's own path
+        # ``/org/gnome/shell/extensions/burn-my-windows-profile/`` into the
+        # group ``[burn-my-windows-profile]``. The Settings object itself is
+        # then built with NO path, so it uses the schema's — which is exactly
+        # what burn-my-windows does (``src/ProfileManager.js``, line 181).
+        if not schema.get_path():
+            raise BackendError(
+                BackendErrorKind.NO_SCHEMA,
+                f"schema {parsed.schema!r} has no path of its own, so it cannot be "
+                "addressed inside a settings file",
+                key=parsed.as_text(),
+            )
+        keyfile = Gio.keyfile_settings_backend_new(parsed.file, parsed.path, None)
+        return Gio.Settings.new_full(schema, keyfile, None), schema
     if parsed.kind is KeyKind.GSETTINGS_PATH:
         return Gio.Settings.new_full(schema, store, parsed.path), schema
     if not schema.get_path():
@@ -431,7 +518,7 @@ class GioBackend(SettingsBackend):
 
     def __init__(self, schema_source: Any | None = None) -> None:
         super().__init__(schema_source)
-        self._cache: dict[tuple[str, str | None], tuple[Any, Any]] = {}
+        self._cache: dict[tuple[str, str | None, str | None], tuple[Any, Any]] = {}
 
     def _resolve(self, key: str) -> tuple[Any, Any, SettingsKey]:
         parsed = parse_key(key)
@@ -442,7 +529,7 @@ class GioBackend(SettingsBackend):
                 "it has no type information to check a value against",
                 key=key,
             )
-        cache_key = (parsed.schema or "", parsed.path)
+        cache_key = (parsed.schema or "", parsed.path, parsed.file)
         entry = self._cache.get(cache_key)
         if entry is None:
             entry = _gio_settings_for(parsed, self.schema_source, None)
@@ -501,7 +588,11 @@ class SubprocessBackend(SettingsBackend):
     Slower and clumsier than :class:`GioBackend`, and kept anyway, because it
     is the code path v1 shipped and proved, and because it is the only backend
     that can address the ``dconf:`` form — a location with no schema, which
-    ``Gio.Settings`` has no way to open.
+    ``Gio.Settings`` has no way to open. It is also the only backend that
+    *cannot* address the ``keyfile:`` form, for the mirror-image reason: there
+    is no command-line tool that reads an add-on's own settings file. Those
+    keys come back as a typed refusal, and ``core.backends.AutoBackend`` sends
+    them to :class:`GioBackend`.
 
     Two rules, both learned the hard way. ``LC_ALL=C`` is pinned on every call,
     because this is the one place in gtheme where a failure has to be
@@ -570,6 +661,18 @@ class SubprocessBackend(SettingsBackend):
         return BackendError(kind, stderr or "the settings command failed", key=key)
 
     def _argv(self, parsed: SettingsKey, verb: str, value: str | None = None) -> list[str]:
+        if parsed.kind is KeyKind.KEYFILE:
+            # There is no command-line tool for this. ``gsettings`` and
+            # ``dconf`` both talk to the settings store; a ``keyfile:`` key is
+            # precisely a setting that is NOT in the settings store. Refusing
+            # with a typed error is the honest answer — ``AutoBackend`` reads
+            # it and sends the key to Gio, which can open the file.
+            raise BackendError(
+                BackendErrorKind.OTHER,
+                "this setting is kept in the add-on's own file, which the "
+                "command-line settings tools cannot open",
+                key=parsed.as_text(),
+            )
         if parsed.kind is KeyKind.DCONF:
             dconf_verb = {"get": "read", "set": "write", "reset": "reset"}[verb]
             args = ["dconf", dconf_verb, parsed.path or ""]

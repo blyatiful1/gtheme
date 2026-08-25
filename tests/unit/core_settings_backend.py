@@ -293,3 +293,158 @@ def test_a_missing_session_is_detected_rather_than_discovered_forty_times(
 
     monkeypatch.setenv("DBUS_SESSION_BUS_ADDRESS", "unix:path=/run/user/1000/bus")
     assert has_session_bus() is True
+
+
+# -- the keyfile form ------------------------------------------------------
+#
+# Some add-ons describe their settings perfectly normally and then keep the
+# values somewhere the settings store never sees. burn-my-windows is the one
+# known case: its per-profile settings carry an ordinary fixed path and are
+# read and written through Gio.keyfile_settings_backend_new against
+# ~/.config/burn-my-windows/profiles/<id>.conf. A row addressed at the store
+# would report success, change nothing, and be undiagnosable.
+
+BMW_PROFILE_SCHEMA = "org.gnome.shell.extensions.burn-my-windows-profile"
+BMW_ROOT = "/org/gnome/shell/extensions/"
+
+
+@pytest.fixture
+def bmw_source(repo_root):
+    """A schema source over the committed burn-my-windows fixture corpus."""
+    pytest.importorskip("gi")
+    from gi.repository import Gio
+
+    schemas = (
+        repo_root
+        / "tests/fixtures/schemas/burn-my-windows@schneegans.github.com/schemas"
+    )
+    assert (schemas / "gschemas.compiled").is_file(), "the fixture corpus is not compiled"
+    return Gio.SettingsSchemaSource.new_from_directory(
+        str(schemas), Gio.SettingsSchemaSource.get_default(), False
+    )
+
+
+def _keyfile_key(path, key: str) -> str:
+    return f"keyfile:{path}:{BMW_PROFILE_SCHEMA}:{BMW_ROOT} {key}"
+
+
+def test_a_keyfile_key_parses_into_its_four_parts():
+    parsed = parse_key(_keyfile_key("/tmp/a profile.conf", "fire-enable-effect"))
+    assert parsed.file == "/tmp/a profile.conf"
+    assert parsed.schema == BMW_PROFILE_SCHEMA
+    assert parsed.path == BMW_ROOT
+    assert parsed.key == "fire-enable-effect"
+
+
+def test_a_keyfile_key_round_trips_through_its_text_form():
+    key = _keyfile_key("/tmp/p.conf", "fire-enable-effect")
+    assert parse_key(key).as_text() == key
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "keyfile:relative.conf:org.a.b:/root/ key",  # file must be absolute
+        "keyfile:/p.conf:org.a.b:no-slash key",  # root must be a path
+        "keyfile:/p.conf:org.a.b:/root key",  # ... ending in '/'
+        "keyfile:/p.conf:/root/ key",  # no schema at all
+        "keyfile:/p.conf:org.a.b:/root/key",  # no space before the key
+    ],
+)
+def test_a_malformed_keyfile_key_is_refused_loudly(text):
+    with pytest.raises(BackendError) as caught:
+        parse_key(text)
+    assert caught.value.kind is BackendErrorKind.OTHER
+
+
+@pytest.mark.mutating
+def test_the_native_backend_reads_and_writes_the_add_ons_own_file(
+    bmw_source, tmp_path, tmp_dest_root
+):
+    """The decisive one: the value lands in the file, in the right group."""
+    profile = tmp_path / "1787167433969725.conf"
+    backend = GioBackend(schema_source=bmw_source)
+    key = _keyfile_key(profile, "fire-enable-effect")
+
+    assert backend.get(key) == "true", "the schema default should be readable"
+    backend.set(key, "false")
+    assert backend.get(key) == "false"
+
+    written = profile.read_text(encoding="utf-8")
+    assert "[burn-my-windows-profile]" in written, (
+        "the keyfile root turns the schema path into this group name; a wrong "
+        "root writes into a group the add-on never reads"
+    )
+    assert "fire-enable-effect=false" in written
+
+    backend.reset(key)
+    assert backend.get(key) == "true"
+
+
+@pytest.mark.mutating
+def test_two_profiles_are_two_different_files(bmw_source, tmp_path, tmp_dest_root):
+    """The settings cache is keyed by file, or every profile shares one value."""
+    backend = GioBackend(schema_source=bmw_source)
+    first = _keyfile_key(tmp_path / "one.conf", "fire-enable-effect")
+    second = _keyfile_key(tmp_path / "two.conf", "fire-enable-effect")
+    backend.set(first, "false")
+    assert backend.get(second) == "true"
+
+
+def test_the_command_line_backend_says_it_cannot_open_a_settings_file(tmp_path):
+    """Neither gsettings nor dconf can reach a file the add-on owns."""
+    key = _keyfile_key(tmp_path / "p.conf", "fire-enable-effect")
+    with pytest.raises(BackendError) as caught:
+        SubprocessBackend().get(key)
+    assert caught.value.kind is BackendErrorKind.OTHER
+    assert "own file" in str(caught.value)
+
+
+def test_auto_routes_a_settings_file_key_to_the_native_backend(tmp_path):
+    auto = AutoBackend()
+    picked = auto._pick(_keyfile_key(tmp_path / "p.conf", "fire-enable-effect"))
+    assert isinstance(picked, GioBackend)
+    # ... and still sends a schema-less location to the child process.
+    assert isinstance(auto._pick("dconf:/org/gnome/shell/x"), SubprocessBackend)
+
+
+def test_a_relocatable_schema_cannot_be_addressed_inside_a_file(
+    schema_source_factory, tmp_path
+):
+    """The form needs a schema with a path of its own, and says so.
+
+    A relocatable schema has no path, so there is nothing to turn into a group
+    name in the file. Guessing one would write somewhere nobody reads.
+    """
+    relocatable = """<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gtheme.test.roaming">
+    <key name="a-word" type="s"><default>'default'</default></key>
+  </schema>
+</schemalist>
+"""
+    backend = GioBackend(schema_source=schema_source_factory(relocatable))
+    key = f"keyfile:{tmp_path / 'p.conf'}:org.gtheme.test.roaming:{BMW_ROOT} a-word"
+    with pytest.raises(BackendError) as caught:
+        backend.get(key)
+    assert caught.value.kind is BackendErrorKind.NO_SCHEMA
+    assert "no path of its own" in str(caught.value)
+
+
+def test_the_memory_backend_holds_a_settings_file_key_in_memory(
+    schema_source_factory, tmp_path
+):
+    """The seam: a keyfile key under test writes nothing to disk."""
+    fixed = """<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gtheme.test.owned" path="/org/gtheme/test/owned/">
+    <key name="a-word" type="s"><default>'default'</default></key>
+  </schema>
+</schemalist>
+"""
+    backend = MemoryBackend(schema_source=schema_source_factory(fixed))
+    target = tmp_path / "never-written.conf"
+    key = f"keyfile:{target}:org.gtheme.test.owned:/org/gtheme/test/ a-word"
+    backend.set(key, "'in memory only'")
+    assert backend.get(key) == "'in memory only'"
+    assert not target.exists(), "the memory backend must not reach the disk"
