@@ -1,0 +1,320 @@
+{
+  "$comment": "GENERATED FILE — do not edit. Regenerate with `python tools/gen_schema.py`. The source of truth is the pydantic model in src/gtheme/.",
+  "$defs": {
+    "Component": {
+      "description": "The closed registry of \"parts of the desktop\" a change can belong to.\n\nThis drives how a change is *described*, never what is written. It is a\nclosed set so that the preview dialog can be exhaustive: every setting a\nLook touches has to fall into one of these buckets, which is what lets the\ndiff be summarised as \"Wallpaper, highlight colour, icons, and 3 add-ons\"\ninstead of as a list of key names.",
+      "enum": [
+        "wallpaper",
+        "colors",
+        "icons",
+        "cursor",
+        "fonts",
+        "shell-theme",
+        "topbar",
+        "windows",
+        "workspaces",
+        "animations",
+        "night-light",
+        "sound",
+        "power",
+        "terminal",
+        "addons",
+        "privacy",
+        "accessibility",
+        "other"
+      ],
+      "title": "Component",
+      "type": "string"
+    },
+    "ExtensionInstallEntry": {
+      "additionalProperties": false,
+      "description": "Where an add-on comes from, when it is not already installed.",
+      "properties": {
+        "alternates": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Alternates",
+          "type": "array"
+        },
+        "ego_pk": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ego Pk"
+        },
+        "source": {
+          "default": "ego",
+          "enum": [
+            "ego",
+            "local-only"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "uuid": {
+          "title": "Uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid"
+      ],
+      "title": "ExtensionInstallEntry",
+      "type": "object"
+    },
+    "ExtensionSetting": {
+      "additionalProperties": false,
+      "description": "A setting belonging to one add-on.\n\nAddressed by ``(schema_id, key)`` rather than by key alone, because several\nadd-ons split their settings across child schemas — blur-my-shell has eight\nof them, and ``blur`` means something different in each.",
+      "properties": {
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "uuid": {
+          "title": "Uuid",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uuid",
+        "schema_id",
+        "key",
+        "value"
+      ],
+      "title": "ExtensionSetting",
+      "type": "object"
+    },
+    "ExtensionsBlock": {
+      "additionalProperties": false,
+      "description": "Which add-ons the Look wants, and how they are configured.",
+      "properties": {
+        "enable": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Enable",
+          "type": "array"
+        },
+        "install": {
+          "items": {
+            "$ref": "#/$defs/ExtensionInstallEntry"
+          },
+          "title": "Install",
+          "type": "array"
+        },
+        "settings": {
+          "items": {
+            "$ref": "#/$defs/ExtensionSetting"
+          },
+          "title": "Settings",
+          "type": "array"
+        }
+      },
+      "title": "ExtensionsBlock",
+      "type": "object"
+    },
+    "FileEntry": {
+      "additionalProperties": false,
+      "description": "One file the Look writes and thereby owns.",
+      "properties": {
+        "dest": {
+          "title": "Dest",
+          "type": "string"
+        },
+        "merge": {
+          "const": "none",
+          "default": "none",
+          "title": "Merge",
+          "type": "string"
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "pattern": "^0[0-7]{3}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mode"
+        },
+        "src": {
+          "title": "Src",
+          "type": "string"
+        },
+        "template": {
+          "default": false,
+          "title": "Template",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "src",
+        "dest"
+      ],
+      "title": "FileEntry",
+      "type": "object"
+    },
+    "Meta": {
+      "additionalProperties": false,
+      "description": "Who made this Look, what it is called, and what it looks like.",
+      "properties": {
+        "author": {
+          "title": "Author",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "min_shell": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Shell"
+        },
+        "name": {
+          "pattern": "^[a-z0-9][a-z0-9._-]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "screenshots": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Screenshots",
+          "type": "array"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "title",
+        "description",
+        "author",
+        "version",
+        "screenshots"
+      ],
+      "title": "Meta",
+      "type": "object"
+    },
+    "SettingEntry": {
+      "additionalProperties": false,
+      "description": "One desktop setting the Look writes.",
+      "properties": {
+        "component": {
+          "$ref": "#/$defs/Component",
+          "default": "other"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "merge": {
+          "default": "none",
+          "enum": [
+            "none",
+            "list-union"
+          ],
+          "title": "Merge",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "value"
+      ],
+      "title": "SettingEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A Look. The whole on-disk format, in one class.",
+  "properties": {
+    "extensions": {
+      "$ref": "#/$defs/ExtensionsBlock"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/FileEntry"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "format": {
+      "const": 2,
+      "title": "Format",
+      "type": "integer"
+    },
+    "meta": {
+      "$ref": "#/$defs/Meta"
+    },
+    "palette": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Palette",
+      "type": "object"
+    },
+    "settings": {
+      "items": {
+        "$ref": "#/$defs/SettingEntry"
+      },
+      "title": "Settings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "format",
+    "meta"
+  ],
+  "title": "Preset",
+  "type": "object"
+}

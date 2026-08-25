@@ -1,0 +1,334 @@
+{
+  "$comment": "GENERATED FILE — do not edit. Regenerate with `python tools/gen_schema.py`. The source of truth is the pydantic model in src/gtheme/.",
+  "$defs": {
+    "Choice": {
+      "additionalProperties": false,
+      "description": "One option of a :attr:`WidgetKind.CHOICE` row.",
+      "properties": {
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "subtitle": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subtitle"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "value",
+        "label"
+      ],
+      "title": "Choice",
+      "type": "object"
+    },
+    "PanelTarget": {
+      "additionalProperties": false,
+      "description": "Which add-on a panel is for, and what the app needs to know about it.",
+      "properties": {
+        "alternates": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Alternates",
+          "type": "array"
+        },
+        "category": {
+          "title": "Category",
+          "type": "string"
+        },
+        "child_schemas": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Child Schemas",
+          "type": "array"
+        },
+        "conflicts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Conflicts",
+          "type": "array"
+        },
+        "ego_pk": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ego Pk"
+        },
+        "relocatable_path_template": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relocatable Path Template"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "uuids": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Uuids",
+          "type": "array"
+        },
+        "warn": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Warn"
+        }
+      },
+      "required": [
+        "uuids",
+        "schema_id",
+        "category",
+        "summary"
+      ],
+      "title": "PanelTarget",
+      "type": "object"
+    },
+    "RequireFirst": {
+      "additionalProperties": false,
+      "description": "A key that must be written first for this row to have any effect.\n\nGNOME has several settings that are silently inert until a *different* key\nis set. Writing the visible one alone produces a control that appears to\nwork and does nothing, which is the worst failure mode a novice app can\nhave. The known cases:\n\n* font hinting and antialiasing do nothing while\n  ``interface font-rendering`` is ``'automatic'``,\n* the titlebar font does nothing while\n  ``wm.preferences titlebar-uses-system-font`` is true,\n* a fixed workspace count does nothing while ``mutter dynamic-workspaces``\n  is true.",
+      "properties": {
+        "explain": {
+          "title": "Explain",
+          "type": "string"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_id",
+        "key",
+        "value",
+        "explain"
+      ],
+      "title": "RequireFirst",
+      "type": "object"
+    },
+    "Row": {
+      "additionalProperties": false,
+      "description": "One control. The unit both ``data/panels/`` and ``data/domains/`` use.",
+      "properties": {
+        "advanced": {
+          "default": false,
+          "title": "Advanced",
+          "type": "boolean"
+        },
+        "choices": {
+          "items": {
+            "$ref": "#/$defs/Choice"
+          },
+          "title": "Choices",
+          "type": "array"
+        },
+        "clamp_max": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Clamp Max"
+        },
+        "clamp_min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Clamp Min"
+        },
+        "dict_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dict Key"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/WidgetKind"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        },
+        "requires_first": {
+          "items": {
+            "$ref": "#/$defs/RequireFirst"
+          },
+          "title": "Requires First",
+          "type": "array"
+        },
+        "reset": {
+          "default": true,
+          "title": "Reset",
+          "type": "boolean"
+        },
+        "schema_id": {
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "step": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Step"
+        },
+        "subtitle": {
+          "title": "Subtitle",
+          "type": "string"
+        },
+        "synonyms": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Synonyms",
+          "type": "array"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "warn": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Warn"
+        }
+      },
+      "required": [
+        "schema_id",
+        "key",
+        "title",
+        "subtitle",
+        "kind"
+      ],
+      "title": "Row",
+      "type": "object"
+    },
+    "WidgetKind": {
+      "description": "How a row is drawn. Closed set — an unknown kind is a data error.",
+      "enum": [
+        "toggle",
+        "slider",
+        "choice",
+        "text",
+        "color",
+        "picker",
+        "dict_slider",
+        "shortcut"
+      ],
+      "title": "WidgetKind",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One curated add-on panel: ``data/panels/<id>.toml``.",
+  "properties": {
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "rows": {
+      "items": {
+        "$ref": "#/$defs/Row"
+      },
+      "title": "Rows",
+      "type": "array"
+    },
+    "target": {
+      "$ref": "#/$defs/PanelTarget"
+    }
+  },
+  "required": [
+    "id",
+    "target"
+  ],
+  "title": "PanelDescriptor",
+  "type": "object"
+}
