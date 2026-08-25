@@ -1,0 +1,12 @@
+<schemalist>
+  <schema id="org.gnome.shell.extensions.blur-my-shell" path="/org/gnome/shell/extensions/blur-my-shell/">
+    <key name="brightness" type="d">
+      <default>0.6</default>
+    </key>
+  </schema>
+  <schema id="org.gnome.shell.extensions.blur-my-shell.panel" path="/org/gnome/shell/extensions/blur-my-shell/panel/">
+    <key name="blur" type="b">
+      <default>false</default>
+    </key>
+  </schema>
+</schemalist>

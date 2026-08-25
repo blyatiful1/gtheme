@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<!DOCTYPE wallpapers SYSTEM "gnome-wp-list.dtd">
+<wallpapers>
+  <wallpaper deleted="false">
+    <name>Timed Background</name>
+    <filename>/usr/share/backgrounds/gnome/timed.xml</filename>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+  </wallpaper>
+</wallpapers>

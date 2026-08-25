@@ -1,0 +1,4 @@
+[Icon Theme]
+Name=Papirus-Dark
+Comment=Papirus dark icon theme
+Inherits=breeze-dark,hicolor
