@@ -58,7 +58,7 @@ def test_validate_points_at_the_offending_field(tmp_path, capsys):
         description = "A demo Look."
         author = "someone"
         version = "1.0.0"
-        screenshots = []
+        screenshots = 7
         """,
         encoding="utf-8",
     )

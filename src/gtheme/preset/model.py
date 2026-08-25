@@ -21,7 +21,7 @@ Sketch of the format::
     author = "blyatiful1"
     version = "1.0.0"
     min_shell = "49"
-    screenshots = ["screenshots/desktop-light.png"]   # at least one, required
+    screenshots = ["screenshots/desktop-light.png"]   # required to publish
 
     [palette]
     bg = "#101a14"
@@ -124,10 +124,18 @@ class Meta(_Strict):
     #: string ("49"). Compared numerically; a Look never *blocks* on it, the
     #: app just warns that parts may not apply.
     min_shell: str | None = None
-    #: MANDATORY (DESIGN.md A8). A Look with no picture cannot be previewed,
-    #: and an unpreviewable Look is exactly the thing this app exists to spare
-    #: people. Paths are relative to the Look's folder.
-    screenshots: list[str] = Field(min_length=1)
+    #: Pictures of this Look, relative to its folder.
+    #:
+    #: Empty is allowed *here* and forbidden at PUBLISH time — a Look with no
+    #: picture cannot be previewed, and an unpreviewable Look is exactly what
+    #: this app exists to spare people (DESIGN.md A8). But the same model also
+    #: describes a restore point, and a restore point is written by machine
+    #: from a desktop that may have no wallpaper file to photograph. Requiring
+    #: a picture in the model meant every such capture had to name a file it
+    #: had not written, which then failed the loader's own missing-picture
+    #: warning. The requirement lives in ``tools/build_index.py`` instead,
+    #: which is the gate a Look actually crosses to reach the community index.
+    screenshots: list[str] = Field(default_factory=list)
 
 
 class FileEntry(_Strict):

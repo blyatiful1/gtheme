@@ -195,7 +195,7 @@ def _write_look(
         files.append(FileEntry(src=rel, dest=dest))
 
     screenshots = list(preset.meta.screenshots)
-    if wallpaper is not None:
+    if wallpaper is not None and wallpaper.is_file():
         shot = f"picture{wallpaper.suffix.lower()}"
         shutil.copy2(wallpaper, out_dir / shot)
         screenshots = [shot]
@@ -252,7 +252,10 @@ def capture_restore_point(
             description=f"How this desktop looked on {moment:%d %B %Y at %H:%M}.",
             author="you",
             version=stamp,
-            screenshots=["picture.png"],
+            # Filled in by _write_look if there is a wallpaper to copy. Naming
+            # a file that was never written is how a restore point ends up
+            # warning about its own missing picture on every load.
+            screenshots=[],
         ),
         settings=entries,
         extensions=ExtensionsBlock(enable=list(enabled_extensions)),
@@ -333,7 +336,9 @@ def capture_share(
             description=description,
             author=author,
             version=version,
-            screenshots=["picture.png"],
+            # See capture_restore_point: only a picture that gets copied in
+            # gets listed.
+            screenshots=[],
         ),
         settings=safe,
         extensions=ExtensionsBlock(enable=list(enabled_extensions)),

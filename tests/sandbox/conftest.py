@@ -41,9 +41,10 @@ from sandboxlib import DataMode, SandboxSession, SandboxUnavailable
 from tests.conftest import SEAM_FIXTURES
 
 #: The fixtures in this file that isolate a test from the live desktop. They are
-#: NOT in ``tests/conftest.py``'s ``SEAM_FIXTURES`` (that file is frozen), which
-#: means a test here marked ``mutating`` would be silently skipped rather than
-#: run. :func:`pytest_collection_modifyitems` turns that silence into an error.
+#: also in ``tests/conftest.py``'s ``SEAM_FIXTURES``, so a test here may be
+#: marked ``mutating`` and actually run. :func:`pytest_collection_modifyitems`
+#: catches the case where a new sandbox fixture is added here and forgotten
+#: there, which would silently downgrade such a test to a skip.
 SANDBOX_SEAM_FIXTURES = ("sandbox_shared_data", "sandbox_private_data", "broadway_session")
 
 
@@ -53,11 +54,11 @@ def pytest_collection_modifyitems(
     """Refuse to let a sandbox test be quietly skipped by the mutating guard.
 
     ``tests/conftest.py`` skips a ``mutating`` test unless one of the names in
-    its ``SEAM_FIXTURES`` is in play. The sandbox fixtures are a real isolation
-    seam but are not on that (frozen) list yet, so a test marked both
-    ``sandbox`` and ``mutating`` would report as an ordinary skip — the exact
-    failure mode the guard's own tests were written about. Fail collection
-    instead, with the fix in the message.
+    its ``SEAM_FIXTURES`` is in play. The sandbox fixtures are on that list, so
+    the ordinary case runs; but a sandbox module that builds its own session
+    under a name nobody added there would report as an ordinary skip — the
+    exact failure mode the guard's own tests were written about. Fail
+    collection instead, with the fix in the message.
     """
     offenders = []
     for item in items:
@@ -75,8 +76,9 @@ def pytest_collection_modifyitems(
             "SKIP them while the summary line called them passes:\n  "
             + "\n  ".join(offenders)
             + "\nEither drop the 'mutating' marker (the sandbox marker plus the "
-            "live canary is the stronger guarantee here) or add "
-            f"{SANDBOX_SEAM_FIXTURES} to SEAM_FIXTURES via the integration agent."
+            "live canary is the stronger guarantee here) or add the fixture "
+            "that isolates them to SEAM_FIXTURES in tests/conftest.py, next to "
+            f"{SANDBOX_SEAM_FIXTURES}."
         )
 
 

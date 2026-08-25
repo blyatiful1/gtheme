@@ -10,6 +10,13 @@ removing or bumping a bundled Look.
 
 ``--check`` is what the test suite uses, so an index that drifts from the Looks
 beside it fails the canonical check rather than shipping.
+
+This is also where "every Look has a picture" is enforced. The requirement is
+real (DESIGN.md A8 — an unpreviewable Look is exactly what this app exists to
+spare people), but it belongs at PUBLISH time rather than in the model: the
+same model describes restore points, which are written by machine from a
+desktop that may have no wallpaper file to photograph. A Look reaches the
+community index through this script, so this is the gate that has to hold.
 """
 
 from __future__ import annotations
@@ -46,6 +53,33 @@ def main(argv: list[str] | None = None) -> int:
     document, skipped = build_index(args.themes_dir)
     for name, reason in skipped:
         print(f"skipped {name}: {reason}", file=sys.stderr)
+
+    unpreviewable = [entry["name"] for entry in document["themes"] if not entry["screenshots"]]
+    if unpreviewable:
+        print(
+            "refusing to publish: these Looks have no picture, so nobody could "
+            "see what they do before applying them: " + ", ".join(sorted(unpreviewable)),
+            file=sys.stderr,
+        )
+        print(
+            "Add a screenshot to each Look's folder and list it under "
+            "[meta] screenshots in its theme.toml.",
+            file=sys.stderr,
+        )
+        return 1
+
+    missing_files = []
+    for entry in document["themes"]:
+        for shot in entry["screenshots"]:
+            if not (args.themes_dir / entry["name"] / shot).is_file():
+                missing_files.append(f"{entry['name']}/{shot}")
+    if missing_files:
+        print(
+            "refusing to publish: these pictures are listed but not there: "
+            + ", ".join(sorted(missing_files)),
+            file=sys.stderr,
+        )
+        return 1
 
     if args.check:
         target = args.themes_dir / "index.json"

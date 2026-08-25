@@ -102,16 +102,21 @@ def fastfetch(tmp_dest_root: Path) -> FastfetchAdapter:
 # -- restart semantics are the whole point of this module ------------------
 
 
-def test_all_three_say_the_change_needs_a_restart():
-    for adapter in (BtopAdapter, CavaAdapter, FastfetchAdapter):
+def test_the_two_running_programs_say_the_change_needs_a_restart():
+    for adapter in (BtopAdapter, CavaAdapter):
         assert adapter.reload_semantics is ReloadSemantics.RESTART
 
 
+def test_fastfetch_is_one_shot_not_restart():
+    """It is not a running program, so "close it and open it again" is a lie."""
+    assert FastfetchAdapter.reload_semantics is ReloadSemantics.ONE_SHOT
+    assert ReloadSemantics.ONE_SHOT.sentence() == "Run it again to see this."
+
+
 @pytest.mark.mutating
-def test_fastfetch_explains_what_restart_means_for_a_one_shot_command(
-    fastfetch: FastfetchAdapter,
-):
-    assert any("run it again" in note for note in fastfetch.detect().notes)
+def test_fastfetch_tells_the_user_the_one_shot_story(fastfetch: FastfetchAdapter):
+    """The note comes from the vocabulary now, not from a hand-written aside."""
+    assert fastfetch.detect().notes == [ReloadSemantics.ONE_SHOT.sentence()]
 
 
 # -- btop ------------------------------------------------------------------

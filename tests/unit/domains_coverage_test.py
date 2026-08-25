@@ -33,7 +33,7 @@ from gtheme.ui import registry
 #: research/gnome-domains.md: §1.6 lists the keys that survive in the settings
 #: definition but that nothing on a modern desktop reads, and §9.6 lists the
 #: recipes that used to work and would now do harm.
-LEGAL_EXCLUSION_REASONS = {"dead-key-§1.6", "obsolete-recipe-§9.6"}
+LEGAL_EXCLUSION_REASONS = {"dead-key-§1.6", "obsolete-recipe-§9.6", "machine-state"}
 
 #: Keyboard shortcuts are customisation, not input configuration, and may never
 #: be handed to the desktop's own Settings app (F14). Anything in these schemas
@@ -128,7 +128,7 @@ def test_the_floor_catches_everything_nobody_designed_a_home_for():
         assert types[descriptor_id], f"{descriptor_id}: no type, so no row can be drawn for it"
 
 
-def test_hiding_a_setting_needs_one_of_two_argued_reasons():
+def test_hiding_a_setting_needs_one_of_three_argued_reasons():
     for descriptor_id, disposition in dispositions().items():
         if _verb(disposition) != "excluded":
             continue
@@ -136,6 +136,41 @@ def test_hiding_a_setting_needs_one_of_two_argued_reasons():
             f"{descriptor_id}: excluded({_arg(disposition)}) — the only legal reasons are "
             f"{sorted(LEGAL_EXCLUSION_REASONS)}"
         )
+
+
+def test_machine_state_is_what_the_desktop_writes_to_itself():
+    """The third exclusion reason, pinned to the keys it was argued for.
+
+    ``machine-state`` is the reason with the most room to be abused — almost
+    any key could be called bookkeeping if nobody checked. So the list is
+    written down: these keys and no others, and the neighbouring keys that
+    look similar and are NOT machine state are pinned beside them.
+    """
+    given = dispositions()
+    expected = {
+        "org.gnome.shell:command-history",
+        "org.gnome.shell:looking-glass-history",
+        "org.gnome.shell:app-picker-layout",
+        "org.gnome.shell:welcome-dialog-last-shown-version",
+        "org.gnome.shell:last-selected-power-profile",
+        "org.gnome.settings-daemon.plugins.color:night-light-last-coordinates",
+        "org.gnome.mutter:output-luminance",
+        "org.gnome.desktop.peripherals.keyboard:numlock-state",
+        "org.gnome.desktop.session:session-name",
+        "org.gnome.desktop.app-folders:folder-children",
+        "org.gnome.shell.world-clocks:locations",
+    }
+    actual = {d for d, disp in given.items() if disp == "excluded(machine-state)"}
+    assert actual == expected
+
+    # People do name their desktops, so this one is a setting, not bookkeeping.
+    assert given["org.gnome.desktop.wm.preferences:workspace-names"] == "floor"
+    # And the switch that decides whether Num Lock is remembered is a real row,
+    # even though the remembered value itself is not.
+    assert (
+        given["org.gnome.desktop.peripherals.keyboard:remember-numlock-state"]
+        == "surfaced(more)"
+    )
 
 
 def test_the_dead_keys_are_the_ones_the_research_named():

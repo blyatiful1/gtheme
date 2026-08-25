@@ -11,7 +11,10 @@ An isolation seam is one of:
   file write is confined below it,
 * the ``memory_settings`` fixture in use — settings go to an in-memory GSettings
   backend and reach no store,
-* ``GTHEME_CONFIG_DIR`` pointing at a temporary directory — app preferences.
+* ``GTHEME_CONFIG_DIR`` pointing at a temporary directory — app preferences,
+* one of the ``tests/sandbox/`` session fixtures — the whole test runs inside a
+  private D-Bus session with its own XDG roots, and the live canary asserts
+  afterwards that the real desktop did not move.
 
 The guard skips rather than fails, so that a suite run without seams is quiet
 rather than red; but the skip reason names the missing seam, so a test that was
@@ -28,7 +31,16 @@ import pytest
 
 #: Environment variables that, when set to a temporary location, isolate a
 #: test from the live desktop.
-SEAM_ENV_VARS = ("GTHEME_DEST_ROOT", "GTHEME_CONFIG_DIR", "GTHEME_STATE_DIR")
+SEAM_ENV_VARS = (
+    "GTHEME_DEST_ROOT",
+    "GTHEME_CONFIG_DIR",
+    "GTHEME_STATE_DIR",
+    # The add-on library writes here: its download cache, and the staging area
+    # where an update waits for the next login. Both point into the real
+    # ~/.local/share by default, so redirecting them is a genuine seam.
+    "GTHEME_CACHE_DIR",
+    "GTHEME_EXTENSION_UPDATES_DIR",
+)
 
 #: Fixtures that provide isolation. Requesting any of them is enough.
 #:
@@ -37,7 +49,27 @@ SEAM_ENV_VARS = ("GTHEME_DEST_ROOT", "GTHEME_CONFIG_DIR", "GTHEME_STATE_DIR")
 #: does — pytest does not promise an order between two same-scope fixtures.
 #: Checking only the environment made every ``config_dir``-seamed test skip
 #: while looking, from the summary line, exactly like a test that had passed.
-SEAM_FIXTURES = ("tmp_dest_root", "config_dir", "state_dir", "memory_settings")
+#: The last three belong to ``tests/sandbox/`` and isolate differently: rather
+#: than redirecting a path, they put the whole test inside a private D-Bus
+#: session with its own XDG roots and a headless shell, with the live canary
+#: asserting afterwards that the real desktop did not move. That is a stronger
+#: seam than any of the first four, not a weaker one, so a sandbox test may say
+#: ``mutating`` out loud instead of having to stay quiet about what it does.
+SEAM_FIXTURES = (
+    "tmp_dest_root",
+    "config_dir",
+    "state_dir",
+    "memory_settings",
+    "sandbox_shared_data",
+    "sandbox_private_data",
+    "broadway_session",
+    # Two sandbox modules build their own private session rather than sharing
+    # one, because installing a test schema and running the runtime-load
+    # experiment both have to happen before a shell starts. Same seam, same
+    # canary, different owner.
+    "golden_session",
+    "experiment",
+)
 
 #: Set by the ``memory_settings`` fixture for the duration of a test.
 _MEMORY_BACKEND_ACTIVE = "_gtheme_memory_backend_active"

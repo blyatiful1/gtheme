@@ -52,7 +52,9 @@ from sandboxlib import (
     zip_extension,
 )
 
-pytestmark = pytest.mark.sandbox
+# Every test here writes settings — into the sandbox's own dconf, with the
+# live canary asserting afterwards that nothing outside it moved.
+pytestmark = [pytest.mark.sandbox, pytest.mark.mutating]
 
 UUID_E = "probe-e@gtheme.local"
 UUID_C = "probe-c@gtheme.local"

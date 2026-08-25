@@ -21,15 +21,37 @@ def test_the_seam_variables_are_the_documented_ones():
         "GTHEME_DEST_ROOT",
         "GTHEME_CONFIG_DIR",
         "GTHEME_STATE_DIR",
+        "GTHEME_CACHE_DIR",
+        "GTHEME_EXTENSION_UPDATES_DIR",
     }
 
 
 def test_every_seam_fixture_exists():
-    """A name in SEAM_FIXTURES with no fixture behind it would grant free passes."""
+    """A name in SEAM_FIXTURES with no fixture behind it would grant free passes.
+
+    Seams live in two files: the shared ones here, and the sandbox sessions in
+    ``tests/sandbox/conftest.py`` and the modules that build their own. A name
+    has to be a real fixture in one of them.
+    """
+    import ast
+    from pathlib import Path
+
     import tests.conftest as conftest
 
-    for name in SEAM_FIXTURES:
-        assert hasattr(conftest, name), f"{name} is listed as a seam but has no fixture"
+    tests_dir = Path(conftest.__file__).parent
+    defined: set[str] = set()
+    for path in [tests_dir / "conftest.py", *sorted((tests_dir / "sandbox").glob("*.py"))]:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            for deco in node.decorator_list:
+                target = deco.func if isinstance(deco, ast.Call) else deco
+                if isinstance(target, ast.Attribute) and target.attr == "fixture":
+                    defined.add(node.name)
+
+    missing = [name for name in SEAM_FIXTURES if name not in defined]
+    assert not missing, f"listed as seams but no fixture defines them: {missing}"
 
 
 @pytest.mark.mutating

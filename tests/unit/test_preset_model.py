@@ -34,17 +34,27 @@ def test_a_minimal_look_validates():
     assert preset.extensions.enable == []
 
 
-def test_screenshots_are_mandatory():
-    """A Look nobody can preview is the thing this app exists to spare people."""
-    data = {**MINIMAL, "meta": {**MINIMAL["meta"], "screenshots": []}}
-    with pytest.raises(ValidationError, match="screenshots"):
-        Preset.model_validate(data)
+def test_screenshots_may_be_empty_in_the_model():
+    """Because a restore point is this model too, and has nothing to photograph.
+
+    "A Look nobody can preview is the thing this app exists to spare people"
+    is still true, and is still enforced — at PUBLISH time, by
+    ``tools/build_index.py``. See ``test_preset_registry.py``. Enforcing it
+    here instead made every machine-written capture claim a picture file it
+    had not written, which the loader then warned about on every load.
+    """
+    preset = Preset.model_validate({**MINIMAL, "meta": {**MINIMAL["meta"], "screenshots": []}})
+    assert preset.meta.screenshots == []
 
 
-def test_screenshots_key_cannot_be_omitted():
+def test_screenshots_key_may_be_omitted_entirely():
     meta = {k: v for k, v in MINIMAL["meta"].items() if k != "screenshots"}
+    assert Preset.model_validate({**MINIMAL, "meta": meta}).meta.screenshots == []
+
+
+def test_screenshots_must_still_be_a_list_of_strings():
     with pytest.raises(ValidationError, match="screenshots"):
-        Preset.model_validate({**MINIMAL, "meta": meta})
+        Preset.model_validate({**MINIMAL, "meta": {**MINIMAL["meta"], "screenshots": "one.png"}})
 
 
 def test_hooks_are_not_a_thing_any_more():
@@ -265,8 +275,9 @@ def test_broken_toml_is_reported_as_such(tmp_path):
 
 
 def test_errors_are_formatted_for_a_human():
+    lines: list[str] = []
     try:
-        Preset.model_validate({**MINIMAL, "meta": {**MINIMAL["meta"], "screenshots": []}})
+        Preset.model_validate({**MINIMAL, "meta": {**MINIMAL["meta"], "screenshots": 7}})
     except ValidationError as exc:
         lines = format_validation_errors(exc)
     assert lines

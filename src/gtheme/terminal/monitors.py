@@ -11,10 +11,9 @@ that has to be told honestly.
   pretending.
 * **cava** is the same: the gradient changes for the next run.
 * **fastfetch** is not a running program at all — it prints once and exits — so
-  the next time it is run, it is already themed. The closest honest reading in
-  the frozen vocabulary is :attr:`~gtheme.terminal.model.ReloadSemantics.RESTART`,
-  and the adapter adds a note saying what "restart" means for a one-shot
-  command.
+  the next time it is run, it is already themed. That is
+  :attr:`~gtheme.terminal.model.ReloadSemantics.ONE_SHOT`: "run it again to see
+  this", with nothing to close and nothing to reload.
 """
 
 from __future__ import annotations
@@ -254,7 +253,7 @@ class FastfetchAdapter:
 
     id = "fastfetch"
     name = "fastfetch"
-    reload_semantics = ReloadSemantics.RESTART
+    reload_semantics = ReloadSemantics.ONE_SHOT
 
     def __init__(self, config_path: Path | None = None) -> None:
         self._config_path = Path(config_path) if config_path is not None else None
@@ -272,9 +271,7 @@ class FastfetchAdapter:
             config_path=self.config_path if installed else None,
             foreign_root=None,
             current=None,
-            notes=[
-                "fastfetch prints once and exits — run it again to see the new colours.",
-            ],
+            notes=[self.reload_semantics.sentence()],
         )
 
     def current(self) -> Palette | None:

@@ -15,10 +15,18 @@
 #                      Settings renders it from the system's own description, marked
 #                      as system text. This is the catch-all that makes the promise
 #                      hold for the long tail.
-#   excluded(<reason>) deliberately not shown at all. Only two reasons are legal, and
+#   excluded(<reason>) deliberately not shown at all. Only three reasons are legal, and
 #                      a test enforces that: dead-key-§1.6 (in the settings list but
-#                      nothing on a modern desktop reads it) and obsolete-recipe-§9.6
-#                      (advice that used to be true and would now do harm).
+#                      nothing on a modern desktop reads it), obsolete-recipe-§9.6
+#                      (advice that used to be true and would now do harm), and
+#                      machine-state (not a setting at all — a note the desktop writes
+#                      to itself and reads back: what you last typed into the run
+#                      dialog, where your app icons ended up, the coordinates night
+#                      light worked out from your clock. Rendering these as controls
+#                      would offer the user a text box over the desktop's own
+#                      bookkeeping, which cannot help and can break things. Note the
+#                      line: workspace-names is NOT machine state — people do name
+#                      their desktops — and stays on the floor page.)
 #   delegated(<who>)   the desktop's own Settings app owns this and does it better.
 #                      Legal only for the entries in [delegated] below, each with a
 #                      justification. Keyboard shortcuts may never be delegated.
@@ -101,7 +109,8 @@
 "org.gnome.desktop.a11y.mouse:secondary-click-time" = "floor"
 
 # -- org.gnome.desktop.app-folders
-"org.gnome.desktop.app-folders:folder-children" = "floor"
+# Which folders exist in the app grid, written as you make and empty them.
+"org.gnome.desktop.app-folders:folder-children" = "excluded(machine-state)"
 
 # -- org.gnome.desktop.background
 "org.gnome.desktop.background:color-shading-type" = "surfaced(wallpaper)"
@@ -243,7 +252,8 @@
 
 # -- org.gnome.desktop.peripherals.keyboard
 "org.gnome.desktop.peripherals.keyboard:delay" = "surfaced(more)"
-"org.gnome.desktop.peripherals.keyboard:numlock-state" = "floor"
+# Whether Num Lock was on when you logged out. The switch that decides whether that gets remembered is a real setting, and is on More Settings.
+"org.gnome.desktop.peripherals.keyboard:numlock-state" = "excluded(machine-state)"
 "org.gnome.desktop.peripherals.keyboard:remember-numlock-state" = "surfaced(more)"
 "org.gnome.desktop.peripherals.keyboard:repeat" = "surfaced(more)"
 "org.gnome.desktop.peripherals.keyboard:repeat-interval" = "surfaced(more)"
@@ -338,7 +348,8 @@
 # -- org.gnome.desktop.session
 "org.gnome.desktop.session:idle-delay" = "surfaced(power)"
 "org.gnome.desktop.session:save-restore" = "floor"
-"org.gnome.desktop.session:session-name" = "floor"
+# Which desktop session is running. Set at login, by the login screen.
+"org.gnome.desktop.session:session-name" = "excluded(machine-state)"
 
 # -- org.gnome.desktop.sound
 "org.gnome.desktop.sound:allow-volume-above-100-percent" = "surfaced(sound)"
@@ -473,7 +484,8 @@
 "org.gnome.mutter:experimental-features" = "excluded(obsolete-recipe-§9.6)"
 "org.gnome.mutter:focus-change-on-pointer-rest" = "surfaced(windows)"
 "org.gnome.mutter:locate-pointer-key" = "floor"
-"org.gnome.mutter:output-luminance" = "floor"
+# Per-monitor brightness the display settings write; not a thing to type.
+"org.gnome.mutter:output-luminance" = "excluded(machine-state)"
 "org.gnome.mutter:overlay-key" = "surfaced(windows)"
 "org.gnome.mutter:workspaces-only-on-primary" = "surfaced(windows)"
 
@@ -493,7 +505,8 @@
 
 # -- org.gnome.settings-daemon.plugins.color
 "org.gnome.settings-daemon.plugins.color:night-light-enabled" = "surfaced(nightlight)"
-"org.gnome.settings-daemon.plugins.color:night-light-last-coordinates" = "floor"
+# Where the desktop worked out you are, to know when the sun sets.
+"org.gnome.settings-daemon.plugins.color:night-light-last-coordinates" = "excluded(machine-state)"
 "org.gnome.settings-daemon.plugins.color:night-light-schedule-automatic" = "surfaced(nightlight)"
 "org.gnome.settings-daemon.plugins.color:night-light-schedule-from" = "surfaced(nightlight)"
 "org.gnome.settings-daemon.plugins.color:night-light-schedule-to" = "surfaced(nightlight)"
@@ -616,18 +629,23 @@
 # -- org.gnome.shell
 "org.gnome.shell:allow-extension-installation" = "surfaced(addons)"
 "org.gnome.shell:always-show-log-out" = "floor"
-"org.gnome.shell:app-picker-layout" = "floor"
-"org.gnome.shell:command-history" = "floor"
+# Where the app icons ended up after being dragged. Written by the app grid.
+"org.gnome.shell:app-picker-layout" = "excluded(machine-state)"
+# What was last typed into the run box. The shell appends to it every time.
+"org.gnome.shell:command-history" = "excluded(machine-state)"
 "org.gnome.shell:development-tools" = "floor"
 "org.gnome.shell:disable-extension-version-validation" = "surfaced(addons)"
 "org.gnome.shell:disable-user-extensions" = "surfaced(addons)"
 "org.gnome.shell:disabled-extensions" = "compound(add-on-enable)"
 "org.gnome.shell:enabled-extensions" = "compound(add-on-enable)"
 "org.gnome.shell:favorite-apps" = "floor"
-"org.gnome.shell:last-selected-power-profile" = "floor"
-"org.gnome.shell:looking-glass-history" = "floor"
+# The profile the shell puts back after it stops saving battery for you.
+"org.gnome.shell:last-selected-power-profile" = "excluded(machine-state)"
+# The same, for the shell's own debug console.
+"org.gnome.shell:looking-glass-history" = "excluded(machine-state)"
 "org.gnome.shell:remember-mount-password" = "floor"
-"org.gnome.shell:welcome-dialog-last-shown-version" = "floor"
+# Which version's welcome screen you have already been shown.
+"org.gnome.shell:welcome-dialog-last-shown-version" = "excluded(machine-state)"
 
 # -- org.gnome.shell.app-switcher
 "org.gnome.shell.app-switcher:current-workspace-only" = "surfaced(windows)"
@@ -674,7 +692,8 @@
 "org.gnome.shell.window-switcher:current-workspace-only" = "surfaced(windows)"
 
 # -- org.gnome.shell.world-clocks
-"org.gnome.shell.world-clocks:locations" = "floor"
+# The cities added in the Clocks app, kept here for the top-bar clock.
+"org.gnome.shell.world-clocks:locations" = "excluded(machine-state)"
 
 # -- org.gnome.system.location
 "org.gnome.system.location:enabled" = "floor"

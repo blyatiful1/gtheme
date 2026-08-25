@@ -50,6 +50,9 @@ class ReloadSemantics(enum.Enum):
     NEW_WINDOWS = "new-windows"
     #: The program has to be closed and started again.
     RESTART = "restart"
+    #: The program is not running: it prints once and exits. There is nothing
+    #: to reload — the next run picks the change up.
+    ONE_SHOT = "one-shot"
 
     def sentence(self) -> str:
         """One line for the UI, in plain words."""
@@ -61,6 +64,7 @@ class ReloadSemantics(enum.Enum):
             ),
             ReloadSemantics.NEW_WINDOWS: "Windows you open from now on will use it.",
             ReloadSemantics.RESTART: "Close the program and open it again to see this.",
+            ReloadSemantics.ONE_SHOT: "Run it again to see this.",
         }[self]
 
 

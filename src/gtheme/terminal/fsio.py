@@ -15,16 +15,28 @@ all of them borrowed from what v1 already learned the hard way:
   ``fsync``, ``os.replace``. A terminal config truncated by a crash is a
   terminal that will not start.
 
-The E1 refusal is ported verbatim in spirit from v1's ``paths.py``: a broken
-environment where the root is empty, relative, or ``/`` would make every path
-"inside" the root and quietly defeat confinement, so it refuses to write at all.
+None of those three rules are implemented here any more. They are
+:mod:`gtheme.core.confine` and :mod:`gtheme.core.atomic`, which are the ported,
+regression-tested versions of the same v1 code — including the E1 refusal, the
+symlinked-directory escape, and the temp-file-in-the-target-directory rule.
+This module is the terminal package's name for them, plus the three XDG roots
+that genuinely are terminal business: unlike the rest of the app, the adapters
+address ``~/.config`` and ``~/.local/share`` directly, and under a test root
+those have to follow the root rather than the environment.
+
+Keeping the five-name surface (``ConfinementError``, ``confine``, ``expand``,
+``atomic_write_bytes``, ``atomic_write_text``) means every adapter is unchanged
+and every ``except ConfinementError`` still catches, because it is now literally
+the same exception class the rest of the app raises.
 """
 
 from __future__ import annotations
 
 import os
-import tempfile
 from pathlib import Path
+
+from ..core import atomic as _atomic
+from ..core.confine import ConfinementError, confine_dest, expand_dest
 
 __all__ = [
     "ConfinementError",
@@ -39,8 +51,23 @@ __all__ = [
 ]
 
 
-class ConfinementError(Exception):
-    """A path resolved somewhere gtheme is not allowed to write."""
+def atomic_write_bytes(path: Path, payload: bytes, *, mode: int | None = None) -> None:
+    """Replace ``path`` with ``payload`` in one step, or not at all.
+
+    :func:`gtheme.core.atomic.atomic_write_bytes` does the write and requires
+    the parent directory to exist; the terminal adapters are frequently the
+    first thing to write a config at all — a machine with ghostty installed and
+    never configured has no ``~/.config/ghostty`` — so the directory is made
+    here first.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _atomic.atomic_write_bytes(path, payload, mode)
+
+
+def atomic_write_text(path: Path, text: str, *, mode: int | None = None) -> None:
+    """:func:`atomic_write_bytes` for UTF-8 text."""
+    atomic_write_bytes(Path(path), text.encode("utf-8"), mode=mode)
 
 
 def _env_path(var: str) -> Path | None:
@@ -56,19 +83,7 @@ def dest_root() -> Path:
             (the v1 E1 case) — confinement would be meaningless, so nothing is
             written.
     """
-    root = _env_path("GTHEME_DEST_ROOT") or Path.home()
-    if not root.is_absolute():
-        raise ConfinementError(
-            f"unsafe destination root {str(root)!r} (relative); refusing to write — "
-            "check $HOME / $GTHEME_DEST_ROOT"
-        )
-    resolved = root.resolve()
-    if resolved == Path(resolved.anchor):
-        raise ConfinementError(
-            f"unsafe destination root {str(root)!r} (filesystem root); refusing to write — "
-            "check $HOME / $GTHEME_DEST_ROOT"
-        )
-    return root
+    return expand_dest("~")
 
 
 def config_root() -> Path:
@@ -112,12 +127,7 @@ def expand(dest: str | Path) -> Path:
     ``~`` and ``$HOME`` both mean the root. Any other absolute path is returned
     as it is — and will then fail :func:`confine`, which is the point.
     """
-    text = str(dest).replace("$HOME", "~")
-    if text == "~":
-        return dest_root()
-    if text.startswith("~/"):
-        return dest_root() / text[2:]
-    return Path(text)
+    return expand_dest(str(dest))
 
 
 def confine(dest: str | Path) -> Path:
@@ -135,38 +145,4 @@ def confine(dest: str | Path) -> Path:
     Raises:
         ConfinementError: the resolved path is outside the root.
     """
-    expanded = expand(dest)
-    root = dest_root().resolve()
-    resolved = expanded.resolve()
-    if not resolved.is_relative_to(root):
-        raise ConfinementError(f"{expanded} resolves to {resolved}, outside {root}")
-    return expanded
-
-
-def atomic_write_bytes(path: Path, payload: bytes, *, mode: int | None = None) -> None:
-    """Replace ``path`` with ``payload`` in one step, or not at all.
-
-    The temp file is created in the destination's own directory so the final
-    ``os.replace`` cannot cross a filesystem boundary — and so a refused
-    destination never gets a stray ``.gtheme-*.tmp`` left behind in it.
-    """
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_name = tempfile.mkstemp(dir=str(path.parent), prefix=".gtheme-", suffix=".tmp")
-    tmp = Path(tmp_name)
-    try:
-        with os.fdopen(fd, "wb") as handle:
-            handle.write(payload)
-            handle.flush()
-            os.fsync(handle.fileno())
-        if mode is not None:
-            os.chmod(tmp, mode)
-        os.replace(tmp, path)
-    except BaseException:
-        tmp.unlink(missing_ok=True)
-        raise
-
-
-def atomic_write_text(path: Path, text: str, *, mode: int | None = None) -> None:
-    """:func:`atomic_write_bytes` for UTF-8 text."""
-    atomic_write_bytes(path, text.encode("utf-8"), mode=mode)
+    return confine_dest(str(dest))

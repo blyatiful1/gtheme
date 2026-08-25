@@ -37,6 +37,7 @@ def test_the_private_bus_is_not_the_live_bus(sandbox_shared_data: SandboxSession
     assert sandbox_shared_data.bus.startswith("unix:")
 
 
+@pytest.mark.mutating
 def test_a_canary_write_lands_in_the_sandbox_and_nowhere_else(
     sandbox_shared_data: SandboxSession,
 ):
@@ -106,6 +107,7 @@ def test_private_mode_cannot_see_the_users_extensions(
     assert "intellibar@nightbloom.local" not in seeded
 
 
+@pytest.mark.mutating
 def test_the_user_extensions_directory_was_not_written_to(
     sandbox_private_data: SandboxSession,
 ):

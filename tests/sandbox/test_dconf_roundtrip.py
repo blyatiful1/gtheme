@@ -37,7 +37,9 @@ from pathlib import Path
 import pytest
 from sandboxlib import DataMode, SandboxSession, SandboxUnavailable, require_tools
 
-pytestmark = pytest.mark.sandbox
+# Every test here writes settings — into the sandbox's own dconf, with the
+# live canary asserting afterwards that nothing outside it moved.
+pytestmark = [pytest.mark.sandbox, pytest.mark.mutating]
 
 PROBE = Path(__file__).parent / "probes" / "backend_probe.py"
 
