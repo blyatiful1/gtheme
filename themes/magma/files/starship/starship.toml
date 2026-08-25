@@ -1,0 +1,89 @@
+# ── MAGMA — minimal prompt ──────────────────────────────────────────
+# Single line, no powerline wedges, no backgrounds: designed for the
+# translucent glass terminal (ptyxis 0.85 / alacritty 0.82 opacity),
+# where painted segment backgrounds would kill the blur.
+# Font: MesloLGS Nerd Font (glyphs:  󰌾   ❯ ❮).
+
+"$schema" = 'https://starship.rs/config-schema.json'
+
+command_timeout = 500
+scan_timeout = 30
+add_newline = true
+
+palette = 'magma'
+
+# Everything on one line, prompt char included — no $line_break.
+format = '$directory$git_branch$git_status$python$rust$nodejs$cmd_duration$character'
+
+[palettes.magma]
+obsidian  = '#0D0A0F'   # deepest background
+plum      = '#181019'   # deep plum surface
+plum2     = '#261826'   # raised plum surface
+selection = '#3A2030'   # selection
+crimson   = '#E0304E'   # vent crimson (error prompt char)
+lava      = '#FF6D3A'   # PRIMARY accent — molten orange
+amber     = '#FFA05C'   # vent glow (slow-command duration)
+gold      = '#FFC145'   # lava gold (dirty git state)
+cream     = '#F2E5D5'   # main text
+bright    = '#FFF6E8'   # white-hot text
+muted     = '#7A6470'   # ash / dim chrome
+teal      = '#45C7B5'   # the one cool vein (runtimes, sparingly)
+error     = '#F25050'   # ANSI red
+purple    = '#B07BE8'   # rare gas flame
+
+[directory]
+style = 'bold lava'
+format = '[$path]($style)[$read_only]($read_only_style) '
+read_only = ' 󰌾'
+read_only_style = 'muted'
+truncation_length = 3
+truncation_symbol = '…/'
+truncate_to_repo = true
+
+[git_branch]
+symbol = ' '
+style = 'muted'
+format = '[$symbol$branch]($style) '
+
+[git_status]
+# Only renders when there is something to say — gold marks a dirty tree.
+style = 'gold'
+format = '([$all_status$ahead_behind]($style) )'
+conflicted = '󰞇 '
+ahead = '⇡${count} '
+behind = '⇣${count} '
+diverged = '⇕ '
+up_to_date = ''
+untracked = '?${count} '
+stashed = '󰆓 '
+modified = '!${count} '
+staged = '+${count} '
+renamed = '»${count} '
+deleted = '✘${count} '
+
+# Runtimes surface only inside a matching project (starship's default
+# detection: pyproject.toml/requirements.txt, Cargo.toml, package.json …).
+[python]
+symbol = ' '
+style = 'teal'
+format = '[$symbol($version )(\($virtualenv\) )]($style)'
+
+[rust]
+symbol = ' '
+style = 'teal'
+format = '[$symbol($version )]($style)'
+
+[nodejs]
+symbol = ' '
+style = 'teal'
+format = '[$symbol($version )]($style)'
+
+[cmd_duration]
+min_time = 3000
+style = 'amber'
+format = '[󰔛 $duration]($style) '
+
+[character]
+success_symbol = '[❯](bold lava)'
+error_symbol = '[❯](bold crimson)'
+vimcmd_symbol = '[❮](bold teal)'

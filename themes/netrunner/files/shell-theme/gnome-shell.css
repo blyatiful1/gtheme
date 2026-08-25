@@ -1,0 +1,131 @@
+/* NETRUNNER — GNOME Shell 50 user theme: navy glass, HUD-cyan interactions.
+ * Loaded as St application_stylesheet; cascades OVER the stock
+ * gnome-shell-dark.css, so only overrides live here.
+ * Deliberately untouched: overview & dash backgrounds (blur-my-shell +
+ * dash-to-dock own those). Shell CSS cannot blur — translucency only.
+ * BORDER-FREE: every stock 1px popover/OSD border is made transparent
+ * (border-color only, so layout metrics never shift). St has no text-shadow. */
+
+/* Overrides stock `.popup-menu-content, .candidate-popup-content`
+ * (bg #36363a, border 1px #424247): quick-settings + calendar/date-menu
+ * popovers are this same node — deep navy glass, no visible border. */
+.popup-menu-content,
+.candidate-popup-content {
+  background-color: rgba(6, 11, 20, 0.80);
+  border-color: transparent;
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.35);
+}
+
+/* Overrides stock cards inside quick-settings / date-menu (bg #47474c):
+ * raised navy glass. */
+.quick-toggle-menu, .message, .events-button,
+.world-clocks-button,
+.weather-button {
+  background-color: rgba(17, 26, 44, 0.62);
+}
+
+/* Overrides stock card :hover/:active (st-lighten grays) so interaction
+ * feedback goes cyan-deep (selection #14324A family), not gray. */
+.quick-toggle-menu:hover, .message:hover, .events-button:hover,
+.world-clocks-button:hover,
+.weather-button:hover,
+.quick-toggle-menu:active, .message:active, .events-button:active,
+.world-clocks-button:active,
+.weather-button:active {
+  background-color: rgba(20, 50, 74, 0.72);
+}
+
+/* Overrides stock `.calendar .calendar-day.calendar-today`
+ * (bg -st-accent-color): today in HUD cyan. Text color stays stock. */
+.calendar .calendar-day.calendar-today {
+  background-color: #10C8D8;
+}
+.calendar .calendar-day.calendar-today:hover,
+.calendar .calendar-day.calendar-today:active {
+  background-color: st-lighten(#10C8D8, 6%);
+}
+
+/* Overrides stock `.message-list` separator (rgba(255,255,255,0.1)):
+ * an ice whisper instead of a white line. */
+.message-list {
+  border-color: rgba(133, 242, 251, 0.08);
+}
+
+/* Overrides stock `.osd-window, .switcher-list, .workspace-switcher,
+ * .resize-popup` (bg #2e2e33): volume/brightness OSD, alt-tab, resize —
+ * navy glass, borderless. */
+.osd-window,
+.switcher-list,
+.workspace-switcher,
+.resize-popup {
+  background-color: rgba(6, 11, 20, 0.80);
+  border-color: transparent;
+}
+
+/* Overrides stock `.modal-dialog` (bg #36363a): system modals — a touch
+ * more opaque for legibility, still borderless. */
+.modal-dialog {
+  background-color: rgba(6, 11, 20, 0.86);
+  border-color: transparent;
+}
+
+/* ===================== Top bar (#panel) ===================== */
+
+/* Overrides stock `#panel` (bg #000000). While blur-my-shell's panel blur
+ * is live its `.transparent-panel` override wins at higher specificity and
+ * this tint is inert by design — it only paints as a navy-glass fallback
+ * if BMS is disabled or mid-reload. No border, no box-shadow: calm chrome. */
+#panel {
+  background-color: rgba(6, 11, 20, 0.22);
+}
+
+/* Overrides stock `#panel .panel-button` (color #ffffff) and the
+ * Activities `.workspace-dot` (bg #ffffff): ice-white over the glass. */
+#panel .panel-button {
+  color: #D7F6FB;
+}
+#panel .panel-button#panelActivities .workspace-dot {
+  background-color: #D7F6FB;
+}
+
+/* Overrides stock panel-button hover/active pills (inset 0 0 0 100px
+ * white fills): same stock mechanism, recolored — the inset 100px
+ * box-shadow is the pill's FILL inside the 999px radius (not a ring/
+ * outline, stays border-free). HUD cyan at whisper opacity. The clock's
+ * pill lives on the inner `.clock` node. */
+#panel .panel-button:focus, #panel .panel-button:hover,
+#panel .panel-button.clock-display:focus .clock,
+#panel .panel-button.clock-display:hover .clock {
+  box-shadow: inset 0 0 0 100px rgba(16, 200, 216, 0.14);
+}
+#panel .panel-button:active, #panel .panel-button:checked,
+#panel .panel-button.clock-display:active .clock,
+#panel .panel-button.clock-display:checked .clock {
+  box-shadow: inset 0 0 0 100px rgba(16, 200, 216, 0.24);
+}
+#panel .panel-button:active:hover, #panel .panel-button:checked:hover,
+#panel .panel-button.clock-display:active .clock:hover,
+#panel .panel-button.clock-display:checked .clock:hover {
+  box-shadow: inset 0 0 0 100px rgba(16, 200, 216, 0.30);
+}
+
+/* Overrides stock `#panel:overview .panel-button` (cool #fafafb + white
+ * pills — higher specificity, needs its own overrides): same language. */
+#panel:overview .panel-button {
+  color: #D7F6FB;
+}
+#panel:overview .panel-button:focus, #panel:overview .panel-button:hover,
+#panel:overview .panel-button.clock-display:focus .clock,
+#panel:overview .panel-button.clock-display:hover .clock {
+  box-shadow: inset 0 0 0 100px rgba(16, 200, 216, 0.14);
+}
+#panel:overview .panel-button:active, #panel:overview .panel-button:checked,
+#panel:overview .panel-button.clock-display:active .clock,
+#panel:overview .panel-button.clock-display:checked .clock {
+  box-shadow: inset 0 0 0 100px rgba(16, 200, 216, 0.24);
+}
+#panel:overview .panel-button:active:hover, #panel:overview .panel-button:checked:hover,
+#panel:overview .panel-button.clock-display:active .clock:hover,
+#panel:overview .panel-button.clock-display:checked .clock:hover {
+  box-shadow: inset 0 0 0 100px rgba(16, 200, 216, 0.30);
+}

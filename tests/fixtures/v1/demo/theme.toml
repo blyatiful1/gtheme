@@ -1,0 +1,78 @@
+[meta]
+name = "demo"
+title = "DEMO — a v1 theme"
+description = "A small v1 theme used to pin the converter's behaviour."
+author = "test"
+version = "1.2.3"
+based_on = "magma"
+
+[requires]
+packages = ["btop", "starship"]
+extensions = ["user-theme@gnome-shell-extensions.gcampax.github.com"]
+fonts = ["Iosevka Nerd Font"]
+
+[build]
+managed = ["terminal"]
+
+[[files]]
+component = "wallpaper"
+src = "files/wallpaper/demo.png"
+dest = "~/.local/share/backgrounds/demo/demo.png"
+
+[[files]]
+component = "shell"
+src = "files/theme.css"
+dest = "~/.local/share/themes/Demo/gnome-shell/gnome-shell.css"
+
+[[files]]
+component = "commands"
+src = "files/bin"
+dest = "~/.local/share/gtheme/assets/demo/bin"
+mode = "755"
+
+[[settings]]
+component = "desktop"
+backend = "gsettings"
+key = "org.gnome.desktop.interface color-scheme"
+value = "'prefer-dark'"
+
+[[settings]]
+component = "desktop"
+backend = "gsettings"
+key = "org.gnome.desktop.interface icon-theme"
+value = "'Papirus-Dark'"
+
+[[settings]]
+component = "desktop"
+backend = "gsettings"
+key = "org.gnome.desktop.interface monospace-font-name"
+value = "'Iosevka Nerd Font Mono 11'"
+
+[[settings]]
+component = "wallpaper"
+backend = "gsettings"
+key = "org.gnome.desktop.background picture-uri"
+value = "'file://{{ home }}/.local/share/backgrounds/demo/demo.png'"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/dock-position"
+value = "'BOTTOM'"
+
+[[settings]]
+component = "shell"
+backend = "gsettings"
+key = "org.gnome.shell enabled-extensions"
+value = "['blur-my-shell@aunetx', 'user-theme@gnome-shell-extensions.gcampax.github.com']"
+
+[[hooks]]
+event = "post"
+component = "hook"
+script = "hooks/post.sh"
+sudo = true
+
+[[hooks]]
+event = "pre"
+script = "hooks/pre.sh"
+optional = true

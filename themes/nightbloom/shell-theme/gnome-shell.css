@@ -1,0 +1,461 @@
+/* NIGHTBLOOM — GNOME Shell 50 user theme. "The glasshouse after dark."
+ * A Victorian conservatory at night: glass panes (translucent void),
+ * bioluminescent jade for every interaction, one amber firefly per
+ * surface. Derived 1:1 from the proven Edgerunner GNOME-50 sheet — same
+ * selectors, same properties, same alpha discipline; only the color
+ * language is swapped. No selector was added, none removed.
+ * Loaded as St application_stylesheet; it cascades OVER the stock
+ * gnome-shell-dark.css, so only overrides live here.
+ * Rules honored: jade leads, amber signs (today's date marker only),
+ * growlight violet is rare (looking-glass lip only). Border overrides
+ * touch border-color only so layout metrics never shift. Overview/dash
+ * backgrounds are left to blur-my-shell + dash-to-dock. */
+
+/* ===================== Palette (reference) =====================
+ * void #0A100C | surface #0F1712 | moss #16211A | glassline #2A3D31
+ * bone #E8E4D6 | sage #8CA294 | jade #52E0A4 | teal #7BD8C4
+ * verdigris #3E7A63 | amber #F5C04A | growlight #C77DFF */
+
+/* ===================== Popovers: quick settings, calendar, menus ==== */
+
+/* Stock `.popup-menu-content, .candidate-popup-content`: quick-settings
+ * and the date/notification popover share this node. Glass surface at
+ * ~95%, 12px radius, glassline hairline. */
+.popup-menu-content,
+.candidate-popup-content {
+  background-color: rgba(15, 23, 18, 0.95);
+  border-radius: 12px;
+  border-color: #2A3D31;
+  box-shadow: 0 2px 6px 0 rgba(0, 0, 0, 0.40);
+}
+
+/* Popup menu items: bone text; hover/selected gets the moss pill with
+ * teal text. */
+.popup-menu-item {
+  color: #E8E4D6;
+}
+.popup-menu-item:hover,
+.popup-menu-item:focus,
+.popup-menu-item:selected {
+  background-color: #16211A;
+  color: #7BD8C4;
+}
+.popup-menu-item:active {
+  background-color: #16211A;
+  color: #52E0A4;
+}
+/* Stock separator is a whitish line: make it a glassline hairline. */
+.popup-separator-menu-item .popup-separator-menu-item-separator {
+  background-color: #2A3D31;
+}
+
+/* Cards inside quick settings / date menu (stock raised gray): moss
+ * glass. */
+.quick-toggle-menu, .message, .events-button,
+.world-clocks-button, .weather-button {
+  background-color: rgba(22, 33, 26, 0.55);
+}
+.quick-toggle-menu:hover, .message:hover, .events-button:hover,
+.world-clocks-button:hover, .weather-button:hover,
+.quick-toggle-menu:active, .message:active, .events-button:active,
+.world-clocks-button:active, .weather-button:active {
+  background-color: rgba(42, 61, 49, 0.75);
+}
+
+/* Quick-settings toggles: unchecked stays stock-dark; checked goes jade
+ * with void glyph/label (jade is a light accent — dark text on it, the
+ * same pairing the GTK accent uses). */
+.quick-toggle:checked,
+.quick-toggle-arrow:checked,
+.quick-menu-toggle:checked {
+  background-color: #52E0A4;
+  color: #0A100C;
+}
+.quick-toggle:checked:hover, .quick-toggle:checked:focus,
+.quick-menu-toggle:checked:hover, .quick-menu-toggle:checked:focus {
+  background-color: #7BD8C4;
+  color: #0A100C;
+}
+/* Quick settings sliders (volume/brightness): jade fill. */
+.quick-slider .slider,
+.popup-menu-item .slider {
+  color: #52E0A4;
+  -barlevel-active-background-color: #52E0A4;
+}
+
+/* Calendar: the ONE amber on this surface — today's date marker, the
+ * firefly. Void text on amber for contrast. */
+.calendar .calendar-day.calendar-today {
+  background-color: #F5C04A;
+  color: #0A100C;
+  font-weight: bold;
+}
+.calendar .calendar-day.calendar-today:hover,
+.calendar .calendar-day.calendar-today:active,
+.calendar .calendar-day.calendar-today:selected {
+  background-color: st-lighten(#F5C04A, 8%);
+  color: #0A100C;
+}
+/* Days with events keep their dot subtle-teal instead of accent. */
+.calendar .calendar-day .calendar-day-dot {
+  background-color: #7BD8C4;
+}
+.message-list {
+  border-color: rgba(42, 61, 49, 0.7);
+}
+/* Notification counter on the date-menu button: jade badge (amber is
+ * spent on this surface by the today marker, keep the rest jade-led). */
+.message-indicator,
+.messages-indicator,
+.datemenu-displays-box .messages-indicator {
+  color: #52E0A4;
+}
+.message-list-placeholder {
+  color: #8CA294;
+}
+
+/* ===================== Top bar (#panel) — floating glass pane ======= */
+
+/* The panel is hidden by default (hidetopbar) and only shows in the
+ * overview / on top-edge pressure, so it can afford to be a detached
+ * floating pane: translucent void (#0A100C @ 90%), 16px radius on ALL
+ * corners, glassline hairline, soft drop shadow, and a margin pulling it
+ * off the screen edges. St DOES parse margin (StThemeNode ->
+ * clutter_actor margins), but #panel sits in #panelBox which is allocated
+ * full-width by the shell's layoutManager — so the margin renders the
+ * pane inset INSIDE that strip. If a shell version ignores the margin,
+ * everything else (radius/translucency/border) still degrades gracefully
+ * to a rounded translucent bar. Do not add vertical padding: struts. */
+#panel {
+  background-color: rgba(10, 16, 12, 0.90);
+  border-radius: 16px;
+  border: 1px solid rgba(42, 61, 49, 0.9);
+  box-shadow: 0 3px 12px 0 rgba(0, 0, 0, 0.45);
+  margin: 5px 14px 0px 14px;
+}
+/* Same pane when the overview is up (stock repaints it solid there). */
+#panel:overview {
+  background-color: rgba(10, 16, 12, 0.90);
+}
+
+/* Panel button text: bone; Activities workspace dots match. */
+#panel .panel-button {
+  color: #E8E4D6;
+}
+#panel .panel-button#panelActivities .workspace-dot {
+  background-color: #E8E4D6;
+}
+
+/* Hover/active pills: the stock mechanism is an inset 100px box-shadow
+ * FILL inside the 999px-radius button (not an outline). Recolored to the
+ * moss pill; active/checked additionally goes jade text. The clock's
+ * pill lives on the inner `.clock` node. */
+#panel .panel-button:focus, #panel .panel-button:hover,
+#panel .panel-button.clock-display:focus .clock,
+#panel .panel-button.clock-display:hover .clock {
+  box-shadow: inset 0 0 0 100px rgba(22, 33, 26, 0.85);
+}
+#panel .panel-button:active, #panel .panel-button:checked,
+#panel .panel-button.clock-display:active .clock,
+#panel .panel-button.clock-display:checked .clock {
+  box-shadow: inset 0 0 0 100px rgba(22, 33, 26, 1.0);
+}
+#panel .panel-button:active, #panel .panel-button:checked {
+  color: #52E0A4;
+}
+#panel .panel-button:active:hover, #panel .panel-button:checked:hover,
+#panel .panel-button.clock-display:active .clock:hover,
+#panel .panel-button.clock-display:checked .clock:hover {
+  box-shadow: inset 0 0 0 100px rgba(42, 61, 49, 1.0);
+}
+
+/* Same language for the overview state of the panel (stock uses a
+ * higher-specificity cool white there). */
+#panel:overview .panel-button {
+  color: #E8E4D6;
+}
+#panel:overview .panel-button:focus, #panel:overview .panel-button:hover,
+#panel:overview .panel-button.clock-display:focus .clock,
+#panel:overview .panel-button.clock-display:hover .clock {
+  box-shadow: inset 0 0 0 100px rgba(22, 33, 26, 0.85);
+}
+#panel:overview .panel-button:active, #panel:overview .panel-button:checked,
+#panel:overview .panel-button.clock-display:active .clock,
+#panel:overview .panel-button.clock-display:checked .clock {
+  box-shadow: inset 0 0 0 100px rgba(22, 33, 26, 1.0);
+}
+#panel:overview .panel-button:active, #panel:overview .panel-button:checked {
+  color: #52E0A4;
+}
+#panel:overview .panel-button:active:hover, #panel:overview .panel-button:checked:hover,
+#panel:overview .panel-button.clock-display:active .clock:hover,
+#panel:overview .panel-button.clock-display:checked .clock:hover {
+  box-shadow: inset 0 0 0 100px rgba(42, 61, 49, 1.0);
+}
+
+/* ===================== OSD / switchers / dialogs ===================== */
+
+/* Volume-brightness OSD, alt-tab switcher, workspace switcher popup,
+ * resize popup: void glass, glassline hairline, 12px radius. */
+.osd-window,
+.switcher-list,
+.workspace-switcher,
+.resize-popup {
+  background-color: rgba(10, 16, 12, 0.88);
+  border-radius: 12px;
+  border-color: #2A3D31;
+  color: #E8E4D6;
+}
+.osd-window .level {
+  -barlevel-active-background-color: #52E0A4;
+}
+/* Alt-tab selection: moss pill, not gray. */
+.switcher-list .item-box:selected,
+.switcher-list .item-box:hover {
+  background-color: #16211A;
+  color: #7BD8C4;
+}
+.switcher-arrow:highlighted {
+  color: #7BD8C4;
+}
+/* Workspace switcher popup active workspace: verdigris — a large filled
+ * block, so the calm structural green rather than full jade. */
+.workspace-switcher .ws-box:selected,
+.workspace-switcher .workspace-indicator:selected {
+  background-color: #3E7A63;
+}
+
+/* System modals (end-session, auth prompts): opaque-ish void. */
+.modal-dialog {
+  background-color: rgba(10, 16, 12, 0.94);
+  border-radius: 12px;
+  border-color: #2A3D31;
+  color: #E8E4D6;
+}
+/* Suggested/default dialog buttons: jade with void text. */
+.modal-dialog .button:default,
+.dialog-button:default,
+.modal-dialog .button:focus {
+  background-color: #52E0A4;
+  color: #0A100C;
+}
+.modal-dialog .button:default:hover,
+.dialog-button:default:hover {
+  background-color: #7BD8C4;
+  color: #0A100C;
+}
+
+/* Lock screen: keep it near-void so the wallpaper leads. */
+.unlock-dialog {
+  background-color: #0A100C;
+}
+.unlock-dialog-clock,
+.unlock-dialog-clock-time,
+.unlock-dialog-clock-date {
+  color: #E8E4D6;
+}
+
+/* ===================== Overview: search, app grid, dash ============= */
+
+/* Overview search entry: WIDE pill. Glass surface bg, jade hairline at
+ * 25% (#52E0A440), full jade on focus. width is honored by St on the
+ * entry node; 480px reads "command bar", not "stock search". */
+.search-entry,
+#searchEntry {
+  background-color: #0F1712;
+  border-radius: 999px;
+  border: 1px solid rgba(82, 224, 164, 0.25);
+  color: #E8E4D6;
+  width: 480px;
+}
+.search-entry:hover, #searchEntry:hover {
+  border-color: rgba(82, 224, 164, 0.5);
+}
+.search-entry:focus, #searchEntry:focus {
+  border-color: #52E0A4;
+  color: #E8E4D6;
+}
+.search-entry .search-entry-icon,
+.search-entry:hover .search-entry-icon {
+  color: #8CA294;
+}
+.search-entry:focus .search-entry-icon {
+  color: #52E0A4;
+}
+/* Search results: selected result gets the pill treatment. */
+.search-provider-icon:focus, .search-provider-icon:hover,
+.list-search-result:focus, .list-search-result:hover {
+  background-color: rgba(22, 33, 26, 0.85);
+}
+
+/* App grid: folder tile on glass surface with a BIG radius (24px,
+ * clearly non-stock squircle-ish); labels bone. */
+.app-folder .overview-icon,
+.app-folder {
+  background-color: rgba(15, 23, 18, 0.7);
+  border-radius: 24px;
+}
+/* App tile labels: bone, dimmer inside search results. */
+.overview-tile, .grid-tile,
+.overview-tile .overview-icon, .grid-tile .overview-icon {
+  color: #E8E4D6;
+}
+.app-folder-dialog {
+  background-color: rgba(10, 16, 12, 0.94);
+  border-color: #2A3D31;
+}
+.app-grid-running-dot,
+.app-well-app-running-dot {
+  background-color: #52E0A4;
+}
+/* Icon hover/active tiles: moss, not white-gray. */
+.overview-tile:hover, .grid-tile:hover,
+.overview-tile:focus, .grid-tile:focus {
+  background-color: rgba(22, 33, 26, 0.75);
+}
+.overview-tile:active, .grid-tile:active,
+.overview-tile:checked, .grid-tile:checked {
+  background-color: rgba(42, 61, 49, 0.9);
+}
+/* App-grid page indicator dots: sage idle, teal hover, jade active. */
+.page-indicator .page-indicator-icon {
+  background-color: rgba(140, 162, 148, 0.45);
+}
+.page-indicator:hover .page-indicator-icon,
+.page-indicator:focus .page-indicator-icon {
+  background-color: #7BD8C4;
+}
+.page-indicator:checked .page-indicator-icon,
+.page-indicator:active .page-indicator-icon {
+  background-color: #52E0A4;
+}
+
+/* Dash (LEFT fixed dock): dash-to-dock paints its own capsule bg via
+ * dconf (custom-background-color #0A100C @ ~0.72) — keep the stock dash
+ * background transparent so d2d's floating-rail styling wins, in AND out
+ * of the overview. */
+#dash .dash-background,
+.dash-background {
+  background-color: transparent;
+}
+/* Running-app indicator dots in the dash stay jade even where d2d's
+ * custom-dots dconf doesn't reach (overview fallback). */
+.dash .app-well-app-running-dot,
+#dash .app-well-app-running-dot {
+  background-color: #52E0A4;
+}
+/* Tooltip-style app label. */
+.dash-label {
+  background-color: rgba(15, 23, 18, 0.95);
+  border-color: #2A3D31;
+  color: #E8E4D6;
+}
+
+/* Workspace thumbnails: void plate behind the strip, rounded thumbs,
+ * active workspace ringed jade (indicator is the stock border node). */
+.workspace-thumbnails {
+  background-color: rgba(10, 16, 12, 0.55);
+  border-radius: 14px;
+}
+.workspace-thumbnail {
+  border-radius: 8px;
+}
+.workspace-thumbnail-indicator {
+  border-color: #52E0A4;
+  border-radius: 10px;
+}
+.workspace-background {
+  box-shadow: 0 4px 16px 4px rgba(0, 0, 0, 0.45);
+}
+/* Overview backdrop: void, never GNOME grey (blur-my-shell may replace
+ * it with blurred wallpaper; this is the fallback). */
+#overviewGroup,
+.overview {
+  background-color: #0A100C;
+}
+/* Window close button in the picker: jade, void glyph. */
+.window-close {
+  background-color: #52E0A4;
+  color: #0A100C;
+}
+.window-close:hover {
+  background-color: #7BD8C4;
+}
+/* Window caption chip under picker windows. */
+.window-caption {
+  background-color: rgba(15, 23, 18, 0.95);
+  border-color: #2A3D31;
+  color: #E8E4D6;
+}
+
+/* ===================== Misc chrome ===================== */
+
+/* Tooltips / OSD-ish floating labels. */
+.osd-window StLabel,
+.tooltip,
+.candidate-popup-text {
+  color: #E8E4D6;
+}
+
+/* Scrollbars: sage trough-less thumb, jade on hover/drag. */
+StScrollBar StButton#vhandle,
+StScrollBar StButton#hhandle {
+  background-color: rgba(140, 162, 148, 0.35);
+}
+StScrollBar StButton#vhandle:hover,
+StScrollBar StButton#hhandle:hover {
+  background-color: rgba(82, 224, 164, 0.7);
+}
+StScrollBar StButton#vhandle:active,
+StScrollBar StButton#hhandle:active {
+  background-color: #52E0A4;
+}
+
+/* Screenshot/screencast UI: keep it on-palette where cheap. */
+.screenshot-ui-panel {
+  background-color: rgba(15, 23, 18, 0.95);
+  border-color: #2A3D31;
+}
+.screenshot-ui-shot-cast-button:checked,
+.screenshot-ui-type-button:checked {
+  background-color: #16211A;
+  color: #7BD8C4;
+}
+.screenshot-ui-capture-button .screenshot-ui-capture-button-circle {
+  background-color: #52E0A4;
+}
+
+/* Ripple (hot-corner) + selection tint. */
+.ripple-box {
+  background-color: rgba(82, 224, 164, 0.3);
+}
+
+/* ===================== Looking glass (lg) — the grow-light room ===== */
+
+/* The debugger drops down as a void terminal with a growlight-violet
+ * lower lip: the ONE rare violet in the whole shell theme. */
+#LookingGlassDialog {
+  background-color: rgba(10, 16, 12, 0.96);
+  border: 1px solid #2A3D31;
+  border-top-width: 0px;
+  border-bottom: 2px solid #C77DFF;
+  border-radius: 0px 0px 14px 14px;
+  color: #E8E4D6;
+}
+#LookingGlassDialog StEntry {
+  color: #E8E4D6;
+  selection-background-color: #2A3D31;
+}
+#LookingGlassDialog .labels StButton,
+#LookingGlassDialog StButton {
+  color: #8CA294;
+}
+#LookingGlassDialog StButton:hover {
+  color: #7BD8C4;
+}
+#LookingGlassDialog StButton:checked {
+  color: #52E0A4;
+}
+#LookingGlassDialog .lg-completions-text {
+  color: #8CA294;
+}

@@ -1,0 +1,404 @@
+# Converted from the v1 gtheme theme format by tools in src/gtheme/preset/v1_import.py.
+# See README.md in this folder for everything the conversion left behind.
+
+format = 2
+
+[meta]
+name = "netrunner"
+title = "NETRUNNER — Jack In"
+description = "A netrunner's deck in Night City: HUD cyan on desaturated navy void, one cyber-yellow signature per surface, Edgerunners hot-pink in the terminal's veins. Ships a live Night City wallpaper. Strictly border-free."
+author = "blyatiful1"
+version = "1.0.0"
+screenshots = ["files/wallpaper/netrunner-still.png"]
+
+[palette]
+bg = "#0A111F"
+surface1 = "#111A2C"
+surface2 = "#19243A"
+fg = "#D8E7F0"
+fg_bright = "#F0F9FF"
+fg_dim = "#9AACC0"
+accent = "#10C8D8"
+accent_bright = "#63EDF8"
+warn = "#EFDF33"
+error = "#FF3D5E"
+info = "#4D9EF0"
+selection = "#14324A"
+comment = "#5F7396"
+cursor = "#FCEE0A"
+cyber_yellow = "#FCEE0A"
+hot_pink = "#FF2E97"
+danger = "#FF003C"
+chrome = "#B8C6D8"
+void = "#060B14"
+ice = "#A8F0FA"
+ansi_black = "#142036"
+red = "#FF3D5E"
+green = "#2BE8A8"
+yellow = "#EFDF33"
+blue = "#4D9EF0"
+magenta = "#EE4BA5"
+cyan = "#26D5E5"
+ansi_white = "#C6D5E4"
+bright_black = "#3E5578"
+bright_red = "#FF7088"
+bright_green = "#71F5C7"
+bright_yellow = "#FCEE0A"
+bright_blue = "#82BDF8"
+bright_magenta = "#FF80C8"
+bright_cyan = "#85F2FB"
+bright_white = "#F0F9FF"
+
+[[files]]
+src = "files/wallpaper/netrunner-still.png"
+dest = "~/.local/share/backgrounds/netrunner/netrunner-still.png"
+
+[[files]]
+src = "files/wallpaper/netrunner-loop.mp4"
+dest = "~/.local/share/backgrounds/netrunner/netrunner-loop.mp4"
+
+[[files]]
+src = "files/wallpaper/netrunner-slideshow.xml"
+dest = "~/.local/share/backgrounds/netrunner/netrunner-slideshow.xml"
+template = true
+
+[[files]]
+src = "files/ptyxis/Netrunner.palette"
+dest = "~/.local/share/org.gnome.Ptyxis/palettes/Netrunner.palette"
+
+[[files]]
+src = "files/alacritty/netrunner.toml"
+dest = "~/.config/alacritty/netrunner.toml"
+
+[[files]]
+src = "files/alacritty/alacritty.toml"
+dest = "~/.config/alacritty/alacritty.toml"
+
+[[files]]
+src = "files/starship/starship.toml"
+dest = "~/.config/starship.toml"
+
+[[files]]
+src = "files/btop/netrunner.theme"
+dest = "~/.config/btop/themes/netrunner.theme"
+
+[[files]]
+src = "files/btop/btop.conf"
+dest = "~/.config/btop/btop.conf"
+
+[[files]]
+src = "files/micro/netrunner.micro"
+dest = "~/.config/micro/colorschemes/netrunner.micro"
+
+[[files]]
+src = "files/micro/settings.json"
+dest = "~/.config/micro/settings.json"
+
+[[files]]
+src = "files/fastfetch/netrunner-logo.txt"
+dest = "~/.config/fastfetch/netrunner-logo.txt"
+
+[[files]]
+src = "files/fastfetch/config.jsonc"
+dest = "~/.config/fastfetch/config.jsonc"
+
+[[files]]
+src = "files/cava/config"
+dest = "~/.config/cava/config"
+
+[[files]]
+src = "files/gtk/gtk4.css"
+dest = "~/.config/gtk-4.0/gtk.css"
+
+[[files]]
+src = "files/gtk/gtk3.css"
+dest = "~/.config/gtk-3.0/gtk.css"
+
+[[files]]
+src = "files/shell/netrunner-emblem.svg"
+dest = "~/.local/share/gtheme/assets/netrunner/netrunner-emblem.svg"
+
+[[files]]
+src = "files/shell-theme/gnome-shell.css"
+dest = "~/.local/share/themes/Netrunner/gnome-shell/gnome-shell.css"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface accent-color"
+value = "'teal'"
+component = "colors"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface color-scheme"
+value = "'prefer-dark'"
+component = "colors"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface icon-theme"
+value = "'Papirus-Dark'"
+component = "icons"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface gtk-theme"
+value = "'adw-gtk3-dark'"
+component = "colors"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface font-name"
+value = "'Rajdhani Medium 11'"
+component = "fonts"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface monospace-font-name"
+value = "'Iosevka Nerd Font Mono 11'"
+component = "fonts"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background picture-uri"
+value = "'file://{{ home }}/.local/share/backgrounds/netrunner/netrunner-slideshow.xml'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background picture-uri-dark"
+value = "'file://{{ home }}/.local/share/backgrounds/netrunner/netrunner-slideshow.xml'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background picture-options"
+value = "'zoom'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background primary-color"
+value = "'#060B14'"
+component = "wallpaper"
+
+[[settings]]
+key = "dconf:/io/github/jeffshee/hanabi-extension/video-path"
+value = "'{{ home }}/.local/share/backgrounds/netrunner/netrunner-loop.mp4'"
+component = "wallpaper"
+
+[[settings]]
+key = "dconf:/io/github/jeffshee/hanabi-extension/mute"
+value = "true"
+component = "wallpaper"
+
+[[settings]]
+key = "dconf:/io/github/jeffshee/hanabi-extension/content-fit"
+value = "2"
+component = "wallpaper"
+
+[[settings]]
+key = "dconf:/io/github/jeffshee/hanabi-extension/startup-delay"
+value = "2000"
+component = "wallpaper"
+
+[[settings]]
+key = "dconf:/io/github/jeffshee/hanabi-extension/pause-on-maximize-or-fullscreen"
+value = "2"
+component = "wallpaper"
+
+[[settings]]
+key = "dconf:/org/gnome/Ptyxis/Profiles/{{ ptyxis_default_profile }}/palette"
+value = "'Netrunner'"
+component = "terminal"
+
+[[settings]]
+key = "dconf:/org/gnome/Ptyxis/Profiles/{{ ptyxis_default_profile }}/opacity"
+value = "0.88"
+component = "terminal"
+
+[[settings]]
+key = "gsettings:org.gnome.Ptyxis use-system-font"
+value = "false"
+component = "fonts"
+
+[[settings]]
+key = "gsettings:org.gnome.Ptyxis font-name"
+value = "'Iosevka Nerd Font Mono 11'"
+component = "fonts"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/dock-position"
+value = "'BOTTOM'"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/transparency-mode"
+value = "'FIXED'"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/custom-background-color"
+value = "true"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/background-color"
+value = "'#0A111F'"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/background-opacity"
+value = "0.55"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/running-indicator-style"
+value = "'DOTS'"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/custom-theme-customize-running-dots"
+value = "true"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/custom-theme-running-dots-color"
+value = "'#FCEE0A'"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/dash-to-dock/custom-theme-running-dots-border-width"
+value = "0"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/dash-to-dock/override-background"
+value = "false"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/applications/blur"
+value = "true"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/applications/enable-all"
+value = "false"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/applications/whitelist"
+value = "['Alacritty', 'org.gnome.Ptyxis']"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/applications/sigma"
+value = "30"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/applications/static-blur"
+value = "false"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/applications/dynamic-opacity"
+value = "false"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/blur-my-shell/applications/corner-radius"
+value = "12"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/Logo-menu/use-custom-icon"
+value = "true"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/Logo-menu/custom-icon-path"
+value = "'{{ home }}/.local/share/gtheme/assets/netrunner/netrunner-emblem.svg'"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/Logo-menu/symbolic-icon"
+value = "false"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/just-perfection/startup-status"
+value = "0"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/just-perfection/animation"
+value = "4"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/net/gfxmonk/impatience/speed-factor"
+value = "0.6"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/hotedge/pressure-threshold"
+value = "uint32 200"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/tilingshell/enable-window-border"
+value = "false"
+component = "addons"
+
+[[settings]]
+key = "dconf:/org/gnome/shell/extensions/user-theme/name"
+value = "'Netrunner'"
+component = "shell-theme"
+
+[extensions]
+enable = [
+    "blur-my-shell@aunetx",
+    "just-perfection-desktop@just-perfection",
+    "logomenu@aryan_k",
+    "tilingshell@ferrarodomenico.com",
+    "dash-to-dock@micxgx.gmail.com",
+    "hanabi-extension@jeffshee.github.io",
+    "hotedge@jonathan.jdoda.ca",
+    "impatience@gfxmonk.net",
+    "user-theme@gnome-shell-extensions.gcampax.github.com",
+]
+
+[[extensions.install]]
+uuid = "blur-my-shell@aunetx"
+source = "ego"
+ego_pk = 3193
+
+[[extensions.install]]
+uuid = "just-perfection-desktop@just-perfection"
+source = "ego"
+ego_pk = 3843
+
+[[extensions.install]]
+uuid = "logomenu@aryan_k"
+source = "ego"
+ego_pk = 4451
+
+[[extensions.install]]
+uuid = "tilingshell@ferrarodomenico.com"
+source = "ego"
+ego_pk = 7065
+
+[[extensions.install]]
+uuid = "dash-to-dock@micxgx.gmail.com"
+source = "ego"
+ego_pk = 307
+
+[[extensions.install]]
+uuid = "hanabi-extension@jeffshee.github.io"
+source = "ego"
+
+[[extensions.install]]
+uuid = "hotedge@jonathan.jdoda.ca"
+source = "ego"
+
+[[extensions.install]]
+uuid = "impatience@gfxmonk.net"
+source = "ego"
+ego_pk = 277
+
+[[extensions.install]]
+uuid = "user-theme@gnome-shell-extensions.gcampax.github.com"
+source = "ego"
+ego_pk = 19

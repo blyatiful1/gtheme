@@ -1,0 +1,7 @@
+'based_on = magma' is not part of the new format; the Look now stands on its own
+the post-apply step 'hooks/post.sh' (it asked for your password) was dropped — Looks only change settings now and can never run a program on your computer; whatever it did, you will have to do by hand
+the pre-apply step 'hooks/pre.sh' was dropped — Looks only change settings now and can never run a program on your computer; whatever it did, you will have to do by hand
+this Look was made for a computer that already has these programs installed, and cannot install them for you: btop, starship
+it also expects these fonts, which you may need to install yourself: Iosevka Nerd Font
+the author's own file-generation settings ([build].managed) were dropped; they were only used by the old command-line tool
+the folder 'files/bin' was dropped: a Look copies one file at a time. Nothing will be written to ~/.local/share/gtheme/assets/demo/bin

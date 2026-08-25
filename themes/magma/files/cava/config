@@ -1,0 +1,23 @@
+# MAGMA — Obsidian Flow — cava audio visualizer.
+# Molten gradient, transparent background (the glass terminal shows through).
+# Needs the `cava` package: sudo pacman -S cava
+
+[general]
+framerate = 60
+bars = 0
+bar_width = 2
+bar_spacing = 1
+sleep_timer = 3
+
+[color]
+gradient = 1
+gradient_count = 6
+gradient_color_1 = '#E0304E'
+gradient_color_2 = '#FF6D3A'
+gradient_color_3 = '#FFA05C'
+gradient_color_4 = '#FFC145'
+gradient_color_5 = '#FFD168'
+gradient_color_6 = '#FFF6E8'
+
+[smoothing]
+noise_reduction = 77

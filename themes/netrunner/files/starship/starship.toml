@@ -1,0 +1,33 @@
+# NETRUNNER — starship prompt. Cold and minimal: cyan path, hot-pink
+# branch, yellow only on the prompt glyph (the terminal's second yellow
+# lives on the cursor — same focal cluster, one signature).
+add_newline = true
+
+format = """
+$directory$git_branch$git_status$cmd_duration$line_break\
+$character"""
+
+[directory]
+style = "bold #26D5E5"
+truncation_length = 3
+truncate_to_repo = true
+read_only = " 󰌾"
+format = "[$path]($style)[$read_only]($style) "
+
+[git_branch]
+symbol = " "
+style = "#FF2E97"
+format = "[$symbol$branch]($style) "
+
+[git_status]
+style = "#EFDF33"
+format = "([$all_status$ahead_behind]($style) )"
+
+[cmd_duration]
+min_time = 2000
+style = "#5F7396"
+format = "[· $duration]($style) "
+
+[character]
+success_symbol = "[❯](bold #FCEE0A)"
+error_symbol = "[❯](bold #FF3D5E)"

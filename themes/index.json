@@ -1,0 +1,92 @@
+{
+  "version": 2,
+  "themes": [
+    {
+      "name": "hyperclass",
+      "title": "HYPERCLASS — Gilded Void",
+      "description": "First class aboard a starliner crossing the void: champagne brass on deep-space ink, ivory starlight, one vein of ice. A brass hairline round the focused window and an airlock-iris animation when it opens.",
+      "author": "blyatiful1",
+      "version": "1.0.0",
+      "components": [
+        "wallpaper",
+        "colors",
+        "icons",
+        "fonts",
+        "terminal",
+        "addons"
+      ],
+      "format": 2,
+      "screenshots": [
+        "files/wallpaper/first-light.png"
+      ],
+      "min_shell": null,
+      "provenance": "bundled"
+    },
+    {
+      "name": "magma",
+      "title": "MAGMA — Obsidian Flow",
+      "description": "Obsidian glass over a living magma chamber: ember orange, lava gold, one cool teal vein. Molten-glass blur, ember running dots and a slideshow of the chamber itself.",
+      "author": "blyatiful1",
+      "version": "2.0.0",
+      "components": [
+        "wallpaper",
+        "colors",
+        "icons",
+        "fonts",
+        "shell-theme",
+        "terminal",
+        "addons"
+      ],
+      "format": 2,
+      "screenshots": [
+        "files/wallpaper/obsidian-flow.png"
+      ],
+      "min_shell": null,
+      "provenance": "bundled"
+    },
+    {
+      "name": "netrunner",
+      "title": "NETRUNNER — Jack In",
+      "description": "A netrunner's deck in Night City: HUD cyan on desaturated navy void, one cyber-yellow signature per surface, Edgerunners hot-pink in the terminal's veins. Ships a live Night City wallpaper. Strictly border-free.",
+      "author": "blyatiful1",
+      "version": "1.0.0",
+      "components": [
+        "wallpaper",
+        "colors",
+        "icons",
+        "fonts",
+        "shell-theme",
+        "terminal",
+        "addons"
+      ],
+      "format": 2,
+      "screenshots": [
+        "files/wallpaper/netrunner-still.png"
+      ],
+      "min_shell": null,
+      "provenance": "bundled"
+    },
+    {
+      "name": "nightbloom",
+      "title": "NIGHTBLOOM — the glasshouse after dark",
+      "description": "A Victorian glass conservatory at night: real glass panes over deep green dark, bioluminescent jade, and exactly one amber firefly on every surface. Rare violet grow-lights. Nothing pure black, no window borders.",
+      "author": "blyatiful1",
+      "version": "1.0.0",
+      "components": [
+        "wallpaper",
+        "colors",
+        "icons",
+        "cursor",
+        "fonts",
+        "topbar",
+        "addons"
+      ],
+      "format": 2,
+      "screenshots": [
+        "wallpaper/nightbloom-glasshouse.png"
+      ],
+      "min_shell": "49",
+      "provenance": "bundled"
+    }
+  ]
+}

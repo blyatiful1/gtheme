@@ -1,0 +1,15 @@
+/* NETRUNNER — libadwaita / GTK4 accent override. Hand-authored (not
+ * rendered): HUD cyan replaces the stock teal enum's hue everywhere
+ * libadwaita paints accent. Restraint is the point — no widget surgery,
+ * no borders, the apps stay stock-calm under a cyan HUD. */
+:root {
+  --accent-bg-color: #10C8D8;
+  /* text ON accent fills: the theme's own void is the readable pairing */
+  --accent-fg-color: #0A111F;
+  --accent-color: #63EDF8;
+}
+
+/* GTK4-without-libadwaita fallback */
+@define-color accent_color #63EDF8;
+@define-color accent_bg_color #10C8D8;
+@define-color accent_fg_color #0A111F;
