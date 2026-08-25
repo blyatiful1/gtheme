@@ -94,9 +94,20 @@ def test_diff_separates_real_changes_from_no_ops():
     assert [e.summary for e in diff.changes] == ["Colours"]
 
 
-def test_novice_rendering_is_not_written_yet_and_says_so():
-    with pytest.raises(NotImplementedError, match="to_novice_lines"):
-        Diff().to_novice_lines()
+def test_novice_rendering_groups_and_counts():
+    """Wave 1 landed the body; the shape it renders is still the contract."""
+    diff = Diff(
+        entries=[
+            DiffEntry(op=SettingWrite(key="a", value="1"), component="wallpaper", summary="x"),
+            DiffEntry(op=SettingWrite(key="b", value="2"), component="colors", summary="x"),
+            DiffEntry(op=ExtensionEnable(uuid="a@b"), component="addons", summary="x"),
+            DiffEntry(op=ExtensionEnable(uuid="c@d"), component="addons", summary="x"),
+            DiffEntry(
+                op=SettingWrite(key="c", value="3"), component="fonts", summary="x", no_op=True
+            ),
+        ]
+    )
+    assert diff.to_novice_lines() == ["Background picture", "Colours", "2 add-ons"]
 
 
 # -- transaction -----------------------------------------------------------
@@ -108,12 +119,16 @@ def test_a_transaction_holds_its_operations_immutably():
     assert tx.label == "NIGHTBLOOM"
 
 
-def test_plan_and_apply_are_not_written_yet_and_say_so():
-    tx = Transaction()
-    with pytest.raises(NotImplementedError, match="Transaction.plan"):
-        tx.plan()
-    with pytest.raises(NotImplementedError, match="Transaction.apply"):
-        tx.apply()
+def test_an_empty_transaction_plans_and_applies_to_nothing(tmp_dest_root, state_dir):
+    """Wave 1 landed the bodies. An empty transaction is still a valid one.
+
+    Both seams are requested deliberately: without them this would plan against
+    the real home directory and apply against the real state directory.
+    """
+    tx = Transaction(dest_root=str(tmp_dest_root))
+    assert tx.plan().changes == []
+    result = tx.apply(restore_point=False)
+    assert result.applied == [] and result.skipped == []
 
 
 def test_apply_takes_a_progress_callback_and_a_restore_point_switch():
@@ -139,13 +154,13 @@ def test_transaction_result_records_skips_with_reasons():
 # -- rescue ----------------------------------------------------------------
 
 
-def test_rescue_is_not_written_yet_and_says_so_in_plain_words():
-    with pytest.raises(NotImplementedError) as caught:
-        rescue.run_rescue()
-    message = str(caught.value)
-    assert "not built yet" in message
-    # The message a frightened user might see must not name internals.
-    assert "NotImplementedError" not in message
+def test_rescue_speaks_plainly_when_there_is_nothing_to_undo(state_dir, capsys):
+    """Wave 1 landed the rescue. What a frightened user reads still matters."""
+    assert rescue.run_rescue() == 0
+    message = capsys.readouterr().out
+    assert "nothing to put back" in message
+    for internal in ("NotImplementedError", "baseline", "dconf", "traceback"):
+        assert internal not in message
 
 
 def test_rescue_never_needs_gtk():
