@@ -1,0 +1,149 @@
+"""The Home page, really constructed.
+
+Marked ``gtk``: real libadwaita widgets are built. Nothing is presented, so
+nothing appears on the developer's screen, and every value is read from an
+in-memory settings backend, so the live desktop is neither read nor written.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+pytest.importorskip("gi", reason="PyGObject is needed for the page modules")
+
+import gi  # noqa: E402
+
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+from gi.repository import Adw, Gtk  # noqa: E402
+
+from gtheme.core.settings_backend import MemoryBackend  # noqa: E402
+from gtheme.prefs import Prefs  # noqa: E402
+from gtheme.ui.pages import home  # noqa: E402
+
+pytestmark = pytest.mark.gtk
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _adw():
+    if not Gtk.init_check():
+        pytest.skip("no display is available for GTK — run under gtk4-broadwayd")
+    Adw.init()
+
+
+class FakeWindow:
+    """What a page is allowed to expect of the window: three attributes."""
+
+    def __init__(self, prefs: Prefs) -> None:
+        self.prefs = prefs
+        self.toasts: list[str] = []
+        self.pages: list[str] = []
+
+    def toast(self, text: str) -> None:
+        self.toasts.append(text)
+
+    def show_page(self, page_id: str) -> None:
+        self.pages.append(page_id)
+
+
+@pytest.fixture
+def window(config_dir):
+    return FakeWindow(Prefs())
+
+
+@pytest.fixture
+def backend():
+    settings = MemoryBackend()
+    settings.set("gsettings:org.gnome.desktop.interface color-scheme", "'prefer-dark'")
+    settings.set("gsettings:org.gnome.desktop.interface accent-color", "'green'")
+    settings.set("gsettings:org.gnome.desktop.interface icon-theme", "'Papirus-Dark'")
+    return settings
+
+
+def _page(window, backend, tmp_path, **kwargs):
+    return home.HomePage(
+        window, backend=backend, root=tmp_path, thumbnails=False, shell=None, **kwargs
+    )
+
+
+def _subtitles(page: home.HomePage) -> dict[str, str]:
+    return {name: row.get_subtitle() for name, row in page._rows.items()}
+
+
+def test_the_card_reads_the_desktop_back_in_words(window, backend, tmp_path):
+    page = _page(window, backend, tmp_path)
+    shown = _subtitles(page)
+    assert shown["light-or-dark"] == "Dark"
+    assert shown["highlight"] == "Green"
+    assert shown["icons"] == "Papirus-Dark"
+
+
+def test_no_row_of_the_card_is_ever_blank(window, backend, tmp_path):
+    """A blank row reads as a broken app; "not set" and "can't check" are answers."""
+    page = _page(window, backend, tmp_path)
+    for name, subtitle in _subtitles(page).items():
+        assert subtitle, f"{name} showed nothing at all"
+
+
+def test_the_add_on_row_is_honest_when_the_desktop_cannot_be_asked(window, backend, tmp_path):
+    class Silent:
+        def load(self):
+            raise RuntimeError("no desktop to ask")
+
+    page = home.HomePage(
+        window, backend=backend, root=tmp_path, thumbnails=False, shell=Silent()
+    )
+    assert _subtitles(page)["addons"] == home.COPY["addons-unavailable"]
+
+
+def test_the_first_visit_explainer_shows_once_and_stays_dismissed(window, backend, tmp_path):
+    assert window.prefs.should_show_banner(home.BANNER_ID)
+    _page(window, backend, tmp_path)
+    window.prefs.mark_banner_seen(home.BANNER_ID)
+    assert not window.prefs.should_show_banner(home.BANNER_ID)
+
+
+def test_the_links_go_to_the_pages_that_own_each_thing(window, backend, tmp_path):
+    page = _page(window, backend, tmp_path)
+    page.open_page("colors")
+    assert window.pages == ["colors"]
+
+
+def test_saving_a_moment_really_saves_one_and_says_so(window, backend, tmp_path):
+    page = _page(window, backend, tmp_path)
+    point = page.save_restore_point()
+    assert point is not None
+    assert (tmp_path / point.id / "restore-point.json").is_file()
+    assert window.toasts and "Saved" in window.toasts[-1]
+
+
+def test_undo_with_nothing_saved_says_there_is_nothing_to_undo(window, backend, tmp_path):
+    page = _page(window, backend, tmp_path)
+    assert page.undo_last_change() is None
+    assert window.toasts[-1].startswith("Nothing has changed yet")
+
+
+def test_undo_puts_the_value_back_and_the_card_follows(window, backend, tmp_path):
+    key = "gsettings:org.gnome.desktop.interface accent-color"
+    page = _page(window, backend, tmp_path)
+    page.save_restore_point()
+    backend.set(key, "'purple'")
+    page.refresh()
+    assert _subtitles(page)["highlight"] == "Purple"
+
+    page.undo_last_change()
+
+    assert backend.get(key) == "'green'"
+    assert _subtitles(page)["highlight"] == "Green"
+
+
+def test_the_header_button_runs_the_same_undo(window, backend, tmp_path):
+    page = _page(window, backend, tmp_path)
+    button = home.header_button(page)
+    button.emit("clicked")
+    assert window.toasts[-1].startswith("Nothing has changed yet")
+
+
+def test_build_is_the_factory_the_manifest_names(window, backend, tmp_path):
+    widget = home.build(window, backend=backend, root=tmp_path, thumbnails=False)
+    assert isinstance(widget, Gtk.Widget)
