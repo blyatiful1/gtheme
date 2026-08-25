@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from gtheme.cli import EXIT_NOT_IMPLEMENTED, main
+from gtheme.cli import main
 
 
 def test_version_flag(capsys):
@@ -20,11 +20,14 @@ def test_an_unknown_subcommand_is_refused(capsys):
     assert caught.value.code != 0
 
 
-def test_rescue_reports_not_finished_rather_than_pretending(capsys):
-    assert main(["rescue"]) == EXIT_NOT_IMPLEMENTED
-    err = capsys.readouterr().err
-    assert "not finished yet" in err
-    assert "Undo & Restore Points" in err
+def test_rescue_on_an_untouched_desktop_says_so_and_succeeds(state_dir, capsys):
+    """Wave 1 landed the rescue path; this used to assert it had not.
+
+    ``state_dir`` is mandatory here: without it this exercises the real
+    ``~/.local/state/gtheme/v2`` on the machine running the tests.
+    """
+    assert main(["rescue"]) == 0
+    assert "nothing to put back" in capsys.readouterr().out
 
 
 def test_validate_accepts_a_good_look(tmp_path, capsys):
@@ -96,7 +99,7 @@ def test_the_default_subcommand_is_the_app(monkeypatch):
     assert called == [True]
 
 
-def test_validate_and_rescue_never_import_gtk(monkeypatch):
+def test_validate_and_rescue_never_import_gtk(monkeypatch, state_dir):
     """The point of the rescue path: it works when GTK does not."""
     import sys
 

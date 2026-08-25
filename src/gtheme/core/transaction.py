@@ -31,10 +31,25 @@ v1 (the defect tags in the legacy ``engine/apply.py`` are the receipts):
 
 from __future__ import annotations
 
+import hashlib
+import shutil
+import tempfile
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Literal
+
+from . import ledger as ledger_store
+from . import placeholders
+from .atomic import atomic_write_bytes
+from .backends import get_backend, has_session_bus, is_missing
+from .baseline import Baseline
+from .confine import ConfinementError, confine_dest
+from .gvariant import format_string_list, merge_string_lists, parse_string_list, values_equal
+from .lock import LockBusy, process_lock
+from .paths import dest_root, xdg_data_home
+from .settings_backend import BackendError, SettingsBackend
 
 __all__ = [
     "Diff",
@@ -139,6 +154,89 @@ class ExtensionInstall:
 Op = FileWrite | SettingWrite | ExtensionEnable | ExtensionInstall
 
 
+#: The one key that is shared global state. Every add-on the user turned on
+#: themselves lives in this list, which is why a Look unions into it rather
+#: than writing over it. See ``core.gvariant.merge_string_lists`` (the X1
+#: defect).
+ENABLED_EXTENSIONS_KEY = "gsettings:org.gnome.shell enabled-extensions"
+
+#: Ledger owner name for changes that came from a page rather than a Look.
+#: Switching Looks tidies up after other Looks; it never tidies up after the
+#: user's own deliberate edits.
+MANUAL_OWNER = "__manual__"
+
+#: Component to the phrase shown to a first-time user, in reading order.
+#: Mirrors ``preset.model.Component``; a test asserts every member is covered,
+#: because a component with no phrase would silently vanish from a preview.
+_COMPONENT_PHRASES: dict[str, tuple[str, str]] = {
+    "wallpaper": ("Background picture", "Background picture"),
+    "colors": ("Colours", "Colours"),
+    "icons": ("Icons", "Icons"),
+    "cursor": ("Mouse pointer", "Mouse pointer"),
+    "fonts": ("Text style", "Text style"),
+    "shell-theme": ("Top bar style", "Top bar style"),
+    "topbar": ("Top bar", "Top bar"),
+    "windows": ("Windows", "Windows"),
+    "workspaces": ("Desktops", "Desktops"),
+    "animations": ("Animations", "Animations"),
+    "night-light": ("Warmer colours in the evening", "Warmer colours in the evening"),
+    "sound": ("Sound", "Sound"),
+    "power": ("Power and screen", "Power and screen"),
+    "terminal": ("Terminal", "Terminal"),
+    "addons": ("1 add-on", "{count} add-ons"),
+    "privacy": ("Privacy", "Privacy"),
+    "accessibility": ("Ease of use", "Ease of use"),
+    "files": ("1 file", "{count} files"),
+    "other": ("Other settings", "Other settings"),
+}
+
+_COMPONENT_ORDER: tuple[str, ...] = tuple(_COMPONENT_PHRASES)
+
+
+def _novice_phrase(component: str, count: int) -> str:
+    singular, plural = _COMPONENT_PHRASES.get(component, ("Other settings", "Other settings"))
+    template = singular if count == 1 else plural
+    return template.format(count=count)
+
+
+def _digest(data: bytes) -> str:
+    """A short, stable fingerprint of a file's contents, for the diff."""
+    return "file:" + hashlib.sha256(data).hexdigest()[:16]
+
+
+def installed_extension_uuids() -> set[str]:
+    """Which add-ons are present on this machine.
+
+    Reads the two directories add-ons are unpacked into, and nothing else — no
+    D-Bus call, because this has to work with no session running (the rescue
+    path) and because a directory listing cannot fail in an interesting way.
+    ``XDG_DATA_HOME`` reroots the user half, which is the seam the tests use.
+    """
+    found: set[str] = set()
+    roots = (
+        xdg_data_home() / "gnome-shell" / "extensions",
+        Path("/usr/share/gnome-shell/extensions"),
+    )
+    for root in roots:
+        try:
+            found.update(child.name for child in root.iterdir() if child.is_dir())
+        except OSError:
+            continue
+    return found
+
+
+def _resolve_extension(op: ExtensionEnable, present: set[str]) -> str | None:
+    """Which of an add-on's acceptable identifiers is actually installed.
+
+    ``ding`` and ``gtk4-ding`` do the same job under different names; a Look
+    that wants desktop icons should get whichever one the machine has.
+    """
+    for uuid in (op.uuid, *op.alternates):
+        if uuid in present:
+            return uuid
+    return None
+
+
 class Progress(Enum):
     """Stages a transaction reports through its progress callback."""
 
@@ -207,8 +305,23 @@ class Diff:
         forty keys reads as ``["Wallpaper", "Highlight colour", "Icons",
         "3 add-ons"]`` rather than as forty key names. This is the string the
         preview dialog and the confirmation toast both show.
+
+        Components appear in a fixed order — the order the desktop reads in,
+        roughly top to bottom — so the same Look always describes itself the
+        same way rather than in whatever order its author happened to write.
         """
-        raise NotImplementedError("Diff.to_novice_lines")
+        counted: dict[str, int] = {}
+        for entry in self.changes:
+            counted[entry.component] = counted.get(entry.component, 0) + 1
+
+        lines: list[str] = []
+        for component in _COMPONENT_ORDER:
+            count = counted.pop(component, 0)
+            if count:
+                lines.append(_novice_phrase(component, count))
+        for component in sorted(counted):
+            lines.append(_novice_phrase(component, counted[component]))
+        return lines
 
 
 @dataclass
@@ -245,6 +358,117 @@ class Transaction:
         self.dest_root = dest_root
         self.label = label
 
+    # -- shared machinery --------------------------------------------------
+
+    @property
+    def _backend(self) -> SettingsBackend:
+        """The settings backend. Overridable per instance, mostly for tests."""
+        override = getattr(self, "backend", None)
+        return override if override is not None else get_backend()
+
+    @property
+    def _root(self) -> Path:
+        return Path(self.dest_root) if self.dest_root else dest_root()
+
+    def _file_ops(self) -> list[FileWrite]:
+        return [op for op in self.ops if isinstance(op, FileWrite)]
+
+    def _setting_ops(self) -> list[SettingWrite]:
+        return [op for op in self.ops if isinstance(op, SettingWrite)]
+
+    def _enable_ops(self) -> list[ExtensionEnable]:
+        return [op for op in self.ops if isinstance(op, ExtensionEnable)]
+
+    def _install_ops(self) -> list[ExtensionInstall]:
+        return [op for op in self.ops if isinstance(op, ExtensionInstall)]
+
+    def _preflight(self) -> dict[str, Path]:
+        """Confine every destination before anything is written.
+
+        Runs over *all* file operations, and runs before the first byte. A
+        transaction that writes three files and then finds the fourth escapes
+        has already done the damage; this is the whole reason the check is a
+        separate pass.
+
+        Raises:
+            TransactionError: a destination escapes, or the destination root
+                itself is unusable.
+        """
+        resolved: dict[str, Path] = {}
+        for op in self._file_ops():
+            try:
+                resolved[op.dest] = confine_dest(op.dest, root=self._root)
+            except ConfinementError as exc:
+                raise TransactionError(str(exc), op=op) from exc
+        return resolved
+
+    def _rendered(self, op: FileWrite, context: dict[str, str]) -> bytes:
+        """The exact bytes ``op`` would write.
+
+        Raises:
+            TransactionError: the source is missing, unreadable, or is being
+                templated while not being text. That last one is not fussiness:
+                templating a binary file used to truncate the destination to
+                nothing.
+        """
+        source = Path(op.src)
+        if not source.is_absolute():
+            raise TransactionError(
+                f"this look's file {op.src!r} was not resolved to a full location before "
+                "the change was prepared",
+                op=op,
+            )
+        if not source.is_file():
+            raise TransactionError(f"this look is missing one of its files: {op.src}", op=op)
+        if not op.template:
+            try:
+                return source.read_bytes()
+            except OSError as exc:
+                raise TransactionError(f"cannot read {op.src}: {exc}", op=op) from exc
+        try:
+            text = source.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            raise TransactionError(
+                f"{op.src} is not text, so the personalised values in it cannot be filled in",
+                op=op,
+            ) from exc
+        return placeholders.resolve(text, context).encode("utf-8")
+
+    def _file_mode(self, op: FileWrite) -> int | None:
+        if op.mode:
+            # Mask off setuid/setgid/sticky. A Look may choose permissions; it
+            # may not hand itself privileges.
+            return int(op.mode, 8) & 0o777
+        try:
+            return Path(op.src).stat().st_mode & 0o777
+        except OSError:
+            return None
+
+    def _current_setting(self, key: str) -> tuple[str | None, BackendError | None]:
+        """``(value, failure)``. A missing schema is a value of None, not a raise."""
+        try:
+            return self._backend.get(key), None
+        except BackendError as exc:
+            return None, exc
+
+    def _planned_setting(
+        self, op: SettingWrite, context: dict[str, str]
+    ) -> tuple[str, str, str | None]:
+        """``(key, value, skip_reason)`` for one setting, tokens resolved."""
+        key = placeholders.resolve(op.key, context)
+        value = placeholders.resolve(op.value, context)
+        if not placeholders.key_ok(key):
+            missing = placeholders.unresolved_tokens(op.key) + placeholders.unresolved_tokens(op.value)
+            if missing:
+                return key, value, (
+                    "this needs something that is not set up on this computer yet "
+                    f"({', '.join(missing)})"
+                )
+            return key, value, "this setting's location came out incomplete on this computer"
+        return key, value, None
+
+    # -- planning ----------------------------------------------------------
+
     def plan(self) -> Diff:
         """Compute what would change, touching nothing.
 
@@ -253,10 +477,106 @@ class Transaction:
         transaction that would escape its destination root fails here — before
         the user is even shown a confirmation.
 
+        The entries come back in the order they will be carried out — files,
+        then settings, then add-ons — so the preview and the apply describe the
+        same thing in the same order.
+
         Raises:
             TransactionError: the transaction cannot be applied at all.
         """
-        raise NotImplementedError("Transaction.plan")
+        dests = self._preflight()
+        backend = self._backend
+        context = placeholders.runtime_context(backend)
+        diff = Diff()
+
+        for op in self._file_ops():
+            dest = dests[op.dest]
+            after = _digest(self._rendered(op, context))
+            before: str | None = None
+            if dest.is_symlink():
+                before = f"link:{dest.readlink()}"
+            elif dest.is_file():
+                try:
+                    before = _digest(dest.read_bytes())
+                except OSError:
+                    before = None
+            diff.entries.append(
+                DiffEntry(
+                    op=op,
+                    component="files",
+                    summary=_novice_phrase("files", 1),
+                    before=before,
+                    after=after,
+                    no_op=before == after,
+                )
+            )
+
+        for op in self._setting_ops():
+            key, value, skip = self._planned_setting(op, context)
+            component = op.component or "other"
+            current, failure = self._current_setting(key)
+            wanted = value
+            if op.merge == "list-union":
+                merged = merge_string_lists(current, value)
+                if merged is not None:
+                    wanted = merged
+            unavailable = skip is not None or (failure is not None and is_missing(failure))
+            diff.entries.append(
+                DiffEntry(
+                    op=op,
+                    component=component,
+                    summary=_novice_phrase(component, 1),
+                    before=current,
+                    after=wanted,
+                    no_op=unavailable or values_equal(current, wanted),
+                )
+            )
+
+        enables = self._enable_ops()
+        if enables:
+            present = installed_extension_uuids()
+            current, _failure = self._current_setting(ENABLED_EXTENSIONS_KEY)
+            wanted_uuids = [
+                uuid
+                for uuid in (_resolve_extension(op, present) for op in enables)
+                if uuid is not None
+            ]
+            merged = merge_string_lists(current, format_string_list(wanted_uuids))
+            for op in enables:
+                resolved = _resolve_extension(op, present)
+                diff.entries.append(
+                    DiffEntry(
+                        op=op,
+                        component="addons",
+                        summary=_novice_phrase("addons", 1),
+                        before=current,
+                        after=merged,
+                        no_op=resolved is None or (current is not None and resolved in (
+                            parse_string_list(current) or []
+                        )),
+                    )
+                )
+
+        if self._install_ops():
+            present = installed_extension_uuids()
+            for op in self._install_ops():
+                diff.entries.append(
+                    DiffEntry(
+                        op=op,
+                        component="addons",
+                        summary=_novice_phrase("addons", 1),
+                        before="present" if op.uuid in present else None,
+                        after="present",
+                        # Downloading an add-on is not something this layer can
+                        # do — it needs the network and a consent dialog. The
+                        # Add-ons page installs first and then applies, so by
+                        # the time a transaction runs, an add-on is either here
+                        # or it is a named skip. Never a promise it cannot keep.
+                        no_op=True,
+                    )
+                )
+
+        return diff
 
     def apply(
         self,
@@ -280,4 +600,417 @@ class Transaction:
             TransactionError: something failed. ``rolled_back`` says whether
                 the desktop was returned to its prior state.
         """
-        raise NotImplementedError("Transaction.apply")
+        report = progress_cb or (lambda _stage, _text: None)
+        report(Progress.PLANNING, "Working out what will change")
+        diff = self.plan()
+
+        try:
+            with process_lock():
+                return self._apply_locked(diff, report, restore_point)
+        except LockBusy as exc:
+            raise TransactionError(str(exc), rolled_back=True) from exc
+
+    # -- applying ----------------------------------------------------------
+
+    def _apply_locked(
+        self,
+        diff: Diff,
+        report: Callable[[Progress, str], None],
+        restore_point: bool,
+    ) -> TransactionResult:
+        backend = self._backend
+        context = placeholders.runtime_context(backend)
+        dests = self._preflight()
+        result = TransactionResult(diff=diff)
+
+        baseline = Baseline(backend=backend).load()
+        owner = self.label or MANUAL_OWNER
+
+        # The rollback journal. It is a Baseline pointed at a throwaway
+        # directory, which is not a trick: "what was here immediately before
+        # this transaction" and "what was here before gtheme ever ran" are the
+        # same kind of recording, and reusing the class means symlinks, missing
+        # parent directories and unset settings are handled once.
+        journal_dir = Path(tempfile.mkdtemp(prefix="gtheme-rollback-"))
+        journal = Baseline(journal_dir, backend=backend)
+        fresh_files: list[str] = []
+        fresh_settings: list[str] = []
+
+        setting_ops = self._setting_ops()
+        enables = self._enable_ops()
+
+        # AS5. With no session to write into, every settings write fails the
+        # same way. Reporting that forty times is noise; skipping the phase
+        # with one sentence is the useful answer.
+        no_session = bool(setting_ops or enables) and not has_session_bus()
+        if no_session:
+            result.skipped.extend(
+                (op, "your desktop session wasn't running, so this was left alone")
+                for op in [*setting_ops, *enables]
+            )
+
+        planned_files = [str(dests[op.dest]) for op in self._file_ops()]
+        planned_settings = [
+            placeholders.resolve(op.key, context)
+            for op in setting_ops
+            if placeholders.key_ok(placeholders.resolve(op.key, context))
+        ]
+        if enables:
+            planned_settings.append(ENABLED_EXTENSIONS_KEY)
+
+        ledger = ledger_store.read_ledger()
+        prior = ledger.get(owner)
+        prior_files = set(prior.get("files", [])) if isinstance(prior, dict) else set()
+        prior_settings = set(prior.get("settings", [])) if isinstance(prior, dict) else set()
+
+        # Switching Looks reverts what the outgoing one owned and the incoming
+        # one does not manage. That is a real change to the desktop that the
+        # diff says nothing about, so the restore point has to cover it too —
+        # otherwise "Undo" after a switch returns to the pristine state rather
+        # than to the Look that was on a moment ago, which is not what anybody
+        # pressing it means.
+        orphan_files, orphan_settings = self._orphans_of_other_looks(
+            ledger, owner, set(planned_files), set(planned_settings)
+        )
+
+        report(Progress.SNAPSHOTTING, "Saving how things look right now")
+        if restore_point:
+            result.restore_point = self._capture_restore_point(
+                diff,
+                backend,
+                dests,
+                extra_keys=orphan_settings if self.label else [],
+                extra_dests=orphan_files if self.label else [],
+            )
+
+        # A single change made from a page is not a switch and must never strip
+        # the rest of the desktop, so this runs only for a Look.
+        if self.label:
+            cleanup = ledger_store.switch_cleanup(
+                owner, set(planned_files), set(planned_settings), baseline
+            )
+            for note in cleanup.notes:
+                report(Progress.SNAPSHOTTING, note)
+
+        # R4. The claim goes down before the change it describes. A crash
+        # between the two leaves a ledger that claims too much, which costs one
+        # redundant restore; the other order orphans a change forever.
+        ledger_store.write_entry(
+            owner, prior_files | set(planned_files), prior_settings | set(planned_settings)
+        )
+
+        try:
+            self._write_files(dests, context, baseline, journal, fresh_files, result, report)
+            if not no_session:
+                self._write_settings(
+                    setting_ops, context, backend, baseline, journal, fresh_settings, result, report
+                )
+                self._write_extensions(
+                    enables, backend, baseline, journal, fresh_settings, result, report
+                )
+        except TransactionError as exc:
+            baseline.save()
+            rolled_back = self._roll_back(journal, baseline, fresh_files, fresh_settings, report)
+            self._restore_ledger(owner, prior_files, prior_settings)
+            shutil.rmtree(journal_dir, ignore_errors=True)
+            raise TransactionError(str(exc), op=exc.op, rolled_back=rolled_back) from exc
+        except BaseException:
+            # A crash, an interrupt, anything. The recording persisted itself
+            # record by record, so it already describes exactly what had been
+            # touched; flushing the indexes keeps it readable.
+            baseline.save()
+            shutil.rmtree(journal_dir, ignore_errors=True)
+            raise
+
+        baseline.save()
+        shutil.rmtree(journal_dir, ignore_errors=True)
+
+        # AS4. A transaction where every setting was skipped and nothing else
+        # happened did not apply anything, and recording it as the current Look
+        # would be a lie the Undo page then has to live with.
+        if not result.applied and result.skipped:
+            self._restore_ledger(owner, prior_files, prior_settings)
+            report(Progress.ROLLED_BACK, "Nothing was changed")
+            raise TransactionError(
+                "nothing could be changed — " + result.skipped[0][1],
+                op=result.skipped[0][0],
+                rolled_back=True,
+            )
+
+        # Replace the claim made before the work with what the work actually
+        # did. Anything skipped is no longer claimed, so nothing tries to undo
+        # a change that never happened.
+        applied_files = [str(dests[op.dest]) for op in result.applied if isinstance(op, FileWrite)]
+        ledger_store.write_entry(
+            owner,
+            prior_files | set(applied_files),
+            prior_settings | set(self._applied_setting_keys(result, context)),
+        )
+
+        report(Progress.DONE, "Done")
+        return result
+
+    def _applied_setting_keys(
+        self,
+        result: TransactionResult,
+        context: dict[str, str],
+    ) -> list[str]:
+        """The setting keys this transaction actually owns now."""
+        keys = [
+            placeholders.resolve(op.key, context)
+            for op in result.applied
+            if isinstance(op, SettingWrite)
+        ]
+        if any(isinstance(op, ExtensionEnable) for op in result.applied):
+            keys.append(ENABLED_EXTENSIONS_KEY)
+        return keys
+
+    @staticmethod
+    def _orphans_of_other_looks(
+        ledger: dict[str, dict],
+        owner: str,
+        incoming_files: set[str],
+        incoming_settings: set[str],
+    ) -> tuple[list[str], list[str]]:
+        """What a switch is about to revert: ``(files, settings)``.
+
+        Every entry is walked, not just the most recent one, because a
+        component overlaid from a third Look is still owned by that third Look.
+        """
+        files: list[str] = []
+        settings: list[str] = []
+        for name, owned in ledger.items():
+            if name == owner or not isinstance(owned, dict):
+                continue
+            files.extend(f for f in owned.get("files", []) if f not in incoming_files)
+            settings.extend(s for s in owned.get("settings", []) if s not in incoming_settings)
+        return files, settings
+
+    def _capture_restore_point(
+        self,
+        diff: Diff,
+        backend: SettingsBackend,
+        dests: dict[str, Path],
+        *,
+        extra_keys: list[str] | None = None,
+        extra_dests: list[str] | None = None,
+    ) -> str | None:
+        """Take a restore point before touching anything. Never fatal.
+
+        A restore point that cannot be written is worth going without, not a
+        refusal: the pristine baseline is the real guarantee and is recorded
+        regardless. Imported here rather than at module scope because a restore
+        point is itself applied as a transaction.
+        """
+        from . import restorepoints
+
+        try:
+            point = restorepoints.capture_from_diff(
+                diff,
+                label=self.label or "Before your last change",
+                backend=backend,
+                resolved_dests={raw: str(path) for raw, path in dests.items()},
+                extra_keys=extra_keys,
+                extra_dests=extra_dests,
+            )
+        except OSError:
+            return None
+        return point.id if point is not None else None
+
+    def _write_files(
+        self,
+        dests: dict[str, Path],
+        context: dict[str, str],
+        baseline: Baseline,
+        journal: Baseline,
+        fresh_files: list[str],
+        result: TransactionResult,
+        report: Callable[[Progress, str], None],
+    ) -> None:
+        """Files first: a Look that points a setting at a file it also ships
+        must have shipped the file by the time the setting takes effect."""
+        ops = self._file_ops()
+        if not ops:
+            return
+        report(Progress.WRITING_FILES, f"Copying {len(ops)} file(s) into place")
+        for op in ops:
+            dest = dests[op.dest]
+            data = self._rendered(op, context)
+            key = str(dest)
+            newly = key not in baseline.files
+            if not baseline.record_file(dest, "files", self.label or ""):
+                # F1. There is a pipe, socket or device node where this file
+                # should go. It cannot be copied, so it cannot be put back, so
+                # it is not overwritten.
+                result.skipped.append(
+                    (op, f"something that is not an ordinary file is already at {dest}")
+                )
+                continue
+            if newly:
+                fresh_files.append(key)
+            journal.record_file(dest, "files", self.label or "")
+            try:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                if dest.is_dir() and not dest.is_symlink():
+                    raise IsADirectoryError(f"{dest} is a folder, not a file")
+                atomic_write_bytes(dest, data, self._file_mode(op))
+            except OSError as exc:
+                raise TransactionError(f"could not write {dest}: {exc}", op=op) from exc
+            result.applied.append(op)
+
+    def _write_settings(
+        self,
+        ops: list[SettingWrite],
+        context: dict[str, str],
+        backend: SettingsBackend,
+        baseline: Baseline,
+        journal: Baseline,
+        fresh_settings: list[str],
+        result: TransactionResult,
+        report: Callable[[Progress, str], None],
+    ) -> None:
+        if not ops:
+            return
+        report(Progress.WRITING_SETTINGS, f"Changing {len(ops)} setting(s)")
+        for op in ops:
+            key, value, skip = self._planned_setting(op, context)
+            if skip is not None:
+                result.skipped.append((op, skip))
+                continue
+            current, failure = self._current_setting(key)
+            if failure is not None and is_missing(failure):
+                # AS8. The add-on or the app this belongs to is not on this
+                # machine. One skip with a sentence, never a failed apply.
+                result.skipped.append((op, "that part of your desktop isn't installed here"))
+                continue
+            wanted = value
+            if op.merge == "list-union":
+                merged = merge_string_lists(current, value)
+                if merged is not None:
+                    wanted = merged
+            if values_equal(current, wanted):
+                result.applied.append(op)
+                continue
+            newly = key not in baseline.settings
+            baseline.record_setting(key, op.component or "other", self.label or "")
+            if key not in journal.settings:
+                journal.record_setting(key, op.component or "other", self.label or "")
+            try:
+                backend.set(key, wanted)
+            except BackendError as exc:
+                if newly:
+                    # Never keep a record for a key that was never changed:
+                    # restoring it later would write a value nothing set.
+                    baseline.forget_settings([key])
+                if is_missing(exc):
+                    result.skipped.append((op, "that part of your desktop isn't installed here"))
+                    continue
+                raise TransactionError(f"could not change {key}: {exc}", op=op) from exc
+            if newly:
+                fresh_settings.append(key)
+            result.applied.append(op)
+
+    def _write_extensions(
+        self,
+        ops: list[ExtensionEnable],
+        backend: SettingsBackend,
+        baseline: Baseline,
+        journal: Baseline,
+        fresh_settings: list[str],
+        result: TransactionResult,
+        report: Callable[[Progress, str], None],
+    ) -> None:
+        """Turn add-ons on by unioning into the one shared list (X1).
+
+        Every add-on the user turned on themselves is in that list. Writing a
+        Look's list over the top is experienced as the app deleting their dock,
+        so the Look's members are added to theirs and the recording keeps the
+        exact value from before, so undo restores their list rather than a
+        computed difference.
+        """
+        for op in self._install_ops():
+            if op.uuid in installed_extension_uuids():
+                continue
+            if op.source == "local-only":
+                result.skipped.append(
+                    (op, "this look uses a private add-on that isn't on this computer")
+                )
+            else:
+                result.skipped.append(
+                    (op, "this add-on isn't installed yet — install it from the Add-ons page first")
+                )
+
+        if not ops:
+            return
+        present = installed_extension_uuids()
+        wanted: list[str] = []
+        for op in ops:
+            resolved = _resolve_extension(op, present)
+            if resolved is None:
+                result.skipped.append((op, "that add-on isn't installed on this computer"))
+                continue
+            wanted.append(resolved)
+        if not wanted:
+            return
+
+        report(Progress.EXTENSIONS, f"Turning on {len(wanted)} add-on(s)")
+        key = ENABLED_EXTENSIONS_KEY
+        current, failure = self._current_setting(key)
+        if failure is not None and is_missing(failure):
+            for op in ops:
+                result.skipped.append((op, "add-ons cannot be turned on on this computer"))
+            return
+        merged = merge_string_lists(current, format_string_list(wanted))
+        if merged is None or values_equal(current, merged):
+            result.applied.extend(ops)
+            return
+        newly = key not in baseline.settings
+        baseline.record_setting(key, "addons", self.label or "")
+        if key not in journal.settings:
+            journal.record_setting(key, "addons", self.label or "")
+        try:
+            backend.set(key, merged)
+        except BackendError as exc:
+            if newly:
+                baseline.forget_settings([key])
+            raise TransactionError(f"could not turn the add-ons on: {exc}", op=ops[0]) from exc
+        if newly:
+            fresh_settings.append(key)
+        result.applied.extend(ops)
+
+    def _roll_back(
+        self,
+        journal: Baseline,
+        baseline: Baseline,
+        fresh_files: list[str],
+        fresh_settings: list[str],
+        report: Callable[[Progress, str], None],
+    ) -> bool:
+        """Put back everything this transaction changed. All of it or none.
+
+        Returns:
+            Whether the desktop really did come back. False is the serious
+            case and the caller must say so in plain words rather than
+            reporting a tidy failure.
+        """
+        report(Progress.ROLLED_BACK, "Putting everything back the way it was")
+        files = journal.restore_files()
+        settings = journal.restore_settings()
+        # Records this transaction created are the ones that describe changes
+        # that have now been undone. Dropping them means the next apply takes a
+        # fresh snapshot rather than restoring to a moment that never happened.
+        baseline.forget_files([key for key in fresh_files if key in files.done])
+        baseline.forget_settings([key for key in fresh_settings if key in settings.done])
+        return not files.warnings and not settings.warnings
+
+    def _restore_ledger(self, owner: str, files: set[str], settings: set[str]) -> None:
+        """Undo the R4 early write, keeping ownership from earlier applies.
+
+        An owner that already owned things before this transaction still owns
+        them — they are still on disk. Only the claim this transaction added is
+        withdrawn.
+        """
+        if files or settings:
+            ledger_store.write_entry(owner, files, settings)
+        else:
+            ledger_store.drop_entry(owner)

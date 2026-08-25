@@ -184,13 +184,22 @@ def test_writes_never_reach_a_real_store(backend, schema_source_factory):
     assert other.get(f"gsettings:{ID} a-flag") == "false"
 
 
-# -- the two stubs ---------------------------------------------------------
+# -- the two real backends -------------------------------------------------
+#
+# Wave 1 landed these bodies; this block used to assert they were stubs. Both
+# are exercised properly in tests/unit/core_settings_backend.py, against
+# throwaway schemas and never against the machine's own settings. What is left
+# here is the shape assertion the frozen contract cares about: whatever goes
+# wrong, a caller gets a typed BackendError and never a bare exception.
 
 
 @pytest.mark.parametrize("cls", [GioBackend, SubprocessBackend])
 @pytest.mark.parametrize("method", ["get", "set", "reset"])
-def test_unimplemented_backends_say_so(cls, method):
+def test_both_backends_raise_typed_errors_for_an_unknown_schema(cls, method):
     backend = cls()
-    args = ["gsettings:org.a.b c"] + ([""] if method == "set" else [])
-    with pytest.raises(NotImplementedError, match=f"{cls.__name__}.{method}"):
+    args = ["gsettings:org.gtheme.definitely.not.installed a-key"]
+    if method == "set":
+        args.append("true")
+    with pytest.raises(BackendError) as caught:
         getattr(backend, method)(*args)
+    assert caught.value.kind in tuple(BackendErrorKind)

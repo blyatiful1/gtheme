@@ -40,9 +40,12 @@ subprocess backend pins ``LC_ALL=C`` and still does not trust the text.
 from __future__ import annotations
 
 import enum
+import os
 import re
+import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 __all__ = [
@@ -362,42 +365,272 @@ class MemoryBackend(SettingsBackend):
         settings.reset(parsed.key)
 
 
+def _gio_settings_for(
+    parsed: SettingsKey,
+    schema_source: Any | None,
+    store: Any | None,
+) -> tuple[Any, Any]:
+    """``(settings, schema)`` for a parsed key against ``store``.
+
+    ``store`` is the GSettings backend object to bind to: the memory backend
+    for tests, or None to mean "whatever the system uses", which is dconf.
+
+    The schema object comes back alongside the settings object on purpose.
+    ``Gio.Settings`` exposes no ``get_settings_schema()`` in PyGObject — the
+    schema is reachable only through the ``settings-schema`` property — and
+    when the source is a per-add-on one, ``SettingsSchemaSource.get_default()``
+    cannot find that schema at all.
+
+    Raises:
+        BackendError: NO_SCHEMA when the schema is not installed or is
+            relocatable and was addressed without a path.
+    """
+    from gi.repository import Gio
+
+    source = schema_source or Gio.SettingsSchemaSource.get_default()
+    if source is None:  # pragma: no cover - a system with no schemas at all
+        raise BackendError(
+            BackendErrorKind.NO_SCHEMA,
+            "no settings descriptions are installed on this system",
+            key=parsed.as_text(),
+        )
+    schema = source.lookup(parsed.schema, True)
+    if schema is None:
+        raise BackendError(
+            BackendErrorKind.NO_SCHEMA,
+            f"schema {parsed.schema!r} is not installed",
+            key=parsed.as_text(),
+        )
+    if parsed.kind is KeyKind.GSETTINGS_PATH:
+        return Gio.Settings.new_full(schema, store, parsed.path), schema
+    if not schema.get_path():
+        raise BackendError(
+            BackendErrorKind.NO_SCHEMA,
+            f"schema {parsed.schema!r} is relocatable and needs a path — "
+            "use the 'gsettings-path:SCHEMA:/path/ KEY' form",
+            key=parsed.as_text(),
+        )
+    return Gio.Settings.new_full(schema, store, None), schema
+
+
 class GioBackend(SettingsBackend):
     """The primary backend: native ``Gio.Settings`` against the real store.
 
-    Lands with the core engine port (Wave 1 Agent A). It must produce values
-    byte-identical to :class:`SubprocessBackend` — a parity test against a real
-    dconf inside the sandbox tier is what proves it, because the exact-string
-    round-trip is what generic restore rests on.
+    Faster than shelling out (no process per key) and, more importantly,
+    honest: a missing schema is a missing schema object, not a sentence in
+    English that a locale change could rewrite. Values are produced by
+    ``GLib.Variant.print_(True)``, which is the same function ``gsettings get``
+    prints with, so the two backends agree byte for byte — asserted by a parity
+    test here against the memory backend, and again in the sandbox tier against
+    a real dconf.
+
+    Raw ``dconf:`` paths are refused: without a schema there is no type to
+    parse a value against. :class:`SubprocessBackend` handles those, and
+    ``core.backends.AutoBackend`` routes them there automatically.
     """
 
+    def __init__(self, schema_source: Any | None = None) -> None:
+        super().__init__(schema_source)
+        self._cache: dict[tuple[str, str | None], tuple[Any, Any]] = {}
+
+    def _resolve(self, key: str) -> tuple[Any, Any, SettingsKey]:
+        parsed = parse_key(key)
+        if parsed.kind is KeyKind.DCONF:
+            raise BackendError(
+                BackendErrorKind.OTHER,
+                "a location with no settings description cannot be read this way — "
+                "it has no type information to check a value against",
+                key=key,
+            )
+        cache_key = (parsed.schema or "", parsed.path)
+        entry = self._cache.get(cache_key)
+        if entry is None:
+            entry = _gio_settings_for(parsed, self.schema_source, None)
+            self._cache[cache_key] = entry
+        settings, schema = entry
+        if not schema.has_key(parsed.key):
+            raise BackendError(
+                BackendErrorKind.NO_KEY,
+                f"schema {parsed.schema!r} has no key {parsed.key!r}",
+                key=key,
+            )
+        return settings, schema, parsed
+
     def get(self, key: str) -> str:
-        raise NotImplementedError("GioBackend.get")
+        settings, _schema, parsed = self._resolve(key)
+        return settings.get_value(parsed.key).print_(True)
 
     def set(self, key: str, value: str) -> None:
-        raise NotImplementedError("GioBackend.set")
+        settings, schema, parsed = self._resolve(key)
+        from gi.repository import GLib
+
+        expected = schema.get_key(parsed.key).get_value_type()
+        try:
+            variant = GLib.Variant.parse(expected, value, None, None)
+        except GLib.Error as exc:
+            raise BackendError(
+                BackendErrorKind.OTHER,
+                f"{value!r} is not a valid value for {key}: {exc}",
+                key=key,
+            ) from exc
+        if not settings.set_value(parsed.key, variant):
+            raise BackendError(
+                BackendErrorKind.COMMIT_FAILED,
+                f"the settings store refused the change to {key}",
+                key=key,
+            )
+        settings.sync()
+        # Exiting without an error is not proof the value landed: dconf can
+        # accept a write and fail to commit it. Read it back.
+        if settings.get_value(parsed.key) != variant:
+            raise BackendError(
+                BackendErrorKind.COMMIT_FAILED,
+                f"the change to {key} did not stick",
+                key=key,
+            )
 
     def reset(self, key: str) -> None:
-        raise NotImplementedError("GioBackend.reset")
+        settings, _schema, parsed = self._resolve(key)
+        settings.reset(parsed.key)
+        settings.sync()
 
 
 class SubprocessBackend(SettingsBackend):
     """The fallback backend: ``gsettings`` and ``dconf`` as child processes.
 
     Slower and clumsier than :class:`GioBackend`, and kept anyway, because it
-    is the code path v1 shipped and proved. It is also the only backend that
-    can address the ``dconf:`` form. Two rules the implementation must keep:
-    pin ``LC_ALL=C`` on every call, and never conclude a write succeeded from
-    the exit status alone.
+    is the code path v1 shipped and proved, and because it is the only backend
+    that can address the ``dconf:`` form — a location with no schema, which
+    ``Gio.Settings`` has no way to open.
 
-    Lands with the core engine port (Wave 1 Agent A).
+    Two rules, both learned the hard way. ``LC_ALL=C`` is pinned on every call,
+    because this is the one place in gtheme where a failure has to be
+    classified from English text and a translated "No such schema" would be
+    classified as OTHER. And a zero exit status is never taken as proof: v1 was
+    bitten by ``gsettings set`` exiting 0 while printing "failed to commit
+    changes to dconf", so every write is read back.
+
+    Args:
+        schema_source: for this backend, optionally a directory path
+            containing compiled schemas, passed on as ``--schemadir``. A
+            ``Gio.SettingsSchemaSource`` object cannot be handed to a child
+            process and is ignored.
     """
 
+    #: Printed on a zero exit that did not persist. The trap v1 fell into.
+    _COMMIT_FAILED_TEXT = "failed to commit changes to dconf"
+
+    def _schemadir_args(self) -> list[str]:
+        source = self.schema_source
+        if isinstance(source, (str, Path)):
+            return ["--schemadir", str(source)]
+        return []
+
+    def _run(self, args: list[str]) -> tuple[int, str, str]:
+        env = {
+            **os.environ,
+            "LC_ALL": "C",
+            "LC_MESSAGES": "C",
+            "LANGUAGE": "C",
+        }
+        try:
+            proc = subprocess.run(
+                args,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                env=env,
+                check=False,
+            )
+        except FileNotFoundError as exc:
+            raise BackendError(
+                BackendErrorKind.OTHER,
+                f"{args[0]} is not installed on this system",
+            ) from exc
+        return proc.returncode, proc.stdout.strip(), proc.stderr.strip()
+
+    @classmethod
+    def _classify(cls, stderr: str, key: str) -> BackendError:
+        """Turn a child process's complaint into a typed failure.
+
+        This is the only place in gtheme that reads an error message. It is
+        contained here, under a pinned locale, and every caller of this backend
+        still verifies the outcome by reading the value back — so a
+        misclassification cannot turn a failed write into a reported success.
+        """
+        lowered = stderr.lower()
+        if "no such schema" in lowered:
+            kind = BackendErrorKind.NO_SCHEMA
+        elif "no such key" in lowered:
+            kind = BackendErrorKind.NO_KEY
+        elif cls._COMMIT_FAILED_TEXT in lowered:
+            kind = BackendErrorKind.COMMIT_FAILED
+        else:
+            kind = BackendErrorKind.OTHER
+        return BackendError(kind, stderr or "the settings command failed", key=key)
+
+    def _argv(self, parsed: SettingsKey, verb: str, value: str | None = None) -> list[str]:
+        if parsed.kind is KeyKind.DCONF:
+            dconf_verb = {"get": "read", "set": "write", "reset": "reset"}[verb]
+            args = ["dconf", dconf_verb, parsed.path or ""]
+        else:
+            target = (
+                f"{parsed.schema}:{parsed.path}"
+                if parsed.kind is KeyKind.GSETTINGS_PATH
+                else str(parsed.schema)
+            )
+            args = ["gsettings", *self._schemadir_args(), verb, target, str(parsed.key)]
+        if value is not None:
+            args.append(value)
+        return args
+
     def get(self, key: str) -> str:
-        raise NotImplementedError("SubprocessBackend.get")
+        parsed = parse_key(key)
+        code, out, err = self._run(self._argv(parsed, "get"))
+        if code != 0:
+            raise self._classify(err, key)
+        if parsed.kind is KeyKind.DCONF and out == "":
+            # dconf prints nothing and exits 0 for a location that has never
+            # been written. There is no value to hand back.
+            raise BackendError(
+                BackendErrorKind.NO_KEY,
+                f"{parsed.path} has never been set",
+                key=key,
+            )
+        return out
 
     def set(self, key: str, value: str) -> None:
-        raise NotImplementedError("SubprocessBackend.set")
+        parsed = parse_key(key)
+        code, _out, err = self._run(self._argv(parsed, "set", value))
+        if code != 0:
+            raise self._classify(err, key)
+        if self._COMMIT_FAILED_TEXT in err.lower():
+            raise BackendError(
+                BackendErrorKind.COMMIT_FAILED,
+                f"the change to {key} was accepted and then not saved",
+                key=key,
+            )
+        try:
+            written = self.get(key)
+        except BackendError:  # pragma: no cover - readable if it was writable
+            return
+        from .gvariant import values_equal
+
+        if not values_equal(written, value):
+            raise BackendError(
+                BackendErrorKind.COMMIT_FAILED,
+                f"the change to {key} did not stick",
+                key=key,
+            )
 
     def reset(self, key: str) -> None:
-        raise NotImplementedError("SubprocessBackend.reset")
+        parsed = parse_key(key)
+        code, _out, err = self._run(self._argv(parsed, "reset"))
+        if code != 0:
+            raise self._classify(err, key)
+        if self._COMMIT_FAILED_TEXT in err.lower():
+            raise BackendError(
+                BackendErrorKind.COMMIT_FAILED,
+                f"the change to {key} was accepted and then not saved",
+                key=key,
+            )
