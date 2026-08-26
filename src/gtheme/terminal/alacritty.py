@@ -24,35 +24,42 @@ from pathlib import Path
 from .fsio import atomic_write_text, config_root, confine
 from .ghostty import slugify
 from .kv import IniFile
-from .model import Palette, ReloadSemantics, TerminalState
+from .model import Palette, ReloadSemantics, TerminalState, one_line, read_palette, toml_string
 
 __all__ = ["AlacrittyAdapter", "render_colors_toml"]
 
 _ANSI_NAMES = ("black", "red", "green", "yellow", "blue", "magenta", "cyan", "white")
 _IMPORT_RE = re.compile(r"^[ \t]*import[ \t]*=[ \t]*\[.*?\]", re.DOTALL | re.MULTILINE)
 _QUOTED_RE = re.compile(r'"([^"]*)"')
+_TABLE_HEADER_RE = re.compile(r"^[ \t]*\[", re.MULTILINE)
 
 
 def render_colors_toml(palette: Palette) -> str:
-    """The colours file gtheme owns. Regenerated whole every time."""
+    """The colours file gtheme owns. Regenerated whole every time.
+
+    Every value goes through :func:`~gtheme.terminal.model.toml_string`, so a
+    colour that is somehow not a colour lands as an escaped string rather than
+    closing gtheme's quote and opening a table of its own.
+    """
     cursor = palette.cursor or palette.foreground
     lines = [
-        f"# {palette.name} — written by gtheme. This file is regenerated; edit",
+        f"# {one_line(palette.name, what='the look name')} — written by gtheme. "
+        "This file is regenerated; edit",
         "# alacritty.toml instead if you want to keep a change.",
         "",
         "[colors.primary]",
-        f'background = "{palette.background}"',
-        f'foreground = "{palette.foreground}"',
+        f"background = {toml_string(palette.background)}",
+        f"foreground = {toml_string(palette.foreground)}",
         "",
         "[colors.cursor]",
-        f'cursor = "{cursor}"',
-        f'text = "{palette.background}"',
+        f"cursor = {toml_string(cursor)}",
+        f"text = {toml_string(palette.background)}",
     ]
     if palette.ansi:
         for offset, section in ((0, "normal"), (8, "bright")):
             lines.extend(["", f"[colors.{section}]"])
             for index, key in enumerate(_ANSI_NAMES):
-                lines.append(f'{key} = "{palette.ansi[offset + index]}"')
+                lines.append(f"{key} = {toml_string(palette.ansi[offset + index])}")
     return "\n".join(lines) + "\n"
 
 
@@ -113,17 +120,33 @@ class AlacrittyAdapter:
         return None
 
     def apply(self, palette: Palette) -> None:
-        """Write the colours file, then make sure the config imports it."""
+        """Write the colours file, then make sure the config imports it.
+
+        The edit to ``alacritty.toml`` is worked out in full *before* anything
+        is written, and refused if it would leave a file Alacritty cannot read
+        — a config that does not parse costs the user their whole terminal
+        setup, which is far worse than a look that did not apply.
+
+        Raises:
+            ValueError: the edit would have broken a config that parsed before.
+        """
         confine(self.config_dir)
         colours = confine(self.colors_path(palette.name))
-        atomic_write_text(colours, render_colors_toml(palette))
+        rendered = render_colors_toml(palette)
 
-        text = _read_text(self.config_path) or ""
-        text = _set_import(text, f"~/.config/alacritty/{colours.name}")
-        parsed = IniFile.parse(text)
-        parsed.set("window", "opacity", f"{palette.opacity:g}")
-        parsed.set("window", "blur", "true" if palette.opacity < 1.0 else "false")
-        atomic_write_text(confine(self.config_path), parsed.render())
+        original = _read_text(self.config_path) or ""
+        text = _set_import(original, f"~/.config/alacritty/{colours.name}")
+        text = _set_window(
+            text,
+            {
+                "opacity": f"{palette.opacity:g}",
+                "blur": "true" if palette.opacity < 1.0 else "false",
+            },
+        )
+        _refuse_if_broken(original, text)
+
+        atomic_write_text(colours, rendered)
+        atomic_write_text(confine(self.config_path), text)
 
     # -- helpers -----------------------------------------------------------
 
@@ -163,6 +186,150 @@ def _set_import(text: str, entry: str) -> str:
     return prefix + ("\n" if prefix else "") + "[general]\n" + rendered + "\n"
 
 
+def _head_end(text: str) -> int:
+    """Where the top-level part of a TOML file stops: the first table header.
+
+    Everything after that belongs to some table, so a ``window.opacity`` line
+    down there is not the ``window`` table gtheme is looking for.
+    """
+    match = _TABLE_HEADER_RE.search(text)
+    return match.start() if match else len(text)
+
+
+def _inline_span(text: str, start: int) -> tuple[int, int] | None:
+    """The inside of the ``{...}`` that begins at ``start``, braces matched."""
+    depth = 0
+    for index in range(start, len(text)):
+        char = text[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return (start + 1, index)
+    return None
+
+
+def _inline_items(body: str) -> list[str]:
+    """The key/value pairs of an inline table, split on its own commas.
+
+    Splitting on every comma would cut ``padding = { x = 4, y = 4 }`` in half,
+    so the depth is counted as it goes.
+    """
+    items: list[str] = []
+    depth = 0
+    current = ""
+    for char in body:
+        if char in "{[":
+            depth += 1
+        elif char in "}]":
+            depth -= 1
+        if char == "," and depth == 0:
+            items.append(current)
+            current = ""
+            continue
+        current += char
+    if current.strip():
+        items.append(current)
+    return [item for item in items if item.strip()]
+
+
+def _set_inline(body: str, values: dict[str, str]) -> str:
+    """Set keys inside an inline table, keeping every other pair as it was."""
+    items = _inline_items(body)
+    remaining = dict(values)
+    rendered: list[str] = []
+    for item in items:
+        key, sep, _ = item.partition("=")
+        name = key.strip().strip('"').strip("'")
+        if sep and name in remaining:
+            rendered.append(f"{name} = {remaining.pop(name)}")
+        else:
+            rendered.append(item.strip())
+    rendered.extend(f"{key} = {value}" for key, value in remaining.items())
+    return " " + ", ".join(rendered) + " "
+
+
+def _set_dotted(head: str, table: str, values: dict[str, str]) -> str:
+    """Set ``table.key`` lines in the top-level part of the file."""
+    for key, value in values.items():
+        dotted = rf"^[ \t]*{re.escape(table)}\.{re.escape(key)}[ \t]*=.*$"
+        pattern = re.compile(dotted, re.MULTILINE)
+        line = f"{table}.{key} = {value}"
+        if pattern.search(head):
+            head = pattern.sub(line, head, count=1)
+            continue
+        anchor = None
+        for match in re.finditer(rf"^[ \t]*{re.escape(table)}\.[^=\n]*=.*$", head, re.MULTILINE):
+            anchor = match
+        if anchor is not None:
+            head = head[: anchor.end()] + "\n" + line + head[anchor.end() :]
+        else:
+            head = head + ("" if not head or head.endswith("\n") else "\n") + line + "\n"
+    return head
+
+
+def _set_window(text: str, values: dict[str, str]) -> str:
+    """Set keys of the ``window`` table, however the user wrote that table.
+
+    ``alacritty.toml`` is TOML, and TOML lets one table be spelled three ways:
+    a ``[window]`` section, an inline ``window = { … }``, or dotted
+    ``window.opacity =`` lines. The line-based :class:`~gtheme.terminal.kv.IniFile`
+    only knows the first, and used to append a ``[window]`` section beside the
+    other two — declaring the same table twice, which TOML forbids and
+    Alacritty refuses, costing the user their whole config to apply a look.
+    So the shape is worked out first, and the edit is made in the shape that is
+    already there.
+    """
+    head_end = _head_end(text)
+    head, tail = text[:head_end], text[head_end:]
+
+    if re.search(r"^[ \t]*\[window\][ \t]*$", text, re.MULTILINE):
+        parsed = IniFile.parse(text)
+        for key, value in values.items():
+            parsed.set("window", key, value)
+        return parsed.render()
+
+    inline = re.search(r"^[ \t]*window[ \t]*=[ \t]*\{", head, re.MULTILINE)
+    if inline is not None:
+        span = _inline_span(head, inline.end() - 1)
+        if span is not None:
+            start, end = span
+            return head[:start] + _set_inline(head[start:end], values) + head[end:] + tail
+    if re.search(r"^[ \t]*window\.[^=\n]*=", head, re.MULTILINE):
+        return _set_dotted(head, "window", values) + tail
+
+    parsed = IniFile.parse(text)
+    for key, value in values.items():
+        parsed.set("window", key, value)
+    return parsed.render()
+
+
+def _refuse_if_broken(original: str, rendered: str) -> None:
+    """Refuse an edit that would leave a config Alacritty cannot read.
+
+    A config that was already broken is not made gtheme's problem — the edit
+    goes ahead, because refusing would mean a user with one stray line could
+    never apply a look again. What is refused is *breaking* one that worked.
+
+    Raises:
+        ValueError: the file parsed before the edit and does not after.
+    """
+    if _parses(original) and not _parses(rendered):
+        raise ValueError(
+            "gtheme could not change your Alacritty settings without breaking "
+            "them, so it has not changed anything."
+        )
+
+
+def _parses(text: str) -> bool:
+    try:
+        tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return False
+    return True
+
+
 def _as_float(value: object, fallback: float) -> float:
     try:
         return float(value)  # type: ignore[arg-type]
@@ -181,7 +348,7 @@ def _palette_from(colours: dict, *, name: str, opacity: float) -> Palette | None
     for section in ("normal", "bright"):
         block = table.get(section, {})
         ansi.extend(str(block[key]) for key in _ANSI_NAMES if key in block)
-    return Palette(
+    return read_palette(
         name=name,
         background=str(background),
         foreground=str(foreground),

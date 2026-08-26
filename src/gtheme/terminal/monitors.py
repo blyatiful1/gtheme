@@ -25,7 +25,7 @@ from pathlib import Path
 from .fsio import atomic_write_text, config_root, confine
 from .ghostty import slugify
 from .kv import IniFile, KeyValueFile
-from .model import Palette, ReloadSemantics, TerminalState
+from .model import Palette, ReloadSemantics, TerminalState, check_colour, one_line, read_palette
 
 __all__ = [
     "BtopAdapter",
@@ -92,8 +92,16 @@ def render_btop_theme(palette: Palette) -> str:
         "process_start": _slot(palette, 6, fg),
         "process_end": _slot(palette, 14, fg),
     }
-    lines = [f"# {palette.name} — written by gtheme"]
-    lines.extend(f'theme[{key}]="{value}"' for key, value in entries.items())
+    # btop's own parser takes the text between the quotes as it finds it, so a
+    # value carrying a quote or a newline would not be a broken colour — it
+    # would be extra lines in a file gtheme wrote. Palette has already refused
+    # anything of the sort; this refuses it a second time rather than escaping
+    # into a format that has no escapes.
+    name = one_line(palette.name, what="the look name")
+    lines = [f"# {name} — written by gtheme"]
+    for key, value in entries.items():
+        safe = one_line(value, what=key, forbid='"')
+        lines.append(f'theme[{key}]="{safe}"')
     return "\n".join(lines) + "\n"
 
 
@@ -160,7 +168,7 @@ class BtopAdapter:
         foreground = entries.get("main_fg")
         if not background or not foreground:
             return None
-        return Palette(
+        return read_palette(
             name=theme,
             background=background,
             foreground=foreground,
@@ -238,7 +246,9 @@ class CavaAdapter:
         parsed.set("color", "gradient", "1")
         parsed.set("color", "gradient_count", str(len(colours)))
         for index, colour in enumerate(colours, start=1):
-            parsed.set("color", f"gradient_color_{index}", f"'{colour}'")
+            # cava wraps its colours in apostrophes and has no escape for one.
+            safe = one_line(colour, what=f"gradient colour {index}", forbid="'")
+            parsed.set("color", f"gradient_color_{index}", f"'{safe}'")
         atomic_write_text(path, parsed.render())
 
 
@@ -337,8 +347,15 @@ def _parse_btop_theme(path: Path) -> dict[str, str]:
 
 
 def _sgr(colour: str) -> str:
-    """A truecolour SGR sequence — what fastfetch configs use for exact colours."""
-    value = colour.lstrip("#")
+    """A truecolour SGR sequence — what fastfetch configs use for exact colours.
+
+    Every spelling :class:`~gtheme.terminal.model.Palette` accepts is handled:
+    ``#abc`` is spelled out, and the alpha of an eight-digit colour is dropped
+    because a terminal escape has nowhere to put it.
+    """
+    value = check_colour(colour, what="that colour").lstrip("#").lower()
+    if len(value) == 3:
+        value = "".join(digit * 2 for digit in value)
     red, green, blue = (int(value[i : i + 2], 16) for i in (0, 2, 4))
     return f"38;2;{red};{green};{blue}"
 

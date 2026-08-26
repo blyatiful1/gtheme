@@ -54,11 +54,25 @@ def test_colours_reach_fish_without_a_hash():
 
 
 def test_a_colour_that_is_not_a_colour_is_refused_before_anything_runs():
-    """These values are interpolated into a shell command; refuse, never escape."""
-    recorder = Recorder()
-    bad = Palette(name="bad", background="#000000", foreground="$(rm -rf ~)")
+    """These values are interpolated into a shell command; refuse, never escape.
+
+    CONTRACT CHANGED (review finding src/gtheme/terminal/prompt.py:240). The
+    refusal used to happen inside the fish adapter, so this test used to build
+    the bad Palette happily and expect ``apply`` to raise. Validation now lives
+    in ``Palette`` itself, because fish was the *only* adapter that checked and
+    the others were writing the same values into starship and ghostty configs
+    that can name a command to run. So the construction is what raises now —
+    and the adapter is still expected to refuse a value that got past it, which
+    is what the second half of this test pins.
+    """
     with pytest.raises(ValueError, match="not a colour"):
-        FishAdapter(recorder).apply(bad)
+        Palette(name="bad", background="#000000", foreground="$(rm -rf ~)")
+
+    recorder = Recorder()
+    smuggled = Palette(name="bad", background="#000000", foreground="#ffffff")
+    object.__setattr__(smuggled, "foreground", "$(rm -rf ~)")
+    with pytest.raises(ValueError, match="not a colour"):
+        FishAdapter(recorder).apply(smuggled)
     assert recorder.calls == []
 
 

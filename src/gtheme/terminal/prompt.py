@@ -28,7 +28,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 from .fsio import atomic_write_text, config_root, confine
-from .model import Palette, ReloadSemantics, TerminalState
+from .model import Palette, ReloadSemantics, TerminalState, check_colour, read_palette, toml_string
 
 __all__ = [
     "FISH_COLOR_MAP",
@@ -36,8 +36,6 @@ __all__ = [
     "StarshipAdapter",
     "fish_env",
 ]
-
-_HEX_RE = re.compile(r"^#?[0-9a-fA-F]{6}$")
 
 #: Which ANSI slot each fish colour variable is drawn from.
 #:
@@ -62,10 +60,18 @@ FISH_COLOR_MAP: dict[str, int | None] = {
 
 
 def _bare(colour: str) -> str:
-    """fish wants ``rrggbb``, with or without the hash. Validate, then strip it."""
-    if not _HEX_RE.match(colour):
-        raise ValueError(f"not a colour gtheme will pass to a shell: {colour!r}")
-    return colour.lstrip("#").lower()
+    """fish wants ``rrggbb``, with or without the hash. Validate, then strip it.
+
+    The validation is the shared one every adapter uses
+    (:func:`~gtheme.terminal.model.check_colour`) rather than a second opinion
+    kept here; the shortening is fish's own: it takes six digits, so ``#abc``
+    is spelled out and the alpha of an eight-digit colour is dropped.
+    """
+    check_colour(colour, what="that colour")
+    value = colour.lstrip("#").lower()
+    if len(value) == 3:
+        value = "".join(digit * 2 for digit in value)
+    return value[:6]
 
 
 def fish_env() -> dict[str, str]:
@@ -213,7 +219,7 @@ class StarshipAdapter:
         if not background or not foreground:
             return None
         ansi = tuple(str(table[f"color{i}"]) for i in range(16) if f"color{i}" in table)
-        return Palette(
+        return read_palette(
             name=active,
             background=str(background),
             foreground=str(foreground),
@@ -235,14 +241,23 @@ class StarshipAdapter:
         atomic_write_text(path, text)
 
     def _table(self, palette: Palette) -> str:
+        """gtheme's palette table, with every value written as a TOML string.
+
+        starship's file can hold a ``[custom.…]`` module that names a command
+        to run on every prompt, so a value that closed its own quote here would
+        be arbitrary code execution from a downloaded Look.
+        :class:`~gtheme.terminal.model.Palette` refuses such a value long before
+        this point; :func:`~gtheme.terminal.model.toml_string` makes sure that
+        even one that got here anyway lands as a string and not as a table.
+        """
         cursor = palette.cursor or palette.foreground
         lines = [
-            f'background = "{palette.background}"',
-            f'foreground = "{palette.foreground}"',
-            f'cursor = "{cursor}"',
+            f"background = {toml_string(palette.background)}",
+            f"foreground = {toml_string(palette.foreground)}",
+            f"cursor = {toml_string(cursor)}",
         ]
         for index, colour in enumerate(palette.ansi):
-            lines.append(f'color{index} = "{colour}"')
+            lines.append(f"color{index} = {toml_string(colour)}")
         return "\n".join(lines)
 
     def _load(self) -> dict | None:

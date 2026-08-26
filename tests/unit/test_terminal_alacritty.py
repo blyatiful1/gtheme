@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from gtheme.terminal import alacritty as alacritty_module
 from gtheme.terminal.alacritty import AlacrittyAdapter, render_colors_toml
 from gtheme.terminal.model import Palette, ReloadSemantics
 
@@ -115,6 +116,91 @@ def test_applying_twice_does_not_grow_the_import_list(alacritty: AlacrittyAdapte
     alacritty.apply(LOOK)
     imports = tomllib.loads(alacritty.config_path.read_text())["general"]["import"]
     assert imports.count("~/.config/alacritty/gtheme-nightbloom.toml") == 1
+
+
+# -- the three ways TOML lets you spell one table --------------------------
+#
+# FINDING src/gtheme/terminal/alacritty.py:124. apply() edited alacritty.toml
+# with the line-based IniFile, which knows only `[window]` headers. A config
+# that spelled the same table inline or with dotted keys got a second `[window]`
+# section appended — TOML forbids declaring a table twice, so Alacritty threw
+# the whole config away and fell back to its defaults. Applying a look cost the
+# user their terminal setup. Each of these round-trips one spelling.
+
+
+def _apply_to(directory: Path, config: str) -> dict:
+    (directory / "alacritty.toml").write_text(config, encoding="utf-8")
+    adapter = AlacrittyAdapter()
+    adapter.apply(LOOK)
+    # tomllib is the assertion: a duplicate table raises here, not silently.
+    return tomllib.loads(adapter.config_path.read_text())
+
+
+@pytest.fixture
+def config_dir(tmp_dest_root: Path) -> Path:
+    directory = tmp_dest_root / ".config" / "alacritty"
+    directory.mkdir(parents=True)
+    return directory
+
+
+@pytest.mark.mutating
+def test_an_inline_window_table_is_edited_not_declared_twice(config_dir: Path):
+    """FINDING alacritty.py:124 — `window = { … }` used to gain a `[window]`."""
+    data = _apply_to(config_dir, "window = { opacity = 0.9, padding = { x = 4, y = 4 } }\n")
+    assert data["window"]["opacity"] == pytest.approx(0.82)
+    assert data["window"]["blur"] is True
+    assert data["window"]["padding"] == {"x": 4, "y": 4}
+
+
+@pytest.mark.mutating
+def test_dotted_window_keys_are_edited_not_declared_twice(config_dir: Path):
+    """FINDING alacritty.py:124 — `window.opacity = …` was the other shape."""
+    data = _apply_to(config_dir, "window.opacity = 0.9\nwindow.decorations = \"None\"\n")
+    assert data["window"]["opacity"] == pytest.approx(0.82)
+    assert data["window"]["blur"] is True
+    assert data["window"]["decorations"] == "None"
+
+
+@pytest.mark.mutating
+def test_a_dotted_key_below_a_table_header_is_not_mistaken_for_the_window_table(
+    config_dir: Path,
+):
+    """FINDING alacritty.py:124 — `window.x` under `[foo]` is foo's, not ours."""
+    data = _apply_to(config_dir, '[keyboard]\nwindow.mine = "no"\n')
+    assert data["keyboard"]["window"] == {"mine": "no"}
+    assert data["window"]["opacity"] == pytest.approx(0.82)
+
+
+@pytest.mark.mutating
+def test_an_existing_window_section_still_round_trips(config_dir: Path):
+    """FINDING alacritty.py:124 — the shape that already worked must keep working."""
+    data = _apply_to(config_dir, '[window]\ndecorations = "None"\nopacity = 0.5\n')
+    assert data["window"]["opacity"] == pytest.approx(0.82)
+    assert data["window"]["decorations"] == "None"
+
+
+@pytest.mark.mutating
+def test_a_config_that_cannot_be_edited_safely_is_left_alone(
+    config_dir: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """A look is not worth a terminal: refuse rather than write broken TOML.
+
+    FINDING alacritty.py:124 — the old code wrote whatever it had rendered,
+    with no check that Alacritty could still read it. The edit is re-parsed
+    now, so even a shape nobody thought of is refused instead of written. The
+    old behaviour is forced back in here to prove the guard catches it.
+    """
+    original = "window = { opacity = 0.9 }\n"
+    (config_dir / "alacritty.toml").write_text(original, encoding="utf-8")
+    monkeypatch.setattr(
+        alacritty_module,
+        "_set_window",
+        lambda text, values: text + "\n[window]\nopacity = 0.1\n",
+    )
+    adapter = AlacrittyAdapter()
+    with pytest.raises(ValueError, match="without breaking"):
+        adapter.apply(LOOK)
+    assert adapter.config_path.read_text() == original
 
 
 @pytest.mark.mutating

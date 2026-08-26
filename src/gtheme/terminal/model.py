@@ -19,11 +19,23 @@ Two rules that come out of the research and are part of the contract:
   edit a git working tree the user maintains by hand. The adapter must
   ``realpath`` the *directory*, and when it points elsewhere, say so and ask,
   rather than write.
+
+**A palette value is untrusted text.** A Look's ``[palette]`` table is written
+by whoever made the Look, and the colours in it end up interpolated into other
+programs' settings files — several of which can name a command to run. A value
+like ``#fff"\\n[custom.pwn]\\ncommand = "id"`` closes gtheme's quote and opens a
+table of its own, and starship then runs that command on every prompt. The
+whole point of the preset format refusing to hold code (DESIGN.md F, no
+``[hooks]``, ``extra='forbid'``, "nothing is executed") is lost if a colour can
+smuggle it in. So this module is where a colour has to *be* a colour:
+:class:`Palette` refuses anything that is not one, before any adapter sees it,
+and the writers escape or refuse a second time on the way out.
 """
 
 from __future__ import annotations
 
 import enum
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol, runtime_checkable
@@ -33,7 +45,100 @@ __all__ = [
     "ReloadSemantics",
     "TerminalAdapter",
     "TerminalState",
+    "check_colour",
+    "check_name",
+    "is_colour",
+    "one_line",
+    "read_palette",
+    "toml_string",
 ]
+
+#: What gtheme will accept as a colour: ``#rgb``, ``#rrggbb`` or ``#rrggbbaa``,
+#: with the hash optional because ghostty and fish both write it bare.
+HEX_COLOUR_RE = re.compile(r"^#?(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$")
+
+#: Characters that end a line, or that no settings file should be asked to hold.
+_CONTROL_RE = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+
+#: A look's name goes into file names and into comment lines. Nothing long
+#: enough to be a payload, and nothing that can start a second line.
+_MAX_NAME = 200
+
+
+def is_colour(value: object) -> bool:
+    """Whether ``value`` is a colour gtheme is willing to write anywhere."""
+    return isinstance(value, str) and bool(HEX_COLOUR_RE.match(value))
+
+
+def check_colour(value: object, *, what: str = "colour") -> str:
+    """``value``, if it is a colour. Otherwise refuse, by name.
+
+    Raises:
+        ValueError: it is not a colour. The message is the one the user sees
+            when a Look is refused, so it says which value was wrong.
+    """
+    if not is_colour(value):
+        raise ValueError(
+            f"{what} is not a colour gtheme will write into a settings file: {value!r}"
+        )
+    return str(value)
+
+
+def check_name(value: object) -> str:
+    """A look's name, if it is safe to put in a file. Otherwise refuse.
+
+    Raises:
+        ValueError: the name is empty, absurdly long, or holds a character that
+            would start a new line in a config file — which is how a name, not
+            just a colour, could smuggle a setting in.
+    """
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"a look needs a name gtheme can write down, got {value!r}")
+    if len(value) > _MAX_NAME:
+        raise ValueError(
+            f"that look's name is too long to write into a settings file ({len(value)} characters)"
+        )
+    if _CONTROL_RE.search(value):
+        raise ValueError(
+            f"that look's name has characters gtheme will not write into a "
+            f"settings file: {value!r}"
+        )
+    return value
+
+
+def one_line(value: str, *, what: str = "value", forbid: str = "") -> str:
+    """``value``, if it fits on one line of a settings file. Otherwise refuse.
+
+    The second layer. ghostty, btop, cava and Ptyxis all read line-shaped files
+    with no escaping to speak of, so there is nothing to escape *into*: a value
+    that could end the line early is refused here even though
+    :class:`Palette` should already have refused it.
+
+    Args:
+        forbid: extra characters this particular file cannot hold — the quote
+            btop wraps its values in, the apostrophe cava uses.
+
+    Raises:
+        ValueError: the value could break the line it is written on.
+    """
+    if _CONTROL_RE.search(value) or any(char in value for char in forbid):
+        raise ValueError(f"{what} cannot be written into a settings file: {value!r}")
+    return value
+
+
+def toml_string(value: str) -> str:
+    """``value`` as a TOML basic string, quotes included.
+
+    The second layer for the TOML files (starship, alacritty). Unlike a
+    line-shaped file, TOML *can* hold anything once it is escaped — so this
+    escapes rather than refuses, and a value that somehow reached a writer
+    unvalidated lands as a harmless string instead of a new table.
+    """
+    out = value.replace("\\", "\\\\").replace('"', '\\"')
+    out = out.replace("\b", "\\b").replace("\t", "\\t").replace("\n", "\\n")
+    out = out.replace("\f", "\\f").replace("\r", "\\r")
+    out = _CONTROL_RE.sub(lambda m: f"\\u{ord(m.group(0)):04X}", out)
+    return f'"{out}"'
 
 
 class ReloadSemantics(enum.Enum):
@@ -90,10 +195,48 @@ class Palette:
     opacity: float = 1.0
 
     def __post_init__(self) -> None:
+        """Refuse anything that is not a palette, before an adapter can write it.
+
+        This is the choke point named in DESIGN.md F: the values come from a
+        Look someone else wrote, and the adapters interpolate them into other
+        programs' settings — starship's file can name a command to run. A
+        colour that is not a colour is refused here, so no writer has to be
+        trusted to escape it (they escape it anyway; see :func:`toml_string`).
+
+        Raises:
+            ValueError: a value is not a colour, the name cannot be written
+                into a file, the ANSI list is the wrong length, or the opacity
+                is out of range. Reading a palette back out of a config file
+                goes through :func:`read_palette`, which turns this into "gtheme
+                cannot tell" rather than an error.
+        """
         if self.ansi and len(self.ansi) != 16:
             raise ValueError(f"{self.name}: an ANSI palette has 16 colours, got {len(self.ansi)}")
+        if not isinstance(self.opacity, int | float) or isinstance(self.opacity, bool):
+            raise ValueError(f"{self.name}: opacity must be a number, got {self.opacity!r}")
         if not 0.0 <= self.opacity <= 1.0:
             raise ValueError(f"{self.name}: opacity must be between 0 and 1")
+        check_name(self.name)
+        check_colour(self.background, what="the background")
+        check_colour(self.foreground, what="the text colour")
+        if self.cursor is not None:
+            check_colour(self.cursor, what="the cursor colour")
+        for index, colour in enumerate(self.ansi):
+            check_colour(colour, what=f"colour {index}")
+
+
+def read_palette(**fields: object) -> Palette | None:
+    """A palette read back out of a config file, or None when it is not one.
+
+    Reading is never a reason to refuse. A hand-written config may hold a
+    colour name gtheme does not speak, and the honest answer to "what look is
+    this terminal wearing?" is then "gtheme cannot tell" — not a traceback on
+    the page that asked.
+    """
+    try:
+        return Palette(**fields)  # type: ignore[arg-type]
+    except ValueError:
+        return None
 
 
 @dataclass
