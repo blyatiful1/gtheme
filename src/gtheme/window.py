@@ -98,7 +98,15 @@ COPY: dict[str, str] = {
 #: The oldest GNOME gtheme is willing to describe. Below this the descriptor
 #: corpus offers settings the desktop does not have, which is worse than saying
 #: no: it is a list of promises that quietly do nothing.
-MINIMUM_GNOME = 47
+#:
+#: 49, not 47. The sidebar of this window is built out of ``Adw.Sidebar``,
+#: ``Adw.SidebarSection``, ``Adw.SidebarItem`` and ``Adw.SidebarMode``, every
+#: one of which arrived in libadwaita 1.9 — which is what GNOME 49 and 50 ship
+#: and what README states as the floor. A gate of 47 was a promise the window
+#: could not keep: on a GNOME 47 or 48 desktop the verdict said "yes" and the
+#: window then died on a missing widget. The gate now says no, and the screen
+#: that says so is built out of widgets that have existed for years.
+MINIMUM_GNOME = 49
 
 #: What size the window opens at the first time, before anyone has resized it.
 #:
@@ -238,24 +246,33 @@ class Window(Adw.ApplicationWindow):
             version=self._shell_version()
         )
 
-        self.sidebar = self._build_sidebar()
-        self.split = self._build_split()
+        # The app half of the window is built only when there is a desktop to
+        # build it for. Its sidebar needs libadwaita 1.9, which is exactly what
+        # a desktop below MINIMUM_GNOME does not have — so building it anyway
+        # replaced the polite "this is too old" screen with a traceback, for
+        # precisely the audience that screen was written for.
+        self.sidebar: Adw.Sidebar | None = None
+        self.split: Adw.NavigationSplitView | None = None
 
         self._root = Gtk.Stack()
-        self._root.add_named(self.split, "app")
+        if self.verdict.ok:
+            self.sidebar = self._build_sidebar()
+            self.split = self._build_split()
+            self._root.add_named(self.split, "app")
         self._root.add_named(self._build_unsupported(), "unsupported")
         self._root.set_visible_child_name("app" if self.verdict.ok else "unsupported")
 
         self.toasts = Adw.ToastOverlay(child=self._root)
         self.set_content(self.toasts)
 
-        # Below this width the sidebar becomes a page of its own and the split
-        # view navigates between the two, instead of squeezing both onto a
-        # screen that cannot hold them.
-        breakpoint_ = Adw.Breakpoint.new(Adw.BreakpointCondition.parse("max-width: 550sp"))
-        breakpoint_.add_setter(self.split, "collapsed", True)
-        breakpoint_.add_setter(self.sidebar, "mode", Adw.SidebarMode.PAGE)
-        self.add_breakpoint(breakpoint_)
+        if self.verdict.ok:
+            # Below this width the sidebar becomes a page of its own and the
+            # split view navigates between the two, instead of squeezing both
+            # onto a screen that cannot hold them.
+            breakpoint_ = Adw.Breakpoint.new(Adw.BreakpointCondition.parse("max-width: 550sp"))
+            breakpoint_.add_setter(self.split, "collapsed", True)
+            breakpoint_.add_setter(self.sidebar, "mode", Adw.SidebarMode.PAGE)
+            self.add_breakpoint(breakpoint_)
 
         self._restore_window_state()
         self.connect("close-request", self._on_close)

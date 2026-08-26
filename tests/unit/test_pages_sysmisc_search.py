@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from gtheme.panels.descriptor import Choice, DomainDescriptor, PanelDescriptor, Row, WidgetKind
-from gtheme.panels.loader import Corpus
+from gtheme.panels.loader import Corpus, load_corpus
 from gtheme.ui import registry, search
 
 
@@ -197,12 +197,38 @@ def test_every_hit_names_a_page_that_exists():
         assert hit.page_id in known, f"{hit.title!r} points at page {hit.page_id!r}"
 
 
-def test_a_setting_hit_deep_links_to_a_row_and_a_page_hit_does_not():
+def test_a_hit_promises_a_row_only_when_a_page_really_registers_one():
+    """Pins the ui/search.py:269 finding (dead deep-links to add-on settings).
+
+    This test used to assert that EVERY ``kind="setting"`` hit carries a
+    ``descriptor_id`` — which is the buggy contract itself: the 215 curated
+    add-on rows were indexed that way, their controls are built only inside an
+    add-on's own settings dialog, and that dialog is not open when a search
+    result lands, so ``window.go_to`` had nothing to scroll to or flash. The
+    assertion is inverted rather than loosened: a hit may name a row only when
+    it is a row some page actually puts on screen, and no hit of any kind may
+    name an add-on panel row.
+    """
+    corpus = load_corpus()
+    panel_row_ids = {row.id for panel in corpus.panels for row in panel.rows}
+    assert panel_row_ids, "the shipped corpus has curated add-on panels"
+
+    registered = {
+        descriptor_id
+        for page_id in registry.page_ids()
+        for descriptor_id in search.surfaced_ids(page_id)
+    }
+    promised = 0
     for hit in search.SearchIndex.build().hits:
-        if hit.kind == "setting":
-            assert hit.descriptor_id
-        else:
+        if hit.kind != "setting":
             assert hit.descriptor_id is None
+            continue
+        if hit.descriptor_id is None:
+            continue
+        promised += 1
+        assert hit.descriptor_id not in panel_row_ids, hit.title
+        assert hit.descriptor_id in registered, hit.title
+    assert promised > 100, "the desktop's own settings are still deep-linkable"
 
 
 @pytest.mark.parametrize(

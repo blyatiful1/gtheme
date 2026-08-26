@@ -43,6 +43,7 @@ __all__ = [
     "BANNER_DISMISS",
     "FLASH_CSS_CLASS",
     "FLASH_MILLISECONDS",
+    "PANEL_ROW_SUBTITLE",
     "GroupSpec",
     "Hit",
     "SearchIndex",
@@ -150,6 +151,12 @@ class Hit:
 
 #: What a page result says underneath itself when the manifest has no subtitle.
 PAGE_SUBTITLE_FALLBACK = "A page of this app."
+
+#: What a setting that belongs to an add-on says underneath itself. Its own
+#: controls live behind that add-on's settings button on the Add-ons page, so
+#: the result says which add-on to open rather than pretending it can land on
+#: the control itself.
+PANEL_ROW_SUBTITLE = "A setting of the {name} add-on."
 
 
 @dataclass
@@ -260,14 +267,19 @@ class SearchIndex:
                     haystack=f"{name} {panel.target.summary} {panel.target.category}".lower(),
                 )
             )
+            # No descriptor_id on these. An add-on's settings are built inside
+            # that add-on's own panel, which is a dialog that is not open when
+            # a search result lands — so the row is in no row index and there
+            # is nothing to scroll to or flash. Claiming otherwise gave a hit
+            # that opened the Add-ons list and then did nothing at all. The
+            # setting stays findable; what it says instead is where it lives.
             for row in panel.rows:
                 hits.append(
                     Hit(
                         kind="setting",
                         title=row.title,
-                        subtitle=row.subtitle,
+                        subtitle=PANEL_ROW_SUBTITLE.format(name=name),
                         page_id="addons",
-                        descriptor_id=row.id,
                         haystack=f"{row_search_text(row)} {name.lower()}",
                     )
                 )
@@ -404,6 +416,13 @@ def probe_built_rows(
     source is removed when the page goes away, because a callback that outlives
     its widgets is a crash waiting for a slow computer.
 
+    Args:
+        backend: handed straight to the probe. An add-on that keeps its
+            settings in a file of its own cannot say which file is in use
+            without one, so the probe answers the pessimistic way and greys a
+            row that works. This used to be accepted here and quietly dropped,
+            which made every caller that passed one wrong in the same way.
+
     Returns the GLib source id, or None when there was nothing to probe.
     """
     if probe is None or not built:
@@ -432,7 +451,13 @@ def probe_built_rows(
         # that has already gone — which is a warning on every page close.
         holder["source"] = None
 
-    holder["source"] = probe_rows_idle(probe, [row for row, _ in built], on_result, on_done=finished)
+    holder["source"] = probe_rows_idle(
+        probe,
+        [row for row, _ in built],
+        on_result,
+        backend=backend,
+        on_done=finished,
+    )
 
     def stop(*_args: Any) -> None:
         if holder["source"] is not None:

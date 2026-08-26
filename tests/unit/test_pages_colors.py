@@ -227,3 +227,61 @@ def test_every_row_is_findable_by_the_words_a_person_would_type(tmp_path, memory
     build_page(colors, window, memory_settings)
     assert window.rows.search("accent")  # the word they know
     assert window.rows.search("high contrast")
+
+
+# -- regression: the confirmed review finding on this page ------------------
+
+
+@pytest.mark.mutating
+def test_the_light_and_dark_tiles_follow_a_change_they_did_not_make(
+    tmp_path, memory_settings
+):
+    """Pins colors.py:263 — the mode tiles were wired to no refresh path.
+
+    ``_ModeChooser`` registers no row and added nothing to the shell's notices,
+    so neither ``Window.after_change`` (run after every Look apply and undo)
+    nor the live-mirroring pass ever re-read it. Applying a dark Look, or
+    flipping dark mode in the desktop's own Settings, left the Light tile
+    selected on a dark desktop. Both paths end in ``run_notices``.
+    """
+    memory_settings.set(colors.COLOR_SCHEME_KEY, "'default'")
+    window = make_window(tmp_path)
+    with use_backend(memory_settings):
+        shell = common.PageShell(window, "colors")
+        chooser = colors._ModeChooser(window, memory_settings, shell)
+    assert chooser.light.get_active() is True
+
+    # something else changed it: a Look, or GNOME Settings
+    memory_settings.set(colors.COLOR_SCHEME_KEY, "'prefer-dark'")
+    shell.run_notices()
+
+    assert chooser.dark.get_active() is True, "the tiles never re-read the desktop"
+    assert chooser.light.get_active() is False
+
+
+@pytest.mark.mutating
+def test_the_built_page_puts_the_mode_tiles_on_a_refresh_path(tmp_path, memory_settings):
+    """The whole page, not just a chooser built by hand.
+
+    The window is the thing that runs the notices — ``after_change`` after a
+    Look, ``_mirror_settled`` after an external change — so this checks the
+    page really hands its shell over with the tiles' refresh on it.
+    """
+    shells = []
+    window = make_window(tmp_path)
+    window.register_page_shell = shells.append
+
+    memory_settings.set(colors.COLOR_SCHEME_KEY, "'default'")
+    build_page(colors, window, memory_settings)
+    shell = next(s for s in shells if s.page_id == "colors")
+    chooser = next(
+        notice.__self__
+        for notice in shell.notices
+        if isinstance(getattr(notice, "__self__", None), colors._ModeChooser)
+    )
+    assert chooser.light.get_active() is True
+
+    memory_settings.set(colors.COLOR_SCHEME_KEY, "'prefer-dark'")
+    shell.run_notices()
+
+    assert chooser.dark.get_active() is True

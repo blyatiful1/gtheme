@@ -284,6 +284,13 @@ class _ModeChooser:
         self.refresh()
         self.light.connect("toggled", self._on_toggled)
         self.dark.connect("toggled", self._on_toggled)
+        # These two tiles are the one control on this page that is not a
+        # descriptor row, so nothing in the row index knows they exist. Without
+        # this line the only thing that ever re-read them was toggling them:
+        # a dark Look applied from the Looks page, or dark mode flipped in the
+        # desktop's own Settings, left the Light tile looking selected on a
+        # dark desktop. Both of those paths end in ``run_notices``.
+        shell.notices.append(self.refresh)
 
     def _tile(self, label: str, *, dark: bool) -> Gtk.ToggleButton:
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)

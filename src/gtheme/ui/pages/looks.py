@@ -28,6 +28,8 @@ constructs a settings backend and never writes a key itself.
 
 from __future__ import annotations
 
+import threading
+import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -38,7 +40,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw, Gtk  # noqa: E402
+from gi.repository import Adw, GLib, Gtk  # noqa: E402
 
 from ...core import restorepoints  # noqa: E402
 from ...core.backends import get_backend  # noqa: E402
@@ -135,6 +137,10 @@ COPY: dict[str, str] = {
     "addons-none": "gtheme cannot add add-ons right now. Open the Add-ons page to try there.",
     "addons-done-heading": "What happened",
     "addons-failed": "Those add-ons could not be added.",
+    "addons-timeout": (
+        "The add-ons this Look needs took too long to arrive, so gtheme stopped "
+        "waiting. Nothing was added."
+    ),
     # -- somebody else's Look wants a name that is already taken
     "replace-heading": "You already have a Look called {name}",
     "replace-yours": (
@@ -173,6 +179,14 @@ COPY: dict[str, str] = {
     "save-name": "Name",
     "save-confirm": "Save",
     "save-empty-name": "Give the Look a name first.",
+    "save-replace-yours": (
+        "Saving under that name would replace the Look of that name that is already on "
+        "this computer, and what is in that one now would be gone."
+    ),
+    "save-replace-built-in": (
+        "gtheme comes with a Look of that name. Saving under it would take its place in "
+        "the list — the built-in one stays on your computer, but you would stop seeing it."
+    ),
     "saved": "Saved as {title}.",
     "save-failed": "gtheme could not save this desktop as a Look.",
     "save-notes-heading": "What gtheme changed before saving",
@@ -436,6 +450,11 @@ class AddonBatch:
         label: what to call the resulting change.
     """
 
+    #: How long :meth:`run_and_wait` will wait for the whole batch. Three
+    #: minutes covers a slow connection fetching several add-ons; past that,
+    #: saying so beats a progress dialog that never closes.
+    TIMEOUT_SECONDS = 180.0
+
     def __init__(
         self,
         installer: Any,
@@ -489,26 +508,36 @@ class AddonBatch:
             if on_progress is not None:
                 on_progress(COPY["addons-working"])
             if self.client is None:
-                problems.append(report)
+                problems.append(_not_added(uuid))
                 step()
                 return
 
             def described(record: Any, error: Any) -> None:
-                tag = None
-                if record is not None and error is None:
-                    if not record.supports(self.shell_version):
-                        problems.append(
-                            InstallReport(
-                                uuid,
-                                InstallOutcome.NOT_COMPATIBLE,
-                                EGO_COPY[InstallOutcome.NOT_COMPATIBLE],
-                            )
+                if record is None or error is not None:
+                    # The library could not be asked. Nothing was downloaded,
+                    # so the queued "Added." report must not be what is shown.
+                    problems.append(_not_added(uuid, error))
+                    step()
+                    return
+                if not record.supports(self.shell_version):
+                    problems.append(
+                        InstallReport(
+                            uuid,
+                            InstallOutcome.NOT_COMPATIBLE,
+                            EGO_COPY[InstallOutcome.NOT_COMPATIBLE],
                         )
-                        step()
-                        return
-                    tag = record.version_tag_for(self.shell_version)
+                    )
+                    step()
+                    return
+                tag = record.version_tag_for(self.shell_version)
                 if tag is None:
-                    problems.append(report)
+                    problems.append(
+                        InstallReport(
+                            uuid,
+                            InstallOutcome.NOT_COMPATIBLE,
+                            EGO_COPY[InstallOutcome.NOT_COMPATIBLE],
+                        )
+                    )
                     step()
                     return
                 self.installer.install_package(uuid, tag, landed, label=self.label)
@@ -516,6 +545,92 @@ class AddonBatch:
             self.client.info(uuid, described)
 
         step()
+
+    def run_and_wait(
+        self,
+        wanted: Sequence[tuple[str, str, tuple[str, ...]]],
+        *,
+        on_progress: Callable[[str], None] | None = None,
+        timeout: float | None = None,
+    ) -> tuple[Transaction | None, list[Any]]:
+        """:meth:`run`, but it does not return until the answer is really in.
+
+        :meth:`run` is asynchronous end to end: looking an add-on up and
+        downloading it both go through the library's ``send_and_read_async``,
+        whose callbacks land on the main loop some time later. A caller that
+        calls :meth:`run` and reads the result on the next line gets ``(None,
+        [])`` every time there is anything to download — no add-ons added, no
+        failure reported, and the download finishing into a dictionary nobody
+        is looking at any more. That was the bug; this is the fix.
+
+        The batch is *started* on the main loop, because the library's session
+        may only be used from there, and this waits on a plain event for the
+        callbacks to come back. Called from the main thread itself — which a
+        test does — the main context is pumped instead of waited on, so a fake
+        that answers straight away still returns immediately.
+
+        Raises:
+            TimeoutError: nothing came back within ``timeout`` seconds. Better
+                than a worker thread parked forever behind a dialog that never
+                closes.
+        """
+        deadline = time.monotonic() + (self.TIMEOUT_SECONDS if timeout is None else timeout)
+        landed: dict[str, Any] = {}
+        finished = threading.Event()
+
+        def collected(transaction: Transaction | None, problems: list[Any]) -> None:
+            landed["transaction"] = transaction
+            landed["problems"] = list(problems)
+            finished.set()
+
+        def start() -> bool:
+            try:
+                self.run(wanted, collected, on_progress=on_progress)
+            except Exception as error:  # noqa: BLE001 - reported to the caller
+                landed["error"] = error
+                finished.set()
+            return GLib.SOURCE_REMOVE
+
+        if threading.current_thread() is threading.main_thread():
+            start()
+            context = GLib.MainContext.default()
+            while not finished.is_set() and time.monotonic() < deadline:
+                if not context.iteration(False):
+                    time.sleep(_PUMP_SECONDS)
+        else:
+            GLib.idle_add(start)
+            finished.wait(max(0.0, deadline - time.monotonic()))
+
+        error = landed.get("error")
+        if error is not None:
+            raise error
+        if not finished.is_set():
+            raise TimeoutError(COPY["addons-timeout"])
+        return landed.get("transaction"), landed.get("problems", [])
+
+
+#: How long :meth:`AddonBatch.run_and_wait` sleeps between pumps of the main
+#: context when it is doing the pumping itself. Long enough not to spin a core,
+#: short enough that a fake answering on the next iteration is not felt.
+_PUMP_SECONDS = 0.01
+
+
+def _not_added(uuid: str, error: Any = None) -> InstallReport:
+    """"It was not added", for an add-on whose download never started.
+
+    ``plan_for_look`` marks an add-on that is missing *but downloadable* as
+    :attr:`~gtheme.ego.install.InstallOutcome.NEEDS_RELOGIN`, whose sentence is
+    "Added. It starts working after you log out and back in." That sentence is
+    true only once the download has happened. Showing the queued report on a
+    path where nothing was fetched tells the person an add-on was added that
+    never was — the exact honesty failure that wording exists to prevent.
+    """
+    return InstallReport(
+        uuid,
+        InstallOutcome.FAILED,
+        EGO_COPY["download-failed"],
+        error=error if isinstance(error, Exception) else None,
+    )
 
 
 def failure_text(error: TransactionError) -> tuple[str, str]:
@@ -1022,15 +1137,10 @@ class LooksPage(Gtk.Box):
             return
 
         def work(narrate: Any) -> tuple[Any, list[Any]]:
-            landed: dict[str, Any] = {}
-
-            def collected(transaction: Any, problems: list[Any]) -> None:
-                landed["transaction"] = transaction
-                landed["problems"] = problems
-
-            batch.run(plan.missing, collected, on_progress=narrate)
-            transaction = landed.get("transaction")
-            problems = landed.get("problems", [])
+            # run_and_wait, not run: the batch is asynchronous, and reading its
+            # answer on the line after starting it is how "Get the missing
+            # ones" became a button that quietly did nothing.
+            transaction, problems = batch.run_and_wait(plan.missing, on_progress=narrate)
             outcome = transaction.apply(lambda _stage, text: narrate(text)) if transaction else None
             return outcome, problems
 
@@ -1046,9 +1156,11 @@ class LooksPage(Gtk.Box):
             if fresh is not None:
                 self._show_preview(fresh, plan_apply(fresh))
 
-        def failed(_error: Exception) -> None:
-            if self._alive:
-                self._toast(COPY["addons-failed"])
+        def failed(error: Exception) -> None:
+            if not self._alive:
+                return
+            timed_out = isinstance(error, TimeoutError)
+            self._toast(COPY["addons-timeout"] if timed_out else COPY["addons-failed"])
 
         self._runner().run(
             work,
@@ -1140,7 +1252,39 @@ class LooksPage(Gtk.Box):
         if not slug:
             self._toast(COPY["save-empty-name"])
             return
-        self._save_look(slug, typed)
+        held_by = look_registry.name_conflict(slug)
+        if held_by is None:
+            self._save_look(slug, typed)
+            return
+        self._confirm_save_over(slug, typed, held_by).present(self)
+
+    def _confirm_save_over(self, slug: str, title: str, held_by: str) -> Adw.AlertDialog:
+        """Ask before saving over a Look that is already here. Returns the dialog.
+
+        A download that lands on a name already taken asks first
+        (:meth:`_confirm_replace`); saving the current desktop under that same
+        name used to write straight over the folder — same destruction, no
+        question. The two paths now ask the same question, for the same reason
+        and with the same two answers.
+
+        Returned rather than merely presented so a test can drive the response
+        with no window anywhere near it.
+        """
+        body = COPY["save-replace-yours"] if held_by == "yours" else COPY["save-replace-built-in"]
+        dialog = Adw.AlertDialog(
+            heading=COPY["replace-heading"].format(name=title or slug),
+            body=body,
+        )
+        dialog.add_response("keep", COPY["replace-keep"])
+        dialog.add_response("replace", COPY["replace-confirm"])
+        dialog.set_response_appearance("replace", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("keep")
+        dialog.set_close_response("keep")
+        dialog.connect(
+            "response",
+            lambda _d, answer: self._save_look(slug, title) if answer == "replace" else None,
+        )
+        return dialog
 
     def _save_look(self, slug: str, title: str) -> None:
         self._runner().run(

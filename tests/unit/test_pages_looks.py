@@ -918,3 +918,215 @@ def test_a_destroyed_page_does_not_finish_a_download_it_started(
 def test_every_sentence_about_getting_a_look_passes_the_jargon_lint():
     for key in ("browse-get", "browse-getting", "browse-get-failed", "browse-got"):
         assert jargon.check(looks.COPY[key], where=f"COPY[{key}]") == []
+
+
+# -- regression: the confirmed review findings on this page ----------------
+
+
+class DeferredLibrary:
+    """A library whose answer arrives on the main loop, like the real one.
+
+    ``EgoClient.info`` and ``EgoClient.download`` both go through
+    ``send_and_read_async``, whose callback lands on a later turn of the GLib
+    main loop. Every fake in this file answers inline, which is exactly why the
+    async bug survived the test suite.
+    """
+
+    def __init__(self, records: dict) -> None:
+        self.records = records
+
+    def info(self, uuid, callback):
+        from gi.repository import GLib
+
+        def later() -> bool:
+            callback(self.records.get(uuid), None)
+            return GLib.SOURCE_REMOVE
+
+        GLib.idle_add(later)
+
+
+class DeferredInstaller(FakeInstaller):
+    """An installer whose download also finishes on a later main-loop turn."""
+
+    def install_package(self, uuid, version_tag, callback, *, alternates=(), label=None):
+        from gi.repository import GLib
+
+        def later() -> bool:
+            FakeInstaller.install_package(
+                self, uuid, version_tag, callback, alternates=alternates, label=label
+            )
+            return GLib.SOURCE_REMOVE
+
+        GLib.idle_add(later)
+
+
+def test_the_batch_waits_for_its_answer_instead_of_reading_an_empty_dict():
+    """Pins looks.py:1031/1032 — the async AddonBatch read synchronously.
+
+    ``run`` starts work whose callbacks land on the main loop later. The Looks
+    page used to call it and read the result on the next line, so with a real
+    client it always saw ``(None, [])``: nothing was enabled, nothing was
+    reported, and the download finished into a dictionary nobody read.
+    ``run_and_wait`` is the fix, and this drives it against a library and an
+    installer that answer the way the real ones do.
+    """
+    installer = DeferredInstaller(present={"here@x"})
+    library = DeferredLibrary({"a@x": FakeRecord(), "b@x": FakeRecord()})
+    batch = looks.AddonBatch(installer, library, shell_version="50.4", label="MAGMA")
+
+    transaction, problems = batch.run_and_wait(
+        [("here@x", "ego", ()), ("a@x", "ego", ()), ("b@x", "ego", ())], timeout=10
+    )
+
+    assert problems == []
+    assert transaction is not None, "the enable transaction was thrown away"
+    assert sorted(op.uuid for op in transaction.ops) == ["a@x", "b@x", "here@x"]
+    assert [uuid for uuid, _tag in installer.asked] == ["a@x", "b@x"]
+
+
+def test_the_old_read_it_on_the_next_line_pattern_really_would_have_lost_it():
+    """The other half of the same finding: the bug is real, not theoretical."""
+    installer = DeferredInstaller()
+    library = DeferredLibrary({"a@x": FakeRecord()})
+    batch = looks.AddonBatch(installer, library, shell_version="50.4")
+
+    landed: dict = {}
+    batch.run([("a@x", "ego", ())], lambda t, p: landed.update(t=t, p=p))
+    assert landed == {}, "the answer cannot be there yet — that was the bug"
+
+
+def test_an_add_on_nothing_could_be_fetched_for_is_not_reported_as_added():
+    """Pins looks.py:468 — 'Added.' shown for add-ons never added.
+
+    ``plan_for_look`` marks a missing-but-downloadable add-on NEEDS_RELOGIN,
+    whose sentence is "Added. It starts working after you log out and back in."
+    The batch used to put that untouched report into ``problems`` on both paths
+    where nothing is fetched, so the dialog said an add-on had been added when
+    the download never started.
+    """
+    from gtheme.ego.install import COPY as EGO_COPY
+    from gtheme.ego.install import InstallOutcome
+
+    added = EGO_COPY[InstallOutcome.NEEDS_RELOGIN]
+
+    # no library at all — EgoClient could not be built
+    landed: dict = {}
+    looks.AddonBatch(FakeInstaller(), None, shell_version="50.4").run(
+        [("a@x", "ego", ())], lambda t, p: landed.update(t=t, p=p)
+    )
+    assert [report.message for report in landed["p"]] == [EGO_COPY["download-failed"]]
+    assert added not in {report.message for report in landed["p"]}
+
+    # the library was asked and answered with nothing
+    landed = {}
+    looks.AddonBatch(FakeInstaller(), FakeLibrary({}), shell_version="50.4").run(
+        [("b@x", "ego", ())], lambda t, p: landed.update(t=t, p=p)
+    )
+    assert [report.message for report in landed["p"]] == [EGO_COPY["download-failed"]]
+
+    # the library knows it, but has no build for this desktop
+    landed = {}
+    looks.AddonBatch(
+        FakeInstaller(), FakeLibrary({"c@x": FakeRecord(tag=None)}), shell_version="50.4"
+    ).run([("c@x", "ego", ())], lambda t, p: landed.update(t=t, p=p))
+    assert landed["p"][0].outcome is InstallOutcome.NOT_COMPATIBLE
+    assert added not in landed["p"][0].message
+
+
+def test_saving_over_a_look_of_the_same_name_asks_first(
+    config_dir, themes_dir, backend, monkeypatch
+):
+    """Pins looks.py:1166 — 'Save my desktop as a Look' overwrote in silence.
+
+    A download that lands on a name already taken asks (``_confirm_replace``);
+    saving the current desktop under that name wrote straight over the folder.
+    """
+    write_look(themes_dir, name="seaglass", title="SEAGLASS")
+
+    page = looks.build(FakeWindow(Prefs()))
+    saved: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        looks.LooksPage, "_save_look", lambda _self, slug, title: saved.append((slug, title))
+    )
+
+    class Row:
+        def get_text(self) -> str:
+            return "Seaglass"
+
+    dialog = _capture_dialog(
+        page, lambda: page._on_save_response(Adw.AlertDialog(), "save", Row())
+    )
+    assert saved == [], "it saved over the Look before asking"
+    assert "Seaglass" in dialog.get_heading()
+    assert looks.COPY["save-replace-yours"] in dialog.get_body()
+
+    dialog.emit("response", "keep")
+    assert saved == [], "'Keep what I have' saved anyway"
+    dialog.emit("response", "replace")
+    assert saved == [("seaglass", "Seaglass")]
+
+
+def test_saving_under_a_free_name_still_asks_nothing(config_dir, themes_dir, backend, monkeypatch):
+    page = looks.build(FakeWindow(Prefs()))
+    saved: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        looks.LooksPage, "_save_look", lambda _self, slug, title: saved.append((slug, title))
+    )
+
+    class Row:
+        def get_text(self) -> str:
+            return "Nothing Like This"
+
+    page._on_save_response(Adw.AlertDialog(), "save", Row())
+    assert saved == [("nothing-like-this", "Nothing Like This")]
+
+
+def test_the_batch_waits_from_a_worker_thread_the_way_the_page_runs_it():
+    """The production shape of the same fix: worker thread, real main loop.
+
+    ``ApplyRunner`` is threaded in the app, so ``work()`` runs off the main
+    loop while the library's callbacks land on it. This drives exactly that.
+    """
+    import threading
+
+    from gi.repository import GLib
+
+    installer = DeferredInstaller()
+    library = DeferredLibrary({"a@x": FakeRecord(), "b@x": FakeRecord()})
+    batch = looks.AddonBatch(installer, library, shell_version="50.4", label="MAGMA")
+
+    loop = GLib.MainLoop()
+    landed: dict = {}
+
+    def worker() -> None:
+        try:
+            landed["result"] = batch.run_and_wait(
+                [("a@x", "ego", ()), ("b@x", "ego", ())], timeout=15
+            )
+        except Exception as error:  # noqa: BLE001 - reported through the loop
+            landed["error"] = error
+        finally:
+            GLib.idle_add(loop.quit)
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+    GLib.timeout_add_seconds(20, loop.quit)
+    loop.run()
+    thread.join(timeout=5)
+
+    assert "error" not in landed, landed.get("error")
+    transaction, problems = landed["result"]
+    assert problems == []
+    assert sorted(op.uuid for op in transaction.ops) == ["a@x", "b@x"]
+
+
+def test_a_batch_whose_answer_never_comes_says_so_instead_of_waiting_forever():
+    """A parked download must not leave the progress dialog open for ever."""
+
+    class SilentLibrary:
+        def info(self, uuid, callback):
+            """Asked, and never answers — a request that went nowhere."""
+
+    batch = looks.AddonBatch(FakeInstaller(), SilentLibrary(), shell_version="50.4")
+    with pytest.raises(TimeoutError):
+        batch.run_and_wait([("a@x", "ego", ())], timeout=0.2)
