@@ -28,8 +28,7 @@ constructs a settings backend and never writes a key itself.
 
 from __future__ import annotations
 
-import threading
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -39,7 +38,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw, GLib, Gtk  # noqa: E402
+from gi.repository import Adw, Gtk  # noqa: E402
 
 from ...core import restorepoints  # noqa: E402
 from ...core.backends import get_backend  # noqa: E402
@@ -52,6 +51,12 @@ from ...core.transaction import (  # noqa: E402
     TransactionError,
     installed_extension_uuids,
 )
+from ...ego.install import COPY as EGO_COPY  # noqa: E402
+from ...ego.install import (  # noqa: E402
+    ExtensionInstaller,
+    InstallOutcome,
+    InstallReport,
+)
 from ...panels.loader import load_corpus  # noqa: E402
 from ...prefs import Prefs  # noqa: E402
 from ...preset import registry as look_registry  # noqa: E402
@@ -59,12 +64,14 @@ from ...preset.capture import capture_share  # noqa: E402
 from ...preset.compile import compile_preset  # noqa: E402
 from ...preset.loader import LoadResult, load_all, user_themes_dir  # noqa: E402
 from ...preset.model import Component  # noqa: E402
+from ..applyrunner import ApplyRunner  # noqa: E402
 from ..preview import build_preview  # noqa: E402
 from ..widgets.rows import key_for  # noqa: E402
 
 __all__ = [
     "BADGES",
     "COPY",
+    "AddonBatch",
     "ApplyPlan",
     "LookTile",
     "LooksPage",
@@ -118,7 +125,25 @@ COPY: dict[str, str] = {
         "Everything else in the Look still applies. You can add the missing ones on "
         "the Add-ons page."
     ),
-    "get-addons": "Open Add-ons",
+    "get-addons": "Get the missing ones",
+    "open-addons": "Open Add-ons",
+    "addons-working": "Getting the add-ons this Look needs…",
+    "addons-heading": "Adding what this Look needs",
+    "addons-none": "gtheme cannot add add-ons right now. Open the Add-ons page to try there.",
+    "addons-done-heading": "What happened",
+    "addons-failed": "Those add-ons could not be added.",
+    # -- somebody else's Look wants a name that is already taken
+    "replace-heading": "You already have a Look called {name}",
+    "replace-yours": (
+        "Getting this one would replace the Look of that name that is already on this "
+        "computer, and what is in that one now would be gone."
+    ),
+    "replace-built-in": (
+        "gtheme comes with a Look of that name. Getting this one would take its place in "
+        "the list — the built-in one stays on your computer, but you would stop seeing it."
+    ),
+    "replace-confirm": "Replace it",
+    "replace-keep": "Keep what I have",
     "cannot-preview": (
         "gtheme could not work out what this Look would change on this computer."
     ),
@@ -262,6 +287,10 @@ class ApplyPlan:
         warnings: what the Look asked for that will not happen. Straight from
             the compiler, which already phrases them for a first-time reader.
         missing_addons: how many add-ons the Look wants that are not here.
+        missing: those add-ons as ``(uuid, source, alternates)`` — exactly the
+            shape ``ego.install.ExtensionInstaller.plan_for_look`` takes, so
+            the "get the missing ones" button hands this straight over instead
+            of rebuilding it from something that has already been worked out.
         transaction: what to apply. None when the Look could not be compiled.
         problem: why there is nothing to apply, when there is nothing.
     """
@@ -270,6 +299,7 @@ class ApplyPlan:
     lines: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     missing_addons: int = 0
+    missing: list[tuple[str, str, tuple[str, ...]]] = field(default_factory=list)
     transaction: Transaction | None = None
     problem: str | None = None
 
@@ -330,14 +360,19 @@ def plan_apply(
     except Exception as exc:  # noqa: BLE001 - a bad Look must not kill the page
         return ApplyPlan(title=tile.title, problem=f"{COPY['cannot-preview']}\n\n{exc}")
 
-    missing = sum(1 for op in compiled.transaction.ops if isinstance(op, ExtensionInstall))
+    missing = [
+        (op.uuid, op.source, ())
+        for op in compiled.transaction.ops
+        if isinstance(op, ExtensionInstall)
+    ]
     try:
         diff = compiled.transaction.plan()
     except Exception as exc:  # noqa: BLE001 - same reason
         return ApplyPlan(
             title=tile.title,
             warnings=list(compiled.warnings),
-            missing_addons=missing,
+            missing_addons=len(missing),
+            missing=missing,
             problem=f"{COPY['cannot-preview']}\n\n{exc}",
         )
 
@@ -345,9 +380,116 @@ def plan_apply(
         title=tile.title,
         lines=diff.to_novice_lines(),
         warnings=list(compiled.warnings),
-        missing_addons=missing,
+        missing_addons=len(missing),
+        missing=missing,
         transaction=compiled.transaction,
     )
+
+
+class AddonBatch:
+    """Add every add-on a Look wants, as ONE change to the desktop.
+
+    A Look that adds three add-ons must not be three separate changes. Three
+    changes means three restore points, three chances to end up half applied,
+    and — on the live install path — three confirmation boxes, which the
+    installer's own docstring calls an interrogation. So the download path is
+    used for all of them, each one's enable step comes back as a planned
+    transaction, and this puts those together with the enable steps for the
+    add-ons that were already here into one transaction the caller applies.
+
+    Nothing here is a widget and nothing here applies anything: the caller
+    applies, because the caller is the one that can put a restore point and a
+    progress dialog around it. That is also what makes this testable with a
+    fake installer and a fake library and no desktop at all.
+
+    Args:
+        installer: ``ego.install.ExtensionInstaller``.
+        client: the add-on library, for looking up which exact build to fetch.
+        shell_version: what this desktop calls itself, for the compatibility
+            check. The library's own answer never reports incompatibility.
+        label: what to call the resulting change.
+    """
+
+    def __init__(
+        self,
+        installer: Any,
+        client: Any = None,
+        *,
+        shell_version: str = "",
+        label: str | None = None,
+    ) -> None:
+        self.installer = installer
+        self.client = client
+        self.shell_version = shell_version
+        self.label = label
+
+    def run(
+        self,
+        wanted: Sequence[tuple[str, str, tuple[str, ...]]],
+        on_done: Callable[[Transaction | None, list[Any]], None],
+        *,
+        on_progress: Callable[[str], None] | None = None,
+    ) -> None:
+        """Work through the list, then call ``on_done(transaction, reports)``.
+
+        ``transaction`` is None only when there is genuinely nothing to do.
+        ``reports`` is one per add-on that could not be added, carrying the
+        installer's own sentence for why — never a reworded one.
+        """
+        enable, missing = self.installer.plan_for_look(list(wanted), label=self.label)
+        ops: list[Any] = list(enable.ops)
+        problems: list[Any] = []
+        queue = [report for report in missing if report.outcome is InstallOutcome.NEEDS_RELOGIN]
+        problems.extend(
+            report for report in missing if report.outcome is not InstallOutcome.NEEDS_RELOGIN
+        )
+
+        def finish() -> None:
+            on_done(Transaction(ops, label=self.label) if ops else None, problems)
+
+        def landed(report: Any) -> None:
+            if report.transaction is not None:
+                ops.extend(report.transaction.ops)
+            if not report.ok:
+                problems.append(report)
+            step()
+
+        def step() -> None:
+            if not queue:
+                finish()
+                return
+            report = queue.pop(0)
+            uuid = report.uuid
+            if on_progress is not None:
+                on_progress(COPY["addons-working"])
+            if self.client is None:
+                problems.append(report)
+                step()
+                return
+
+            def described(record: Any, error: Any) -> None:
+                tag = None
+                if record is not None and error is None:
+                    if not record.supports(self.shell_version):
+                        problems.append(
+                            InstallReport(
+                                uuid,
+                                InstallOutcome.NOT_COMPATIBLE,
+                                EGO_COPY[InstallOutcome.NOT_COMPATIBLE],
+                            )
+                        )
+                        step()
+                        return
+                    tag = record.version_tag_for(self.shell_version)
+                if tag is None:
+                    problems.append(report)
+                    step()
+                    return
+                self.installer.install_package(uuid, tag, landed, label=self.label)
+
+            self.client.info(uuid, described)
+
+        step()
 
 
 def failure_text(error: TransactionError) -> tuple[str, str]:
@@ -467,6 +609,7 @@ class LooksPage(Gtk.Box):
         self._alive = True
         self._browse_started = False
         self._tiles: list[LookTile] = []
+        self._own_runner: ApplyRunner | None = None
         self.connect("destroy", self._on_destroy)
 
         self._banner = Adw.Banner(
@@ -679,6 +822,7 @@ class LooksPage(Gtk.Box):
         dialog.add_response("cancel", COPY["cancel"])
         if plan.missing_addons:
             dialog.add_response("addons", COPY["get-addons"])
+            dialog.add_response("open-addons", COPY["open-addons"])
         if plan.transaction is not None and plan.lines:
             label = COPY["apply-anyway"] if plan.missing_addons else COPY["apply-button"]
             dialog.add_response("apply", label)
@@ -694,70 +838,147 @@ class LooksPage(Gtk.Box):
         if response == "apply" and plan.transaction is not None:
             self._apply(tile, plan.transaction)
         elif response == "addons":
+            self._get_missing_addons(tile, plan)
+        elif response == "open-addons":
             self._go_to_page("addons")
 
     def _apply(self, tile: LookTile, transaction: Transaction) -> None:
-        """Apply a Look on a worker thread, narrating on the main one."""
-        progress = Adw.AlertDialog(heading=tile.title, body=COPY["working"])
-        progress.present(self)
+        """Apply a Look on the shared runner, narrating while it happens."""
 
-        def report(_stage: Progress, text: str) -> None:
-            GLib.idle_add(self._set_progress, progress, text)
+        def work(narrate: Any) -> Any:
+            def report(_stage: Progress, text: str) -> None:
+                narrate(text)
 
-        def work() -> None:
-            try:
-                outcome = transaction.apply(report)
-            except TransactionError as error:
-                GLib.idle_add(self._apply_failed, progress, error)
-            except Exception as error:  # noqa: BLE001 - never leave the dialog spinning
-                GLib.idle_add(
-                    self._apply_failed, progress, TransactionError(str(error), rolled_back=True)
-                )
-            else:
-                GLib.idle_add(self._apply_finished, progress, tile, outcome)
+            return transaction.apply(report)
 
-        threading.Thread(target=work, daemon=True, name="gtheme-apply-look").start()
+        def done(outcome: Any) -> None:
+            if not self._alive:
+                return
+            point = getattr(outcome, "restore_point", None)
+            self._toast(COPY["applied"].format(title=tile.title), undo_point=point)
+            self._changed()
 
-    def _set_progress(self, dialog: Adw.AlertDialog, text: str) -> bool:
-        if self._alive:
-            dialog.set_body(text)
-        return GLib.SOURCE_REMOVE
+        def failed(error: Exception) -> None:
+            if not self._alive:
+                return
+            if not isinstance(error, TransactionError):
+                error = TransactionError(str(error), rolled_back=True)
+            heading, body = failure_text(error)
+            dialog = Adw.AlertDialog(heading=heading, body=body)
+            dialog.add_response("close", COPY["close"])
+            dialog.present(self)
 
-    def _apply_finished(self, dialog: Adw.AlertDialog, tile: LookTile, outcome: Any) -> bool:
-        dialog.close()
-        if not self._alive:
-            return GLib.SOURCE_REMOVE
-        point = getattr(outcome, "restore_point", None)
-        self._toast(COPY["applied"].format(title=tile.title), undo_point=point)
-        self.reload()
-        return GLib.SOURCE_REMOVE
+        self._runner().run(
+            work, heading=tile.title, starting=COPY["working"], on_done=done, on_failed=failed
+        )
 
-    def _apply_failed(self, dialog: Adw.AlertDialog, error: TransactionError) -> bool:
-        dialog.close()
-        if not self._alive:
-            return GLib.SOURCE_REMOVE
-        heading, body = failure_text(error)
-        failed = Adw.AlertDialog(heading=heading, body=body)
-        failed.add_response("close", COPY["close"])
-        failed.present(self)
-        return GLib.SOURCE_REMOVE
+    # -- the add-ons a Look wants and this computer does not have ----------
+
+    def _get_missing_addons(self, tile: LookTile, plan: ApplyPlan) -> None:
+        """Add every add-on this Look needs, as one change, then ask again.
+
+        Not a redirect to another page: the person said "use this look", and
+        "go and find three add-ons yourself" is not an answer to that. What
+        they get instead is one change, one restore point, and then the same
+        preview again — now with nothing missing from it.
+        """
+        batch = self._addon_batch(tile.title)
+        if batch is None:
+            self._toast(COPY["addons-none"])
+            self._go_to_page("addons")
+            return
+
+        def work(narrate: Any) -> tuple[Any, list[Any]]:
+            landed: dict[str, Any] = {}
+
+            def collected(transaction: Any, problems: list[Any]) -> None:
+                landed["transaction"] = transaction
+                landed["problems"] = problems
+
+            batch.run(plan.missing, collected, on_progress=narrate)
+            transaction = landed.get("transaction")
+            problems = landed.get("problems", [])
+            outcome = transaction.apply(lambda _stage, text: narrate(text)) if transaction else None
+            return outcome, problems
+
+        def done(result: tuple[Any, list[Any]]) -> None:
+            if not self._alive:
+                return
+            _outcome, problems = result
+            self._changed()
+            self._report_addons(problems)
+            # Ask again, with the same Look. Whatever arrived is now present,
+            # so the preview it opens is the truthful one.
+            fresh = next((t for t in self._tiles if t.name == tile.name), None)
+            if fresh is not None:
+                self._show_preview(fresh, plan_apply(fresh))
+
+        def failed(_error: Exception) -> None:
+            if self._alive:
+                self._toast(COPY["addons-failed"])
+
+        self._runner().run(
+            work,
+            heading=COPY["addons-heading"],
+            starting=COPY["addons-working"],
+            on_done=done,
+            on_failed=failed,
+        )
+
+    def _addon_batch(self, label: str) -> AddonBatch | None:
+        """The batch installer, or None when there is no desktop to add to."""
+        shell = getattr(self._window, "shell", None)
+        if shell is None:
+            return None
+        try:
+            version = shell.proxy.shell_version() or ""
+        except Exception:  # noqa: BLE001 - the desktop answered nothing useful
+            version = ""
+        installer = ExtensionInstaller(shell, self._addon_client(version))
+        return AddonBatch(installer, installer.client, shell_version=version, label=label)
+
+    def _addon_client(self, version: str) -> Any:
+        from ...ego.client import DiskCache, EgoClient, SoupTransport
+
+        try:
+            return EgoClient(SoupTransport("gtheme"), version or "50", DiskCache())
+        except Exception:  # noqa: BLE001 - no internet client, no download path
+            return None
+
+    def _report_addons(self, problems: Sequence[Any]) -> None:
+        """Say what did not happen, in the installer's own words.
+
+        The sentences come from ``ego.install.COPY`` verbatim. Re-wording them
+        here is how "it starts working after you log out and back in" quietly
+        becomes "added", which is the one thing that wording exists to prevent.
+        """
+        if not problems:
+            return
+        body = "\n".join(f"• {report.message}" for report in problems)
+        dialog = Adw.AlertDialog(heading=COPY["addons-done-heading"], body=body)
+        dialog.add_response("close", COPY["close"])
+        dialog.present(self)
 
     # -- undo --------------------------------------------------------------
 
     def _undo(self, point_id: str) -> None:
-        def work() -> None:
-            result = restorepoints.apply_point(point_id)
-            GLib.idle_add(self._undo_finished, result)
+        def work(narrate: Any) -> Any:
+            return restorepoints.apply_point(point_id, lambda *a: narrate(_first_sentence(a)))
 
-        threading.Thread(target=work, daemon=True, name="gtheme-undo-look").start()
+        def done(result: Any) -> None:
+            if not self._alive:
+                return
+            warnings = list(getattr(result, "warnings", []))
+            self._toast(COPY["undo-failed"] if warnings else COPY["undone"])
+            self._changed()
 
-    def _undo_finished(self, result: Any) -> bool:
-        if not self._alive:
-            return GLib.SOURCE_REMOVE
-        warnings = list(getattr(result, "warnings", []))
-        self._toast(COPY["undo-failed"] if warnings else COPY["undone"])
-        self.reload()
-        return GLib.SOURCE_REMOVE
+        self._runner().run(
+            work,
+            heading=COPY["undo"],
+            starting=COPY["undone"],
+            on_done=done,
+            on_failed=lambda _e: self._toast(COPY["undo-failed"]),
+        )
 
     # -- saving the current desktop ---------------------------------------
 
@@ -789,15 +1010,13 @@ class LooksPage(Gtk.Box):
         self._save_look(slug, typed)
 
     def _save_look(self, slug: str, title: str) -> None:
-        def work() -> None:
-            try:
-                result = self.save_current_desktop(slug, title)
-            except Exception as error:  # noqa: BLE001 - reported, never raised at a click
-                GLib.idle_add(self._save_finished, title, None, error)
-            else:
-                GLib.idle_add(self._save_finished, title, result, None)
-
-        threading.Thread(target=work, daemon=True, name="gtheme-save-look").start()
+        self._runner().run(
+            lambda _narrate: self.save_current_desktop(slug, title),
+            heading=COPY["save-heading"],
+            starting=COPY["working"],
+            on_done=lambda result: self._save_finished(title, result, None),
+            on_failed=lambda error: self._save_finished(title, None, error),
+        )
 
     def save_current_desktop(self, slug: str, title: str) -> Any:
         """Write the desktop as it is now into a Look folder of its own.
@@ -819,17 +1038,17 @@ class LooksPage(Gtk.Box):
             enabled_extensions=enabled_extension_uuids(backend),
         )
 
-    def _save_finished(self, title: str, result: Any, error: Exception | None) -> bool:
+    def _save_finished(self, title: str, result: Any, error: Exception | None) -> None:
         if not self._alive:
-            return GLib.SOURCE_REMOVE
+            return
         if error is not None or result is None:
             failed = Adw.AlertDialog(
                 heading=COPY["save-failed"], body=str(error) if error else COPY["save-failed"]
             )
             failed.add_response("close", COPY["close"])
             failed.present(self)
-            return GLib.SOURCE_REMOVE
-        self.reload()
+            return
+        self._changed()
         self._toast(COPY["saved"].format(title=title))
         notes = list(result.warnings)
         if notes:
@@ -839,7 +1058,6 @@ class LooksPage(Gtk.Box):
             )
             dialog.add_response("close", COPY["close"])
             dialog.present(self)
-        return GLib.SOURCE_REMOVE
 
     # -- the community list ------------------------------------------------
 
@@ -920,9 +1138,43 @@ class LooksPage(Gtk.Box):
     def _on_community_response(self, dialog: Adw.AlertDialog, response: str, entry: Any) -> None:
         if response != "get":
             return
-        self._download(entry)
+        held_by = look_registry.name_conflict(entry.name)
+        if held_by is None:
+            self._download(entry)
+            return
+        self._confirm_replace(entry, held_by).present(self)
 
-    def _download(self, entry: Any) -> None:
+    def _confirm_replace(self, entry: Any, held_by: str) -> Adw.AlertDialog:
+        """Ask before somebody else's Look takes the name of one already here.
+
+        v1 never asked. A community Look called ``magma`` overwrote the user's
+        own ``magma``, or shadowed the built-in one, and the only sign of it
+        afterwards was that the Look they knew had different contents. The
+        question has two answers because it has two consequences: replacing
+        their own Look destroys it, and shadowing a built-in one only hides it.
+
+        Returned rather than presented so a test can read the dialog without a
+        window anywhere near it.
+        """
+        body = COPY["replace-yours"] if held_by == "yours" else COPY["replace-built-in"]
+        dialog = Adw.AlertDialog(
+            heading=COPY["replace-heading"].format(name=entry.title or entry.name),
+            body=f"{body}\n\n{COPY['safety']}",
+        )
+        dialog.add_response("keep", COPY["replace-keep"])
+        dialog.add_response("replace", COPY["replace-confirm"])
+        dialog.set_response_appearance("replace", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("keep")
+        dialog.set_close_response("keep")
+        dialog.connect(
+            "response",
+            lambda _d, answer, e=entry: self._download(e, replace=True)
+            if answer == "replace"
+            else None,
+        )
+        return dialog
+
+    def _download(self, entry: Any, *, replace: bool = False) -> None:
         """Fetch a Look and say what is happening while it happens.
 
         No thread. The fetch is asynchronous on the main loop already, so the
@@ -946,14 +1198,14 @@ class LooksPage(Gtk.Box):
                 failed.add_response("close", COPY["close"])
                 failed.present(self)
                 return
-            self.reload()
+            self._changed()
             # The community list badges what is already here, so it has to be
             # asked again or the tile the user just used still says "get".
             self._start_browse(force=True)
             self._stack.set_visible_child_name("installed")
             self._toast(COPY["browse-got"].format(name=entry.title or entry.name))
 
-        look_registry.fetch_look_async(entry, done)
+        look_registry.fetch_look_async(entry, done, replace=replace)
 
     # -- small helpers -----------------------------------------------------
 
@@ -976,6 +1228,35 @@ class LooksPage(Gtk.Box):
         show = getattr(self._window, "show_page", None)
         if callable(show):
             show(page_id)
+
+    def _runner(self) -> ApplyRunner:
+        """The window's runner, or a private one when there is no window.
+
+        One runner per window means one progress dialog at a time, which is the
+        property that stops two Looks being applied on top of each other.
+        """
+        runner = getattr(self._window, "runner", None)
+        if isinstance(runner, ApplyRunner):
+            return runner
+        if self._own_runner is None:
+            self._own_runner = ApplyRunner(self)
+        return self._own_runner
+
+    def _changed(self) -> None:
+        """The desktop moved. Everything on screen re-reads itself."""
+        after = getattr(self._window, "after_change", None)
+        if callable(after):
+            after()
+        else:
+            self.reload()
+
+
+def _first_sentence(args: Iterable[Any]) -> str:
+    """Whatever the engine said, as one sentence to narrate."""
+    for value in args:
+        if isinstance(value, str) and value:
+            return value
+    return ""
 
 
 def build(window: Any) -> Gtk.Widget:

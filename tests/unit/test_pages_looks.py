@@ -391,9 +391,26 @@ def test_the_grid_holds_one_tile_per_look(config_dir, themes_dir, backend):
     assert len(children) == len(page._tiles)
 
 
-def test_asking_for_the_missing_add_ons_goes_to_the_add_ons_page(
+def test_the_second_button_still_just_opens_the_add_ons_page(
     config_dir, themes_dir, backend
 ):
+    """"Get the missing ones" is the offer; "Open Add-ons" is still there."""
+    window = FakeWindow(Prefs())
+    page = looks.build(window)
+    tile = page._tiles[0]
+    page._on_preview_response(
+        Adw.AlertDialog(),
+        "open-addons",
+        tile,
+        looks.ApplyPlan(title=tile.title, missing_addons=2),
+    )
+    assert window.visited == ["addons"]
+
+
+def test_with_no_desktop_to_add_to_it_says_so_and_offers_the_page(
+    config_dir, themes_dir, backend
+):
+    """The honest fallback. No desktop means no add-ons, and saying which."""
     window = FakeWindow(Prefs())
     page = looks.build(window)
     tile = page._tiles[0]
@@ -401,6 +418,249 @@ def test_asking_for_the_missing_add_ons_goes_to_the_add_ons_page(
         Adw.AlertDialog(), "addons", tile, looks.ApplyPlan(title=tile.title, missing_addons=2)
     )
     assert window.visited == ["addons"]
+
+
+# -- adding what a Look needs, as one change -------------------------------
+
+
+class FakeInstaller:
+    """An installer that installs nothing and reports what it was asked."""
+
+    def __init__(self, *, present=(), fails=()) -> None:
+        self.present = set(present)
+        self.fails = set(fails)
+        self.asked: list[tuple[str, int]] = []
+        self.client = object()
+
+    def plan_for_look(self, wanted, *, label=None):
+        from gtheme.core.transaction import ExtensionEnable, Transaction
+        from gtheme.ego.install import COPY, InstallOutcome, InstallReport
+
+        ops, missing = [], []
+        for uuid, source, alternates in wanted:
+            if uuid in self.present:
+                ops.append(ExtensionEnable(uuid=uuid, alternates=alternates))
+                continue
+            outcome = (
+                InstallOutcome.LOCAL_ONLY_MISSING
+                if source == "local-only"
+                else InstallOutcome.NEEDS_RELOGIN
+            )
+            missing.append(InstallReport(uuid, outcome, COPY[outcome]))
+        return Transaction(ops, label=label), missing
+
+    def install_package(self, uuid, version_tag, callback, *, alternates=(), label=None):
+        from gtheme.ego.install import COPY, InstallOutcome, InstallReport, enable_transaction
+
+        self.asked.append((uuid, version_tag))
+        if uuid in self.fails:
+            callback(
+                InstallReport(uuid, InstallOutcome.FAILED, COPY["download-failed"], via="package")
+            )
+            return
+        callback(
+            InstallReport(
+                uuid,
+                InstallOutcome.NEEDS_RELOGIN,
+                COPY[InstallOutcome.NEEDS_RELOGIN],
+                via="package",
+                transaction=enable_transaction([uuid], label=label),
+            )
+        )
+
+
+class FakeRecord:
+    def __init__(self, tag: int | None = 7, supported: bool = True) -> None:
+        self.tag = tag
+        self.supported = supported
+
+    def supports(self, _version: str) -> bool:
+        return self.supported
+
+    def version_tag_for(self, _version: str) -> int | None:
+        return self.tag
+
+
+class FakeLibrary:
+    def __init__(self, records: dict) -> None:
+        self.records = records
+
+    def info(self, uuid, callback):
+        callback(self.records.get(uuid), None)
+
+
+def test_a_look_that_needs_three_add_ons_is_one_change_not_three():
+    """The whole reason this is a batch: one restore point, all or nothing."""
+    installer = FakeInstaller(present={"here@x"})
+    library = FakeLibrary({"a@x": FakeRecord(), "b@x": FakeRecord()})
+    batch = looks.AddonBatch(installer, library, shell_version="50.4", label="MAGMA")
+
+    landed = {}
+    batch.run(
+        [("here@x", "ego", ()), ("a@x", "ego", ()), ("b@x", "ego", ())],
+        lambda transaction, problems: landed.update(t=transaction, p=problems),
+    )
+
+    assert [uuid for uuid, _tag in installer.asked] == ["a@x", "b@x"]
+    assert landed["p"] == []
+    uuids = sorted(op.uuid for op in landed["t"].ops)
+    assert uuids == ["a@x", "b@x", "here@x"]
+    assert landed["t"].label == "MAGMA"
+
+
+def test_a_private_add_on_that_is_absent_is_a_named_skip_not_a_failure():
+    installer = FakeInstaller()
+    batch = looks.AddonBatch(installer, FakeLibrary({}), shell_version="50.4")
+
+    landed = {}
+    batch.run([("mine@local", "local-only", ())], lambda t, p: landed.update(t=t, p=p))
+
+    assert installer.asked == [], "a private add-on must never be downloaded"
+    assert [report.uuid for report in landed["p"]] == ["mine@local"]
+    assert "private add-on" in landed["p"][0].message
+
+
+def test_an_add_on_with_no_build_for_this_desktop_is_refused_before_it_is_fetched():
+    installer = FakeInstaller()
+    library = FakeLibrary({"old@x": FakeRecord(supported=False)})
+    batch = looks.AddonBatch(installer, library, shell_version="50.4")
+
+    landed = {}
+    batch.run([("old@x", "ego", ())], lambda t, p: landed.update(t=t, p=p))
+
+    assert installer.asked == []
+    assert landed["p"][0].outcome.value == "not-compatible"
+
+
+def test_one_add_on_that_will_not_download_does_not_lose_the_others():
+    installer = FakeInstaller(fails={"broken@x"})
+    library = FakeLibrary({"broken@x": FakeRecord(), "fine@x": FakeRecord()})
+    batch = looks.AddonBatch(installer, library, shell_version="50.4")
+
+    landed = {}
+    batch.run(
+        [("broken@x", "ego", ()), ("fine@x", "ego", ())],
+        lambda t, p: landed.update(t=t, p=p),
+    )
+
+    assert [report.uuid for report in landed["p"]] == ["broken@x"]
+    assert [op.uuid for op in landed["t"].ops] == ["fine@x"]
+
+
+def test_the_outcome_sentences_are_the_installer_s_own(config_dir, themes_dir, backend):
+    """Never re-worded here. "after you log out" is the whole point of it."""
+    from gtheme.ego.install import COPY as EGO_COPY
+    from gtheme.ego.install import InstallOutcome
+
+    page = looks.build(FakeWindow(Prefs()))
+    installer = FakeInstaller()
+    batch = looks.AddonBatch(installer, FakeLibrary({}), shell_version="50.4")
+    landed = {}
+    batch.run([("mine@local", "local-only", ())], lambda t, p: landed.update(t=t, p=p))
+
+    dialog = _capture_dialog(page, lambda: page._report_addons(landed["p"]))
+    assert EGO_COPY[InstallOutcome.LOCAL_ONLY_MISSING] in dialog.get_body()
+
+
+def test_a_plan_names_the_add_ons_it_is_missing_not_just_how_many(
+    config_dir, themes_dir, backend, monkeypatch
+):
+    """The count was all Wave 2 had; the batch needs the list."""
+    from gtheme.core.transaction import ExtensionInstall
+
+    page = looks.build(FakeWindow(Prefs()))
+    tile = next(tile for tile in page._tiles if not tile.broken)
+    plan = looks.plan_apply(tile, installed=[])
+    for uuid, source, alternates in plan.missing:
+        assert isinstance(uuid, str) and source in {"ego", "local-only"}
+        assert alternates == ()
+    assert plan.missing_addons == len(plan.missing)
+    assert plan.missing_addons == sum(
+        1 for op in plan.transaction.ops if isinstance(op, ExtensionInstall)
+    )
+
+
+# -- somebody else's Look wanting a name that is already used --------------
+
+
+class Entry:
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.title = name.upper()
+        self.description = "a look"
+
+
+def test_getting_a_look_whose_name_is_free_does_not_ask_anything(
+    config_dir, themes_dir, backend, monkeypatch
+):
+    page = looks.build(FakeWindow(Prefs()))
+    started = []
+    monkeypatch.setattr(page, "_download", lambda entry, **kw: started.append((entry.name, kw)))
+    page._on_community_response(Adw.AlertDialog(), "get", Entry("nobody-has-this"))
+    assert started == [("nobody-has-this", {})]
+
+
+def test_getting_a_look_named_like_one_you_have_asks_first(
+    config_dir, themes_dir, backend, monkeypatch
+):
+    (themes_dir / "seaglass").mkdir()
+    (themes_dir / "seaglass" / "theme.toml").write_text(THEME_TOML, encoding="utf-8")
+
+    page = looks.build(FakeWindow(Prefs()))
+    started = []
+    monkeypatch.setattr(page, "_download", lambda entry, **kw: started.append(entry.name))
+
+    dialog = _capture_dialog(
+        page, lambda: page._on_community_response(Adw.AlertDialog(), "get", Entry("seaglass"))
+    )
+    assert started == [], "it downloaded before asking"
+    assert "SEAGLASS" in dialog.get_heading()
+    assert looks.COPY["replace-yours"] in dialog.get_body()
+
+    dialog.emit("response", "replace")
+    assert started == ["seaglass"]
+
+
+def test_saying_keep_what_i_have_downloads_nothing(
+    config_dir, themes_dir, backend, monkeypatch
+):
+    (themes_dir / "seaglass").mkdir()
+    (themes_dir / "seaglass" / "theme.toml").write_text(THEME_TOML, encoding="utf-8")
+
+    page = looks.build(FakeWindow(Prefs()))
+    started = []
+    monkeypatch.setattr(page, "_download", lambda entry, **kw: started.append(entry.name))
+
+    dialog = page._confirm_replace(Entry("seaglass"), "yours")
+    dialog.emit("response", "keep")
+    assert started == []
+
+
+def test_shadowing_a_built_in_look_says_hidden_rather_than_gone(
+    config_dir, themes_dir, backend
+):
+    """Different consequence, different sentence. One destroys, one hides."""
+    page = looks.build(FakeWindow(Prefs()))
+    dialog = page._confirm_replace(Entry("magma"), "built-in")
+    assert looks.COPY["replace-built-in"] in dialog.get_body()
+    assert looks.COPY["replace-yours"] not in dialog.get_body()
+
+
+def _capture_dialog(page, action):
+    """Run something that presents a dialog and hand the dialog back."""
+    seen = []
+    original = Adw.AlertDialog.present
+
+    def spy(self, *args):
+        seen.append(self)
+
+    Adw.AlertDialog.present = spy
+    try:
+        action()
+    finally:
+        Adw.AlertDialog.present = original
+    assert seen, "nothing was presented"
+    return seen[-1]
 
 
 def test_a_community_entry_with_no_picture_is_never_listed(config_dir, themes_dir, backend):
