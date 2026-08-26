@@ -71,7 +71,40 @@ __all__ = [
     "InstallReport",
     "SubprocessRunner",
     "enable_transaction",
+    "safe_uuid",
 ]
+
+#: The characters a GNOME add-on uuid is made of. Same idea as
+#: :func:`gtheme.core.confine.safe_name`, widened by exactly one character:
+#: every real uuid looks like ``blur-my-shell@aunetx``, so ``@`` has to be
+#: allowed where a Look name would not allow it.
+_UUID_CHARS = "-_.@"
+
+
+def safe_uuid(uuid: str) -> str:
+    """Validate an add-on uuid that is about to become a path component.
+
+    A uuid arrives from the desktop, from the online library, or from a Look's
+    own description file, and then gets used as a folder name and as part of a
+    file name. ``..`` as a uuid turns ``<updates>/<uuid>`` into the folder
+    *above* the updates folder, which is then deleted and replaced. So it goes
+    through the same kind of gate every other name-turned-path in gtheme goes
+    through, rather than being trusted because today's callers happen to be
+    trustworthy.
+
+    Raises:
+        ValueError: the uuid is empty, is ``.`` or ``..``, or holds anything
+            outside ``[A-Za-z0-9._@-]``.
+    """
+    if not uuid or uuid in (".", ".."):
+        raise ValueError(f"{uuid!r} is not a usable add-on name")
+    for char in uuid:
+        if not char.isascii() or not (char.isalnum() or char in _UUID_CHARS):
+            raise ValueError(
+                f"{uuid!r} is not a usable add-on name: "
+                "letters, digits, '-', '_', '.' and '@' only"
+            )
+    return uuid
 
 
 class InstallOutcome(enum.Enum):
@@ -120,6 +153,15 @@ COPY: dict[InstallOutcome | str, str] = {
     ),
     InstallOutcome.FAILED: "The add-on could not be added.",
     # -- situational lines, keyed by name
+    # What a Look's missing add-on is called before anything has been
+    # downloaded. It must NOT be the NEEDS_RELOGIN sentence above: that one
+    # begins "Added.", and this add-on has not been added — it is the *plan* to
+    # try. If the download then works, the install path builds a fresh report
+    # with the real sentence; if it does not, this is what the person is shown,
+    # and it says the true thing.
+    "not-added-yet": (
+        "This add-on is not on this computer, and gtheme could not add it."
+    ),
     "confirm-on-screen": (
         "Confirm the download in the box that appeared on your screen. "
         "It is in front of this window."
@@ -211,10 +253,25 @@ def enable_transaction(
     switched on themselves, so a Look *unions* into it and a restore puts back
     the exact value that was there before — not a value computed by removing
     what the Look added.
+
+    The returned transaction deliberately carries **neither** a Look name nor a
+    label. Switching add-ons on is not a Look being applied, and the transaction
+    layer treats a named transaction as one: it tidies away everything the
+    previous Look owns that the new one does not list, and this transaction
+    lists nothing but the enabled-add-ons setting. A label here would therefore
+    strip the current Look's wallpaper, icons and fonts off the desktop as the
+    side effect of switching one add-on on. Callers that *are* applying a Look
+    build the whole thing as one transaction and name that one.
+
+    Args:
+        uuids: the add-ons to switch on.
+        alternates: per uuid, other uuids that count as the same add-on.
+        label: accepted so callers can pass the name of the larger change they
+            are part of; it is deliberately not attached to this transaction.
     """
     alternates = alternates or {}
     ops = [ExtensionEnable(uuid=uuid, alternates=alternates.get(uuid, ())) for uuid in uuids]
-    return Transaction(ops, label=label)
+    return Transaction(ops, look=None)
 
 
 class ExtensionInstaller:
@@ -451,8 +508,20 @@ class ExtensionInstaller:
         alternates: tuple[str, ...] = (),
         label: str | None = None,
     ) -> InstallReport:
+        try:
+            component = safe_uuid(uuid)
+        except ValueError as exc:
+            # A callback is no place for an exception nobody catches; the
+            # honest answer to "this name cannot be a file" is a failed report.
+            return InstallReport(
+                uuid,
+                InstallOutcome.FAILED,
+                COPY[InstallOutcome.FAILED],
+                via="package",
+                error=exc,
+            )
         with tempfile.TemporaryDirectory(prefix="gtheme-addon-") as tmp:
-            package = Path(tmp) / f"{uuid}.shell-extension.zip"
+            package = Path(tmp) / f"{component}.shell-extension.zip"
             package.write_bytes(zip_bytes)
             result = self.runner.run(
                 ["gnome-extensions", "install", "--force", str(package)]
@@ -519,11 +588,15 @@ class ExtensionInstaller:
                     )
                 )
             else:
+                # NEEDS_RELOGIN is what the caller queues a download on, so the
+                # outcome stays. The *sentence* may not: nothing has been
+                # downloaded yet, and this report is shown verbatim when the
+                # download never happens.
                 missing.append(
                     InstallReport(
                         uuid,
                         InstallOutcome.NEEDS_RELOGIN,
-                        COPY[InstallOutcome.NEEDS_RELOGIN],
+                        COPY["not-added-yet"],
                     )
                 )
         return (
