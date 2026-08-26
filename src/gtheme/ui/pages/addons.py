@@ -460,9 +460,20 @@ def _key_range(schema_key: Any) -> tuple[str | None, Any]:
 # --------------------------------------------------------------------------
 
 
-def build(window: Any = None) -> Gtk.Widget:
-    """The factory named by ``ui.registry``'s manifest."""
-    return AddonsPage(window)
+def build(
+    window: Any = None,
+    *,
+    shell: ShellExtensions | None = None,
+    probe: SchemaProbe | None = None,
+) -> Gtk.Widget:
+    """The factory named by ``ui.registry``'s manifest.
+
+    ``shell`` and ``probe`` are named here on purpose: the window offers
+    exactly the things it owns one of, and a factory receives the ones it says
+    it can take. Left out, this page builds its own — which is what every test
+    that constructs it by hand relies on.
+    """
+    return AddonsPage(window, shell=shell, probe=probe, owns_shell=shell is None)
 
 
 class AddonsPage(Adw.Bin):
@@ -488,12 +499,20 @@ class AddonsPage(Adw.Bin):
         probe: SchemaProbe | None = None,
         prefs: Prefs | None = None,
         panels: Sequence[PanelDescriptor] | None = None,
+        owns_shell: bool = True,
     ) -> None:
         super().__init__()
         self.window = window
         self.prefs = prefs or getattr(window, "prefs", None) or Prefs()
         self.probe = probe or SchemaProbe()
 
+        #: Whether closing this page closes the desktop connection with it.
+        #: False when the window lent one: the window keeps a single connection
+        #: for this page and the Home page's add-on line, and a shared object
+        #: closed by a borrower is exactly how the Home page ends up talking to
+        #: a connection that was shut behind its back. The default is True
+        #: because a page that built its own connection must close it.
+        self._owns_shell = owns_shell
         self.shell, self.available = self._connect_desktop(shell)
         self.client = client if client is not None else self._build_client()
         self.installer = installer or (
@@ -1786,5 +1805,10 @@ class AddonsPage(Adw.Bin):
             if watcher is not None:
                 watcher.disarm()
         self._installs.clear()
-        if self.shell is not None:
+        if self.shell is None:
+            return
+        if self._owns_shell:
             self.shell.close()
+        else:
+            # Borrowed. Take back only what this page put in.
+            self.shell.disconnect(self._on_extension_changed)

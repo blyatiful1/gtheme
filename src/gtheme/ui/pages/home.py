@@ -562,9 +562,15 @@ def header_button(page: HomePage) -> Gtk.Button:
     return button
 
 
-def build(window: Any | None = None, **kwargs: Any) -> Gtk.Widget:
-    """Factory named by ``ui.registry``: the Home page."""
-    return HomePage(window, **kwargs)
+def build(window: Any | None = None, *, shell: Any = None, **kwargs: Any) -> Gtk.Widget:
+    """Factory named by ``ui.registry``: the Home page.
+
+    ``shell`` is named rather than left to ``**kwargs`` because that is how the
+    window knows it can hand one over: it offers what it owns one of, and a
+    factory takes what it names. Left out, the add-on line asks the desktop
+    itself, which is what every test that builds this page relies on.
+    """
+    return HomePage(window, shell=shell, **kwargs)
 
 
 def copy_strings() -> Iterable[tuple[str, str]]:

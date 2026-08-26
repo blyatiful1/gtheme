@@ -266,6 +266,16 @@ class PageShell:
         self._source_id: int | None = None
         self._built: list[str] = []
 
+        # Announce this page to the window, if the window keeps a list. That is
+        # how live mirroring re-runs the notices above when a value moves
+        # *outside* gtheme: a notice watches something it does not own, and the
+        # only thing that knows a value moved is the window's changed-signal
+        # subscription. Optional in both directions — a test's stand-in window
+        # has no such method, and nothing here depends on one.
+        announce = getattr(window, "register_page_shell", None)
+        if callable(announce):
+            announce(self)
+
     # -- the first-visit explainer ----------------------------------------
 
     def _build_banner(self, banner_id: str, text: str) -> Adw.Banner | None:
@@ -440,6 +450,9 @@ class PageShell:
         index = _row_index(self.window)
         if index is not None:
             index.unregister_page(self.page_id)
+        forget = getattr(self.window, "unregister_page_shell", None)
+        if callable(forget):
+            forget(self)
 
     def finish(self) -> Gtk.Widget:
         """Start the probe, wire teardown, and hand back the page widget."""

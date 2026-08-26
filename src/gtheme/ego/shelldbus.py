@@ -460,6 +460,20 @@ class ShellExtensions:
         """Call ``listener(extension)`` whenever one changes state."""
         self._listeners.append(listener)
 
+    def disconnect(self, listener: Callable[[InstalledExtension], None]) -> bool:
+        """Stop calling one listener. Returns whether it was listening.
+
+        The counterpart to :meth:`connect`, and it exists because this object
+        can outlive the page that subscribed to it: the window owns one of
+        these and lends it to the Add-ons page, so a page going away has to be
+        able to take its own callback with it rather than relying on the
+        object being thrown away.
+        """
+        if listener in self._listeners:
+            self._listeners.remove(listener)
+            return True
+        return False
+
     def _on_state_changed(self, uuid: str, info: dict[str, Any]) -> None:
         parsed = InstalledExtension.from_info(uuid, info)
         if parsed is None:

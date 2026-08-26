@@ -29,9 +29,9 @@ from gi.repository import Adw, Gtk  # noqa: E402
 from ...core.backends import get_backend  # noqa: E402
 from ...panels.descriptor import DomainDescriptor, Row, WidgetKind  # noqa: E402
 from ...panels.loader import load_domains  # noqa: E402
-from ...panels.schema_probe import SchemaProbe  # noqa: E402
 from ...panels.widgets import build_row, set_link_handler  # noqa: E402
 from ...ui.widgets.rows import set_plain_text  # noqa: E402
+from ._style_common import get_probe  # noqa: E402
 
 __all__ = ["build"]
 
@@ -135,7 +135,7 @@ def _collapsed_group(
 
 def build(window) -> Gtk.Widget:
     backend = get_backend()
-    probe = SchemaProbe()
+    probe = get_probe(window)
     all_domains, problems = load_domains()
     if problems:
         raise RuntimeError("the descriptor corpus did not load: " + "; ".join(problems))

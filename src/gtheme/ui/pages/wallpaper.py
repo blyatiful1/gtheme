@@ -61,6 +61,7 @@ from ...system.wallpapers import (  # noqa: E402
     scan_wallpaper_catalogue,
 )
 from ...ui.widgets.rows import key_for  # noqa: E402
+from ._style_common import get_probe  # noqa: E402
 
 __all__ = ["build"]
 
@@ -390,7 +391,7 @@ def _build_lock_screen_group() -> Adw.PreferencesGroup:
 def build(window: Any) -> Gtk.Widget:
     """Build the Wallpaper page. See ``ui.registry`` for the factory contract."""
     backend = get_backend()
-    probe = SchemaProbe()
+    probe = get_probe(window)
     rows_by_key = _load_domain_rows()
     catalogue = scan_wallpaper_catalogue(default_wallpaper_catalogue_roots())
 
