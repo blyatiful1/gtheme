@@ -52,7 +52,15 @@ from .ui import search as ui_search  # noqa: E402
 from .ui.applyrunner import ApplyRunner  # noqa: E402
 from .ui.rowindex import RowIndex  # noqa: E402
 
-__all__ = ["COPY", "MINIMUM_GNOME", "DesktopVerdict", "Window", "check_desktop"]
+__all__ = [
+    "COPY",
+    "DEFAULT_HEIGHT",
+    "DEFAULT_WIDTH",
+    "MINIMUM_GNOME",
+    "DesktopVerdict",
+    "Window",
+    "check_desktop",
+]
 
 
 #: Every sentence this window says, in one place, so the wording can be
@@ -91,6 +99,20 @@ COPY: dict[str, str] = {
 #: corpus offers settings the desktop does not have, which is worse than saying
 #: no: it is a list of promises that quietly do nothing.
 MINIMUM_GNOME = 47
+
+#: What size the window opens at the first time, before anyone has resized it.
+#:
+#: The old default was 1000x720, which cut the sidebar off in the middle of its
+#: last section: "Safety" — the one holding Undo & Restore Points — was the
+#: heading a first-time user could not see. The sidebar asks for 826px of
+#: content plus its header bar, so the height is what actually matters here;
+#: 900 clears it with room to spare, and 1200 is the width the README's
+#: screenshots are taken at (``packaging.md`` §7), so a first run and a picture
+#: of a first run are the same shape. Neither is a *minimum* — ``width_request``
+#: and ``height_request`` still let the window go down to 360x294, and a size
+#: the user chose is restored over this by :meth:`Window._restore_window_state`.
+DEFAULT_WIDTH = 1200
+DEFAULT_HEIGHT = 900
 
 
 class DesktopVerdict:
@@ -175,8 +197,8 @@ class Window(Adw.ApplicationWindow):
     ) -> None:
         super().__init__(
             title="Gtheme",
-            default_width=1000,
-            default_height=720,
+            default_width=DEFAULT_WIDTH,
+            default_height=DEFAULT_HEIGHT,
             width_request=360,
             height_request=294,
             **kwargs,

@@ -63,7 +63,7 @@ from ...system.wallpapers import (  # noqa: E402
 from ...ui.widgets.rows import key_for  # noqa: E402
 from ._style_common import get_probe  # noqa: E402
 
-__all__ = ["build"]
+__all__ = ["TILE_HEIGHT", "TILE_WIDTH", "GridTile", "build"]
 
 #: Where a custom picture is copied to, relative to the destination root
 #: (``$HOME``, or ``GTHEME_DEST_ROOT`` under test) — see ``core.paths.dest_root``.
@@ -71,6 +71,20 @@ CUSTOM_DEST = "~/.local/share/backgrounds/gtheme/"
 
 #: What a slideshow tile says, verbatim from the brief.
 _SLIDESHOW_LABEL = "Changes during the day"
+
+#: How big one tile in a picture grid is, 16:9 like the screen it stands for.
+#:
+#: A *fixed* size rather than a floor, and the reason is the single most
+#: surprising thing on this page. ``Gtk.Picture`` can shrink, so its minimum
+#: size is zero; ``Gtk.AspectFrame`` passes that straight through; and a
+#: ``GtkViewport`` — which is what every scrolled preferences page puts around
+#: its content — allocates its child the child's *minimum* height in the
+#: direction it scrolls, not its natural one. Zero minimum plus a scroller is a
+#: grid of 6px slivers, which is what this page photographed as: two bands of
+#: empty grey where the wallpapers should be. So the tile states its size, and
+#: :class:`GridTile` stops the thumbnail's own resolution from arguing with it.
+TILE_WIDTH = 160
+TILE_HEIGHT = 90
 
 _STYLE_KEYS = ("picture-options", "primary-color", "secondary-color", "color-shading-type")
 
@@ -170,9 +184,51 @@ def _set_picture(picture: Gtk.Picture, path: Path) -> None:
     picture.set_paintable(texture)
 
 
+class GridTile(Gtk.Widget):
+    """One picture in a grid: exactly :data:`TILE_WIDTH` wide, never more.
+
+    A thumbnail is 256px across whatever the picture behind it is, and
+    ``Gtk.Picture`` asks for the size of what it holds. Left alone, a row of
+    them tells the FlowBox each tile naturally wants 456px, which is how a grid
+    of twenty-three wallpapers decides it can fit one and a half of them across
+    a preferences page. Capping the request is what makes the grid a grid; the
+    tile still fills whatever column it is given, so nothing floats in the
+    middle of empty space.
+    """
+
+    __gtype_name__ = "GthemeWallpaperGridTile"
+
+    def __init__(self, child: Gtk.Widget) -> None:
+        super().__init__(halign=Gtk.Align.CENTER, valign=Gtk.Align.CENTER)
+        self._child: Gtk.Widget | None = child
+        child.set_parent(self)
+
+    def do_measure(  # noqa: D102 - GTK vfunc
+        self, orientation: Gtk.Orientation, for_size: int
+    ) -> tuple[int, int, int, int]:
+        if self._child is None:
+            return 0, 0, -1, -1
+        minimum, natural, min_baseline, nat_baseline = self._child.measure(
+            orientation, for_size
+        )
+        limit = TILE_WIDTH if orientation == Gtk.Orientation.HORIZONTAL else TILE_HEIGHT
+        return minimum, max(minimum, min(natural, limit)), min_baseline, nat_baseline
+
+    def do_size_allocate(self, width: int, height: int, baseline: int) -> None:  # noqa: D102
+        if self._child is not None:
+            self._child.allocate(width, height, baseline, None)
+
+    def do_dispose(self) -> None:  # noqa: D102 - GTK vfunc
+        if self._child is not None:
+            self._child.unparent()
+            self._child = None
+        Gtk.Widget.do_dispose(self)
+
+
 def _make_tile(name: str, value: Path, thumb_source: Path, *, is_slideshow: bool) -> Gtk.FlowBoxChild:
     picture = Gtk.Picture(content_fit=Gtk.ContentFit.COVER)
     frame = Gtk.AspectFrame(ratio=16 / 9, obey_child=False, child=Gtk.GraphicsOffload(child=picture))
+    frame.set_size_request(TILE_WIDTH, TILE_HEIGHT)
     overlay = Gtk.Overlay(child=frame)
     if is_slideshow:
         badge = Gtk.Label(
@@ -184,7 +240,7 @@ def _make_tile(name: str, value: Path, thumb_source: Path, *, is_slideshow: bool
             margin_bottom=6,
         )
         overlay.add_overlay(badge)
-    child = Gtk.FlowBoxChild(child=overlay, tooltip_text=name)
+    child = Gtk.FlowBoxChild(child=GridTile(overlay), tooltip_text=name)
     child.wallpaper_value = value.as_uri()  # type: ignore[attr-defined]
     _load_tile_image(picture, thumb_source)
     return child
