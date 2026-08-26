@@ -243,3 +243,57 @@ def _buttons(row: Adw.ActionRow):
 def test_build_is_the_factory_the_manifest_names(window, backend, tmp_path):
     widget = restore.build(window, backend=backend, root=tmp_path, keys=[ACCENT], import_v1=False)
     assert isinstance(widget, Gtk.Widget)
+
+
+# -- regression: the confirmed review finding on this page ------------------
+
+
+def test_undo_the_last_change_goes_through_the_shared_runner(window, backend, tmp_path):
+    """Pins restore.py:478 — the Undo button ran the restore on the main loop.
+
+    ``_on_undo`` called the module-level ``undo_last_change`` inline, so the
+    whole restore — file copies plus several dozen settings writes — happened
+    in the click handler while the window could not repaint. Its neighbour
+    ``start_apply`` runs the identical work on the shared runner and says in
+    its own docstring why. Both do now, and this checks the work still lands.
+    """
+    from gtheme.ui.applyrunner import ApplyRunner
+
+    class Recording(ApplyRunner):
+        def __init__(self) -> None:
+            super().__init__(None, threaded=False)
+            self.headings: list[str] = []
+
+        def run(self, work, *, heading, starting, on_done, on_failed=None):
+            self.headings.append(heading)
+            return super().run(
+                work, heading=heading, starting=starting, on_done=on_done, on_failed=on_failed
+            )
+
+    window.runner = Recording()
+    page = _page(window, backend, tmp_path)
+    page._on_save()
+    backend.set(ACCENT, "'purple'")
+
+    page._on_undo()
+
+    assert window.runner.headings == [restore.COPY["working-heading"]]
+    assert backend.get(ACCENT) == "'green'"
+    assert window.toasts[-1] == restore.COPY["done"]
+
+
+def test_undo_with_nothing_saved_still_says_so_on_the_runner(window, backend, tmp_path):
+    from gtheme.ui.applyrunner import ApplyRunner
+
+    window.runner = ApplyRunner(threaded=False)
+    page = _page(window, backend, tmp_path)
+    page._on_undo()
+    assert window.toasts[-1] == restore.COPY["undo-nothing"]
+
+
+def test_undo_without_a_runner_still_undoes(window, backend, tmp_path):
+    page = _page(window, backend, tmp_path)
+    page._on_save()
+    backend.set(ACCENT, "'purple'")
+    page._on_undo()
+    assert backend.get(ACCENT) == "'green'"

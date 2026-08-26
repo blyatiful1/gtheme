@@ -178,3 +178,69 @@ def test_the_pointer_words_a_person_would_search_for_find_the_row(tmp_path, memo
     build_page(icons, window, memory_settings)
     assert window.rows.search("cursor")
     assert window.rows.search("where is my mouse")
+
+
+# -- regression: the confirmed review finding on this page ------------------
+
+
+def _make_theme(root: Path, name: str, *, icons_dirs: tuple[str, ...] = (), cursors: bool = False):
+    folder = root / name
+    folder.mkdir(parents=True)
+    (folder / "index.theme").write_text(
+        f"[Icon Theme]\nName={name}\nComment=written by a test\n", encoding="utf-8"
+    )
+    for directory in icons_dirs:
+        (folder / directory).mkdir(parents=True)
+    if cursors:
+        (folder / "cursors").mkdir()
+    return folder
+
+
+def test_a_pointer_only_theme_is_not_offered_as_an_icon_set(tmp_path):
+    """Pins icons.py:313 — cursor-only themes were listed as icon sets.
+
+    A pointer style such as Bibata is structurally an icon theme: a directory
+    with an ``index.theme`` that has a ``Name=``. It has no icon folders at
+    all, so its tiles drew fallback icons, and choosing one wrote a pointer
+    style's name into the icon setting, where nothing visible happened and
+    nothing said why. The pointer grid filtered; the icon grid had no inverse.
+    """
+    from gtheme.system.iconscan import cursor_themes, scan_icon_themes
+
+    _make_theme(tmp_path, "Bibata-Modern-Ice", cursors=True)
+    _make_theme(tmp_path, "Papirus", icons_dirs=("48x48/apps", "scalable/places"))
+    _make_theme(tmp_path, "Adwaita", icons_dirs=("scalable/apps",), cursors=True)
+
+    entries = scan_icon_themes([tmp_path])
+    assert {e.directory_name for e in entries} == {"Bibata-Modern-Ice", "Papirus", "Adwaita"}
+
+    offered = {e.directory_name for e in icons.icon_sets(entries)}
+    assert "Bibata-Modern-Ice" not in offered, "a pointer style is not an icon set"
+    assert offered == {"Papirus", "Adwaita"}, "a theme that is both stays in both"
+    assert {e.directory_name for e in cursor_themes(entries)} == {
+        "Bibata-Modern-Ice",
+        "Adwaita",
+    }
+
+
+def test_the_icon_grid_of_the_built_page_drops_pointer_only_themes(
+    tmp_path, memory_settings, monkeypatch
+):
+    """The filter where it matters: on the grid the page actually renders."""
+    roots = tmp_path / "icons"
+    _make_theme(roots, "Bibata-Modern-Ice", cursors=True)
+    _make_theme(roots, "Papirus", icons_dirs=("48x48/apps",))
+    monkeypatch.setattr(icons, "default_icon_roots", lambda: [roots])
+
+    window = make_window(tmp_path)
+    page = build_page(icons, window, memory_settings)
+    labels = {
+        widget.get_text()
+        for widget in _walk(page)
+        if isinstance(widget, Gtk.Label) and widget.get_text()
+    }
+    assert "Papirus" in labels
+    assert "Bibata-Modern-Ice" in labels, "it is still offered as a pointer style"
+
+    icon_grid = next(w for w in _walk(page) if isinstance(w, Gtk.FlowBox))
+    assert [t.get_tooltip_text() for t in _tiles(icon_grid)] == ["Papirus"]

@@ -400,3 +400,57 @@ def _menu_labels(model: Any) -> list[str]:
             if isinstance(child, Gio.MenuModel):
                 labels.extend(_menu_labels(child))
     return labels
+
+
+# -- regression: the confirmed review finding on this window ----------------
+
+
+class _OldLibadwaita:
+    """libadwaita as GNOME 47 and 48 ship it: no 1.9 sidebar widgets.
+
+    ``gi`` raises ``AttributeError`` for a name that is not in the installed
+    typelib, which is exactly what this does for the four names the sidebar is
+    built out of. Everything else is the real thing.
+    """
+
+    _MISSING = frozenset({"Sidebar", "SidebarSection", "SidebarItem", "SidebarMode"})
+
+    def __getattr__(self, name: str) -> Any:
+        if name in self._MISSING:
+            raise AttributeError(f"module 'gi.repository.Adw' has no attribute {name!r}")
+        return getattr(Adw, name)
+
+
+def test_the_gnome_floor_is_the_one_the_window_can_actually_be_built_on():
+    """Pins window.py:101 — MINIMUM_GNOME = 47 was a promise nothing kept.
+
+    The sidebar is ``Adw.Sidebar``/``SidebarSection``/``SidebarItem``/
+    ``SidebarMode``, all of which arrived in libadwaita 1.9 — GNOME 49. A gate
+    of 47 said "yes" to desktops the window then died on.
+    """
+    assert MINIMUM_GNOME == 49
+    assert not check_desktop(current_desktop="GNOME", version="48.6").ok
+    assert not check_desktop(current_desktop="GNOME", version="47").ok
+    assert check_desktop(current_desktop="GNOME", version="49.2").ok
+
+
+def test_a_desktop_too_old_for_the_sidebar_still_gets_the_polite_screen(
+    prefs: Prefs, monkeypatch
+):
+    """The other half of the same finding: the screen has to be reachable.
+
+    ``__init__`` built the sidebar before it looked at the verdict, so on the
+    very desktops the "this is older than gtheme expects" screen was written
+    for, the window raised ``AttributeError`` on a missing 1.9 widget instead
+    of showing it. The app half is now built only when there is a desktop for
+    it.
+    """
+    monkeypatch.setattr(window_module, "Adw", _OldLibadwaita())
+    verdict = check_desktop(current_desktop="GNOME", version="48.6")
+    assert not verdict.ok
+
+    window = Window(prefs, ask_desktop=False, mirror=False, verdict=verdict)
+
+    assert window._root.get_visible_child_name() == "unsupported"
+    assert window.sidebar is None and window.split is None
+    assert not window._pages

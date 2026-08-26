@@ -36,6 +36,7 @@ from gi.repository import Adw, Gdk, Gtk  # noqa: E402
 
 from ...core.backends import get_backend, has_session_bus  # noqa: E402
 from ...core.settings_backend import BackendError, SettingsBackend  # noqa: E402
+from ..applyrunner import ApplyRunner  # noqa: E402
 from . import restore as restore_page  # noqa: E402
 
 __all__ = [
@@ -522,20 +523,79 @@ class HomePage(Adw.Bin):
         if callable(toast):
             toast(text)
 
+    def _runner(self) -> ApplyRunner | None:
+        """The window's runner, or None when this page is not in a window.
+
+        The header-bar Undo button and the two rows below the card are the most
+        prominent way into the engine the app has, and they used to call it
+        straight from the click handler — the very pattern
+        :mod:`gtheme.ui.applyrunner` was written to remove. They go through the
+        window's one runner now, so they narrate, and so the window keeps
+        repainting while several dozen settings are written.
+        """
+        runner = getattr(self.window, "runner", None)
+        return runner if isinstance(runner, ApplyRunner) else None
+
     def save_restore_point(self) -> Any:
-        """Save how the desktop looks right now."""
-        try:
-            point = restore_page.create_restore_point(backend=self.backend, root=self.root)
-        except OSError as exc:
-            self._toast(f"Could not save how your desktop looks: {exc.strerror or exc}")
-            return None
+        """Save how the desktop looks right now, on the shared runner."""
+        runner = self._runner()
+        if runner is None:
+            try:
+                point = self._capture()
+            except OSError as exc:
+                self._save_failed(exc)
+                return None
+            return self._save_finished(point)
+        runner.run(
+            lambda _narrate: self._capture(),
+            heading=restore_page.COPY["save-title"],
+            starting=restore_page.COPY["save-subtitle"],
+            on_done=self._save_finished,
+            on_failed=self._save_failed,
+        )
+        return None
+
+    def _capture(self) -> Any:
+        """The engine half of saving a moment. No widgets, no thread."""
+        return restore_page.create_restore_point(backend=self.backend, root=self.root)
+
+    def _save_finished(self, point: Any) -> Any:
         self._toast(restore_page.COPY["saved"])
         self._changed()
         return point
 
+    def _save_failed(self, error: Exception) -> None:
+        detail = getattr(error, "strerror", None) or error
+        self._toast(f"Could not save how your desktop looks: {detail}")
+
     def undo_last_change(self) -> Any:
         """Go back to the most recent saved moment. Backs the header button."""
-        point, result = restore_page.undo_last_change(root=self.root, backend=self.backend)
+        runner = self._runner()
+        if runner is None:
+            return self._undo_finished(self._undo(None))
+        runner.run(
+            self._undo,
+            heading=restore_page.COPY["working-heading"],
+            starting=restore_page.COPY["working"],
+            on_done=self._undo_finished,
+            on_failed=lambda _error: self._toast(restore_page.COPY["failed"]),
+        )
+        return None
+
+    def _undo(self, narrate: Any = None) -> Any:
+        """The engine half of going back. Runs off the main loop, or inline."""
+
+        def progress(*args: Any) -> None:
+            text = next((value for value in args if isinstance(value, str) and value), "")
+            if text and narrate is not None:
+                narrate(text)
+
+        return restore_page.undo_last_change(
+            root=self.root, backend=self.backend, progress_cb=progress
+        )
+
+    def _undo_finished(self, landed: Any) -> Any:
+        point, result = landed
         if point is None:
             self._toast(restore_page.COPY["undo-nothing"])
             return None

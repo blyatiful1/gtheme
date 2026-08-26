@@ -438,8 +438,11 @@ class PageShell:
         def on_done() -> None:
             self._source_id = None
 
+        # The backend goes with it: without one, a row whose add-on keeps its
+        # settings in a file of its own comes back "cannot be read" and is
+        # greyed even though it works.
         self._source_id = probe_rows_idle(
-            self.probe, rows, on_result, on_done=on_done
+            self.probe, rows, on_result, backend=self.backend, on_done=on_done
         )
         return self._source_id
 

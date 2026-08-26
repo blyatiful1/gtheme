@@ -476,9 +476,39 @@ class RestorePage(Adw.Bin):
         self._toast(COPY["saved"])
 
     def _on_undo(self) -> None:
-        point, result = undo_last_change(
-            root=self.root, backend=self.backend, dest_root=self.dest_root
+        """"Undo the last change", on the shared runner.
+
+        Going back is the same work whichever button starts it — file copies
+        and several dozen settings writes — so it belongs on the same runner
+        :meth:`start_apply` uses. Running it in the click handler is what
+        :mod:`gtheme.ui.applyrunner` exists to stop: the window stops
+        repainting during the one operation the user is most anxious about.
+        """
+        runner = self._runner()
+        if runner is None:
+            self._undo_finished(self._undo_now())
+            return
+        runner.run(
+            lambda _narrate: self._undo_now(),
+            heading=COPY["working-heading"],
+            starting=COPY["working"],
+            on_done=self._undo_finished,
+            on_failed=lambda _error: self._toast(COPY["failed"]),
         )
+
+    def _undo_now(self) -> tuple[RestorePoint | None, restorepoints.RestoreResult | None]:
+        """The engine half of "undo the last change". No widgets, no thread."""
+        return undo_last_change(
+            root=self.root,
+            backend=self.backend,
+            dest_root=self.dest_root,
+            progress_cb=self._progress,
+        )
+
+    def _undo_finished(
+        self, landed: tuple[RestorePoint | None, restorepoints.RestoreResult | None]
+    ) -> None:
+        point, result = landed
         if point is None:
             self._toast(COPY["undo-nothing"])
             return

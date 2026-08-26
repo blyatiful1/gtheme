@@ -42,6 +42,7 @@ __all__ = [
     "SAMPLE_ICONS",
     "build",
     "icon_grid",
+    "icon_sets",
     "pointer_description",
     "sample_images",
 ]
@@ -293,6 +294,35 @@ def pointer_description(count: int) -> str:
     return f"{COPY['pointer-description']} {COPY['pointer-not-drawable']}"
 
 
+def _has_icon_directories(entry: IconThemeEntry) -> bool:
+    """Does this directory hold any icons, or only a pointer?
+
+    The scanner calls anything with an ``index.theme`` and a ``Name=`` an icon
+    theme, which is right for what it is for — but a pointer style such as
+    Bibata has exactly that and nothing else: one ``cursors`` folder and no
+    icon folders at all. Structure is the only thing that tells them apart,
+    which is the same test the scanner uses to find pointer styles, inverted.
+    """
+    try:
+        return any(
+            child.is_dir() and child.name != "cursors" for child in entry.path.iterdir()
+        )
+    except OSError:  # pragma: no cover - a directory that went away mid-scan
+        return True
+
+
+def icon_sets(entries: list[IconThemeEntry]) -> list[IconThemeEntry]:
+    """Entries usable as ``interface icon-theme`` — pointer-only ones dropped.
+
+    Offering a pointer style as an icon set gave tiles with no pictures in
+    them, and choosing one wrote a pointer style's name into the icon setting:
+    nothing visible changed, and nothing said why. A theme that is both — the
+    desktop's own Adwaita is both — stays in both grids, because it really is
+    both.
+    """
+    return [e for e in entries if not e.is_cursor_theme or _has_icon_directories(e)]
+
+
 def build(window: Any) -> Gtk.Widget:
     """Build the Icons & Pointer page."""
     _install_css()
@@ -310,7 +340,7 @@ def build(window: Any) -> Gtk.Widget:
         ICON_THEME_ID,
         COPY["icons-group"],
         COPY["icons-description"],
-        entries,
+        icon_sets(entries),
     )
 
     pointer_group = _grid_group(

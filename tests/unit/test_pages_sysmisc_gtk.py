@@ -611,3 +611,62 @@ def test_ctrl_f_is_wired_to_a_real_window():
     controller = search.install_search(window, index=search.SearchIndex(hits=[]))
     assert isinstance(controller, Gtk.ShortcutController)
     assert window.observe_controllers().get_n_items() >= 1
+
+
+# -- regression: the confirmed review findings on the probe seam ------------
+
+
+class _RecordingProbe(SchemaProbe):
+    """A real probe that also writes down what backend it was probed with."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.backends: list[object] = []
+
+    def probe(self, rows, backend=None):
+        self.backends.append(backend)
+        return super().probe(rows, backend)
+
+
+def _one_row():
+    from gtheme.panels.descriptor import Row, WidgetKind
+
+    return Row(
+        schema_id="org.gnome.shell.extensions.burn-my-windows-profile",
+        key="fire-enable",
+        title="A setting an add-on keeps in a file of its own",
+        subtitle="The kind of row the backend exists for.",
+        kind=WidgetKind.TOGGLE,
+    )
+
+
+def test_probe_built_rows_hands_the_backend_on_instead_of_dropping_it(window, backend):
+    """Pins search.py:435 — the backend parameter was accepted and swallowed.
+
+    ``probe_rows_idle`` needs the backend to answer for an add-on that keeps
+    its settings in a file of its own; without one it returns the pessimistic
+    "cannot be read" and greys a row that works. ``probe_built_rows`` declared
+    the parameter, three pages passed it, and the call never forwarded it.
+    """
+    row = _one_row()
+    probe = _RecordingProbe()
+    widget = Adw.SwitchRow(title=row.title, subtitle=row.subtitle)
+
+    search.probe_built_rows(Gtk.Box(), probe, [(row, widget)], backend=backend)
+
+    assert probe.backends == [backend]
+
+
+def test_the_page_shell_probes_with_its_own_backend(window, backend):
+    """The same omission, in ``PageShell.start_probe``."""
+    from gtheme.ui.pages import _style_common as common
+
+    shell = common.PageShell(window, "more")
+    shell.backend = backend
+    probe = _RecordingProbe()
+    shell.probe = probe
+    shell._probe_targets = [(_one_row(), Adw.SwitchRow(title="x"))]
+
+    shell.start_probe()
+
+    assert probe.backends == [backend]

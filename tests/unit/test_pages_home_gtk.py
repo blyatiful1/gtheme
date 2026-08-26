@@ -26,7 +26,9 @@ from gi.repository import Adw, Gtk  # noqa: E402
 
 from gtheme.core.settings_backend import MemoryBackend  # noqa: E402
 from gtheme.prefs import Prefs  # noqa: E402
+from gtheme.ui.applyrunner import ApplyRunner  # noqa: E402
 from gtheme.ui.pages import home  # noqa: E402
+from gtheme.ui.pages import restore as restore_page  # noqa: E402
 
 pytestmark = pytest.mark.gtk
 
@@ -178,3 +180,70 @@ def test_the_card_says_so_when_there_is_no_look_rather_than_going_blank(
     """A desktop changed one thing at a time has no Look, and that is a state."""
     page = _page(window, backend, tmp_path)
     assert _subtitles(page)["look"] == home.COPY["no-look"]
+
+
+# -- regression: the confirmed review finding on this page ------------------
+
+
+class RecordingRunner(ApplyRunner):
+    """A real runner that also writes down what it was asked to run.
+
+    ``threaded=False`` so the work happens inline and the result is there when
+    ``run`` returns — the runner's own documented shape for a test.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(None, threaded=False)
+        self.headings: list[str] = []
+
+    def run(self, work, *, heading, starting, on_done, on_failed=None):
+        self.headings.append(heading)
+        return super().run(
+            work, heading=heading, starting=starting, on_done=on_done, on_failed=on_failed
+        )
+
+
+def test_home_save_and_undo_go_through_the_shared_runner(window, backend, tmp_path):
+    """Pins home.py:536 — Home's Save/Undo ran the engine on the main loop.
+
+    ``HomePage.save_restore_point`` and ``HomePage.undo_last_change`` back both
+    the two rows under the card and the header-bar Undo button, and both called
+    the engine straight from the click handler — the exact pattern
+    ``ui.applyrunner`` exists to remove, while Ctrl+Z ran the identical work on
+    the runner with a narrated dialog. Both now go through the window's runner.
+    """
+    key = "gsettings:org.gnome.desktop.interface accent-color"
+    window.runner = RecordingRunner()
+    page = _page(window, backend, tmp_path)
+
+    page.save_restore_point()
+    assert window.runner.headings == [restore_page.COPY["save-title"]]
+
+    backend.set(key, "'purple'")
+    page.undo_last_change()
+
+    assert window.runner.headings[-1] == restore_page.COPY["working-heading"]
+    assert backend.get(key) == "'green'", "the undo itself must still work"
+    assert window.toasts[-1] == restore_page.COPY["done"]
+
+
+def test_the_header_undo_button_uses_the_runner_too(window, backend, tmp_path):
+    """The header button is the most prominent undo in the app; same path."""
+    window.runner = RecordingRunner()
+    page = _page(window, backend, tmp_path)
+    page.save_restore_point()
+    window.runner.headings.clear()
+
+    home.header_button(page).emit("clicked")
+
+    assert window.runner.headings == [restore_page.COPY["working-heading"]]
+
+
+def test_a_page_with_no_runner_still_saves_and_undoes_inline(window, backend, tmp_path):
+    """No window, no runner, no thread — and the work still happens."""
+    key = "gsettings:org.gnome.desktop.interface accent-color"
+    page = _page(window, backend, tmp_path)
+    assert page.save_restore_point() is not None
+    backend.set(key, "'purple'")
+    page.undo_last_change()
+    assert backend.get(key) == "'green'"
