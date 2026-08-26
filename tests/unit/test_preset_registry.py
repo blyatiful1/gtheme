@@ -164,6 +164,67 @@ def test_a_document_that_is_not_a_registry_says_so(text):
         parse_index(text)
 
 
+# ── fetching the index, through the seam ─────────────────────────────────
+#
+# ``fetch_look_async`` grew a ``fetch=`` seam so the interesting half — what is
+# asked for, what is refused, where it lands — could be tested without a socket.
+# The index fetch had no such seam, which meant the one code path every user
+# hits when they open "Get more" was the one path no test could reach.
+
+
+def _fetch_index(getter, **kwargs):
+    landed: list[tuple] = []
+    registry.fetch_index_async(
+        lambda entries, error: landed.append((entries, error)), fetch=getter, **kwargs
+    )
+    assert len(landed) == 1, "on_done must be called exactly once"
+    return landed[0]
+
+
+def test_the_published_list_arrives_as_entries():
+    document = {"version": 2, "themes": [{"name": "seaglass", "title": "Seaglass", "version": "1"}]}
+
+    def server(url, on_done, _timeout):
+        assert url == registry.INDEX_URL
+        on_done(json.dumps(document).encode(), None)
+
+    entries, error = _fetch_index(server)
+    assert error is None
+    assert [e.name for e in entries] == ["seaglass"]
+
+
+def test_a_list_that_cannot_be_downloaded_is_said_out_loud():
+    def offline(_url, on_done, _timeout):
+        on_done(None, "is not available right now (404)")
+
+    entries, error = _fetch_index(offline)
+    assert entries is None
+    assert error == "the list of community Looks is not available right now (404)"
+
+
+def test_a_list_that_is_not_a_registry_is_refused_rather_than_shown_empty():
+    """A malformed document must not read as "nobody has published anything"."""
+
+    def nonsense(_url, on_done, _timeout):
+        on_done(b"not json at all", None)
+
+    entries, error = _fetch_index(nonsense)
+    assert entries is None
+    assert error and "could not be read" in error
+
+
+def test_the_address_of_the_list_can_be_pointed_somewhere_else():
+    asked: list[str] = []
+
+    def server(url, on_done, _timeout):
+        asked.append(url)
+        on_done(b'{"version": 2, "themes": []}', None)
+
+    entries, error = _fetch_index(server, url="https://example.invalid/index.json")
+    assert (entries, error) == ([], None)
+    assert asked == ["https://example.invalid/index.json"]
+
+
 def test_write_index_returns_where_it_wrote(tmp_path):
     (tmp_path / "empty").mkdir()
     out = write_index(tmp_path)
@@ -334,6 +395,72 @@ def _fetch(entry, server, into):
     registry.fetch_look_async(entry, lambda p, e: landed.append((p, e)), into=into, fetch=server)
     assert len(landed) == 1, "on_done must be called exactly once"
     return landed[0]
+
+
+# ── a name that is already taken ─────────────────────────────────────────
+#
+# v1 answered this with --force on a command line, which in the app meant the
+# answer was always "yes, silently". Downloading a community Look called
+# `magma` replaced the user's own `magma`, or hid the built-in one, with
+# nothing in the interface afterwards to say which one was now which.
+
+
+def test_a_free_name_is_free(tmp_path):
+    assert registry.name_conflict("nobody-has-this-name", into=tmp_path) is None
+
+
+def test_a_look_the_user_already_has_is_named_as_theirs(tmp_path):
+    (tmp_path / "seaglass").mkdir()
+    (tmp_path / "seaglass" / "theme.toml").write_text(LOOK_TOML, encoding="utf-8")
+    assert registry.name_conflict("seaglass", into=tmp_path) == "yours"
+
+
+def test_a_look_gtheme_ships_is_named_as_built_in(tmp_path):
+    """The one that used to be invisible: the user's folder wins in discovery."""
+    assert registry.name_conflict("magma", into=tmp_path) == "built-in"
+
+
+def test_installing_over_a_look_that_is_here_is_refused_until_it_is_asked_for(tmp_path):
+    server = FakeServer(_published())
+    first = _fetch(_entry(), server, tmp_path)
+    assert first[1] is None
+
+    (tmp_path / "seaglass" / "theme.toml").write_text(
+        LOOK_TOML.replace("Seaglass", "The one I already had"), encoding="utf-8"
+    )
+
+    path, error = _fetch(_entry(), FakeServer(_published()), tmp_path)
+    assert path is None
+    assert error and "already here" in error
+    # And the Look that was there is untouched.
+    assert "The one I already had" in (tmp_path / "seaglass" / "theme.toml").read_text()
+
+
+def test_saying_replace_installs_over_it(tmp_path):
+    (tmp_path / "seaglass").mkdir()
+    (tmp_path / "seaglass" / "theme.toml").write_text("format = 2\n", encoding="utf-8")
+
+    landed = []
+    registry.fetch_look_async(
+        _entry(),
+        lambda p, e: landed.append((p, e)),
+        into=tmp_path,
+        replace=True,
+        fetch=FakeServer(_published()),
+    )
+    path, error = landed[0]
+    assert error is None, error
+    assert path == tmp_path / "seaglass"
+    assert "Seaglass" in (path / "theme.toml").read_text()
+
+
+def test_the_refusal_names_which_kind_of_collision_it_is(tmp_path):
+    (tmp_path / "seaglass").mkdir()
+    (tmp_path / "seaglass" / "theme.toml").write_text("format = 2\n", encoding="utf-8")
+    with pytest.raises(registry.LookNameTaken) as raised:
+        registry.install_look(_entry(), {"theme.toml": b"format = 2\n"}, into=tmp_path)
+    assert raised.value.name == "seaglass"
+    assert raised.value.held_by == "yours"
 
 
 def test_a_published_look_is_downloaded_and_becomes_usable(tmp_path):

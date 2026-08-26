@@ -32,7 +32,7 @@ from urllib.parse import quote
 from pydantic import ValidationError
 
 from ..core.confine import ConfinementError, confine_src, safe_name
-from .loader import ORIGIN_FILENAME, load, user_themes_dir
+from .loader import ORIGIN_FILENAME, bundled_themes_dir, load, user_themes_dir
 from .model import PRESET_FILENAME, Component, Preset
 
 __all__ = [
@@ -43,12 +43,14 @@ __all__ = [
     "ORIGIN_FILENAME",
     "IndexEntry",
     "LookFetchError",
+    "LookNameTaken",
     "build_index",
     "entry_for",
     "fetch_index_async",
     "fetch_look_async",
     "install_look",
     "look_url",
+    "name_conflict",
     "parse_index",
     "wanted_files",
     "write_index",
@@ -211,6 +213,7 @@ def fetch_index_async(
     *,
     url: str = INDEX_URL,
     timeout: int = 10,
+    fetch: Callable[[str, Callable[[bytes | None, str | None], None], int], None] | None = None,
 ) -> None:
     """Fetch the registry without blocking the interface.
 
@@ -219,36 +222,25 @@ def fetch_index_async(
     the status code is checked explicitly because it does not raise on 404, and
     a 404 that is treated as an empty registry looks to the user like nobody
     has ever published a Look.
+
+    Args:
+        fetch: how to get one address. The same seam
+            :func:`fetch_look_async` takes, and for the same reason: what is
+            worth testing here is what happens to the bytes, not whether
+            libsoup can open a socket.
     """
-    try:
-        import gi
+    getter = fetch if fetch is not None else _soup_fetch
 
-        gi.require_version("Soup", "3.0")
-        from gi.repository import GLib, Soup
-    except (ImportError, ValueError):  # pragma: no cover - needs PyGObject
-        on_done(None, "gtheme cannot reach the internet on this system")
-        return
-
-    session = Soup.Session()
-    session.set_timeout(timeout)
-    message = Soup.Message.new("GET", url)
-
-    def _finished(source: Any, result: Any) -> None:
-        try:
-            body = source.send_and_read_finish(result)
-        except GLib.Error as exc:
-            on_done(None, f"the list of community Looks could not be downloaded: {exc.message}")
-            return
-        status = message.get_status()
-        if int(status) != 200:
-            on_done(None, f"the list of community Looks is not available right now ({status})")
+    def landed(payload: bytes | None, error: str | None) -> None:
+        if error is not None or payload is None:
+            on_done(None, f"the list of community Looks {error or 'could not be downloaded'}")
             return
         try:
-            on_done(parse_index(bytes(body.get_data() or b"")), None)
+            on_done(parse_index(payload), None)
         except ValueError as exc:
             on_done(None, str(exc))
 
-    session.send_and_read_async(message, GLib.PRIORITY_DEFAULT, None, _finished)
+    getter(url, landed, timeout)
 
 
 # ---------------------------------------------------------------------------
@@ -281,6 +273,57 @@ MAX_LOOK_FILE_BYTES = 40 * 1024 * 1024
 
 class LookFetchError(Exception):
     """A Look could not be downloaded or could not be trusted."""
+
+
+class LookNameTaken(LookFetchError):
+    """A Look of that name is already here, and nobody has said to replace it.
+
+    Not a failure — a question. v1 answered it with ``--force`` on a command
+    line, which meant that in the app the answer was always "yes, silently":
+    downloading a community Look called ``magma`` replaced the user's own
+    ``magma``, or shadowed the built-in one of that name, with no dialog and
+    nothing in the interface afterwards to say which one was now which.
+
+    Attributes:
+        name: the folder name both Looks want.
+        held_by: ``"yours"`` when a Look already in the user's own folder would
+            be overwritten, ``"built-in"`` when one that ships with gtheme
+            would be shadowed. Different sentences, different consequences: the
+            first destroys something, the second only hides it.
+    """
+
+    def __init__(self, name: str, held_by: str) -> None:
+        super().__init__(
+            f"a look called {name} is already here"
+            + (" and would be replaced" if held_by == "yours" else " and would be hidden")
+        )
+        self.name = name
+        self.held_by = held_by
+
+
+def name_conflict(name: str, *, into: Path | str | None = None) -> str | None:
+    """Who already owns this Look name here, if anyone.
+
+    Asked *before* a download rather than after it, so the question reaches the
+    person while cancelling still costs nothing.
+
+    Returns:
+        ``"yours"`` if a Look of that name is already in the user's own folder —
+        installing would overwrite it. ``"built-in"`` if one of gtheme's own
+        Looks has that name — installing would not delete it, but the user's
+        folder wins in discovery, so it would disappear from the list.
+        ``None`` when the name is free.
+    """
+    try:
+        safe = safe_name(name)
+    except ConfinementError:
+        return None
+    root = Path(into) if into is not None else user_themes_dir()
+    if (root / safe / PRESET_FILENAME).is_file():
+        return "yours"
+    if (bundled_themes_dir() / safe / PRESET_FILENAME).is_file():
+        return "built-in"
+    return None
 
 
 def look_url(name: str, relative: str, *, base_url: str = LOOK_BASE_URL) -> str:
@@ -317,6 +360,7 @@ def install_look(
     files: Mapping[str, bytes],
     *,
     into: Path | str | None = None,
+    replace: bool = False,
 ) -> Path:
     """Write a downloaded Look into place. The pure half, and the careful one.
 
@@ -324,11 +368,17 @@ def install_look(
         entry: the registry entry it came from — its name is the folder name.
         files: ``{relative path: contents}``. ``theme.toml`` must be among them.
         into: the Looks folder to install under. Defaults to the user's.
+        replace: proceed even though a Look of that name is already here. This
+            is v1's ``--force``, made explicit and made *asked for*: the check
+            lives here rather than in the page, so no caller can install over
+            somebody's Look by forgetting to look first.
 
     Returns:
         The installed Look's folder.
 
     Raises:
+        LookNameTaken: a Look of that name is already here and ``replace`` is
+            false. Nothing is written, and the caller is expected to ask.
         LookFetchError: the name is unusable, a file would land outside the
             Look's own folder, or the Look does not validate. Nothing is
             written in any of those cases — validation happens against the
@@ -347,6 +397,10 @@ def install_look(
         raise LookFetchError(f"that look's name cannot be used as a folder: {exc}") from exc
 
     root = Path(into) if into is not None else user_themes_dir()
+    held_by = name_conflict(name, into=root)
+    if held_by is not None and not replace:
+        raise LookNameTaken(name, held_by)
+
     root.mkdir(parents=True, exist_ok=True)
     destination = root / name
     staging = root / f".{name}.downloading"
@@ -453,6 +507,7 @@ def fetch_look_async(
     base_url: str = LOOK_BASE_URL,
     into: Path | str | None = None,
     timeout: int = 30,
+    replace: bool = False,
     fetch: Callable[[str, Callable[[bytes | None, str | None], None], int], None] | None = None,
 ) -> None:
     """Download one community Look and install it. Never blocks the interface.
@@ -467,6 +522,10 @@ def fetch_look_async(
     before a single byte of it has been requested.
 
     Args:
+        replace: install even though a Look of that name is already here. The
+            caller is expected to have asked first — :func:`name_conflict`
+            answers before a byte is fetched, which is when cancelling is still
+            free.
         fetch: how to get one address. The seam the tests use; the default
             talks to libsoup3 asynchronously, never a thread — HTTP on a thread
             is how a slow network becomes a frozen window.
@@ -479,7 +538,7 @@ def fetch_look_async(
 
     def finish() -> None:
         try:
-            path = install_look(entry, collected, into=into)
+            path = install_look(entry, collected, into=into, replace=replace)
         except LookFetchError as exc:
             fail(str(exc))
         except OSError as exc:
