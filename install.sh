@@ -49,7 +49,7 @@ oops() { echo "!! $*" >&2; }
 if [ "$DO_UNINSTALL" -eq 1 ]; then
   # Don't strand a changed desktop: without the launcher there is no way left
   # to put it back.
-  if [ -s "$STATE_DIR/v2/current" ] && [ "$DO_FORCE" -eq 0 ]; then
+  if [ -s "$STATE_DIR/v2/current.json" ] && [ "$DO_FORCE" -eq 0 ]; then
     oops "your desktop is still using a look that gtheme applied."
     oops "open gtheme, go to Undo & Restore Points, and put it back first."
     oops "(or remove the launcher anyway: ./install.sh --uninstall --force)"

@@ -109,6 +109,9 @@ ignore = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# core_*.py and system_*.py are dedicated suites (Wave-1 naming); pytest's default
+# python_files would silently skip them, so widen it to collect every intended file.
+python_files = ["test_*.py", "*_test.py", "core_*.py", "system_*.py"]
 # The sandbox tier boots a real headless GNOME Shell and is LOCAL ONLY; it is
 # never part of a plain `pytest` run and never runs in CI. `verify.sh --full`
 # opts into it explicitly.
