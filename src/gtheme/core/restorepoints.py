@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 from .atomic import atomic_write_json, load_json
 from .backends import get_backend
@@ -169,8 +170,33 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
-def _new_id(when: datetime) -> str:
-    return when.strftime("%Y-%m-%dT%H-%M-%S")
+def _new_id(when: datetime, base_dir: Path | None = None) -> str:
+    """A folder name for a moment, and never one that is already taken.
+
+    The timestamp alone is not enough, and that was a real bug rather than a
+    theoretical one: it is written to the second, so two moments saved inside
+    one second landed in the same folder and the second silently overwrote the
+    first. That is where the stray ``.bak`` files beside the junk moments came
+    from — a half-written moment on top of a whole one.
+
+    The readable timestamp stays the base name, because people do look at these
+    folders. Uniqueness comes from *claiming* the directory rather than from
+    guessing an unused name: one ``mkdir`` that refuses to succeed twice, which
+    makes this safe between two gtheme windows as well as between two clicks.
+    """
+    base = when.strftime("%Y-%m-%dT%H-%M-%S")
+    if base_dir is None:
+        return base
+    for attempt in range(1, 1000):
+        candidate = base if attempt == 1 else f"{base}-{attempt}"
+        try:
+            (base_dir / candidate).mkdir(parents=True, exist_ok=False)
+        except FileExistsError:
+            continue
+        return candidate
+    # A thousand moments in one second is not a situation to have an opinion
+    # about; it is one to stay correct through.
+    return f"{base}-{uuid4().hex[:8]}"
 
 
 def _root(root: str | Path | None = None) -> Path:
@@ -283,13 +309,14 @@ def capture(
     """
     when = when or _now()
     reader = backend if backend is not None else get_backend()
-    identifier = safe_name(point_id or _new_id(when))
+    base_dir = _root(root)
+    identifier = safe_name(point_id or _new_id(when, base_dir))
     point = RestorePoint(
         id=identifier,
         label=label,
         created=when,
         kind=kind,
-        path=_root(root) / identifier,
+        path=base_dir / identifier,
     )
     for key in dict.fromkeys(keys):
         try:

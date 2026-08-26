@@ -119,12 +119,11 @@ def test_a_moment_captured_here_is_one_the_engine_can_find(backend, state_dir: P
 def test_a_moment_captured_by_the_engine_appears_in_the_same_list(backend, state_dir: Path):
     """The other direction. One list means both paths are on it.
 
-    The two moments are given different times on purpose. A moment's id is its
-    timestamp to the second, so two taken inside the same second land in the
-    same folder and the second overwrites the first — true of the engine before
-    this change and still true after it, and the reason the junk moments this
-    gate cleaned up had ``.bak`` files beside them. Noted for Wave 3; not
-    something to hide inside a test about something else.
+    The two moments are given different times, which is what a reader of this
+    list expects to see. They no longer *have* to be: the same-second collision
+    this test used to document — where the second moment landed in the first
+    one's folder and overwrote it — is closed in ``core.restorepoints._new_id``
+    and pinned by its own test over there, where it belongs.
     """
     backend.set(key("color-scheme"), "'default'")
     cap.capture_restore_point(

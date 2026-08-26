@@ -18,7 +18,7 @@ one on this machine and check both what imports and what is honestly refused.
 from __future__ import annotations
 
 import json
-from datetime import UTC
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -70,6 +70,41 @@ def test_a_capture_records_the_exact_value(points, backend):
     point = capture([WORD], label="Before", backend=backend, root=points)
     backend.set(WORD, "'later'")
     assert load(point.id, root=points).settings[WORD] == "'the moment'"
+
+
+def test_two_moments_saved_in_the_same_second_do_not_overwrite_each_other(points, backend):
+    """The Wave-2 gate lead, closed.
+
+    A moment's folder used to be named after the second it was taken in, so two
+    saved inside one second landed in the same folder and the second silently
+    replaced the first. Somebody clicking "save how my desktop looks" twice, or
+    a Look applying while an automatic point is being taken, lost a moment they
+    had been promised — and left a ``.bak`` file beside the survivor, which is
+    how the bug was found.
+    """
+    same_second = datetime(2026, 8, 25, 12, 0, 0, tzinfo=UTC)
+
+    backend.set(WORD, "'first'")
+    first = capture([WORD], label="First", backend=backend, root=points, when=same_second)
+    backend.set(WORD, "'second'")
+    second = capture([WORD], label="Second", backend=backend, root=points, when=same_second)
+
+    assert first.id != second.id
+    assert load(first.id, root=points).settings[WORD] == "'first'"
+    assert load(second.id, root=points).settings[WORD] == "'second'"
+    assert {point.label for point in list_restore_points(points)} == {"First", "Second"}
+
+
+def test_the_first_moment_of_a_second_still_gets_the_plain_timestamp(points, backend):
+    """Uniqueness is not allowed to make the ordinary name unreadable."""
+    point = capture(
+        [WORD],
+        label="Before",
+        backend=backend,
+        root=points,
+        when=datetime(2026, 8, 25, 12, 0, 0, tzinfo=UTC),
+    )
+    assert point.id == "2026-08-25T12-00-00"
 
 
 def test_an_empty_list_keeps_its_type_in_a_capture(points, backend):
