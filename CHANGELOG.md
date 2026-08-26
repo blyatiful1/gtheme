@@ -3,22 +3,125 @@
 All notable changes to gtheme are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
-## v2 (in development)
+## v2.0.0 (unreleased) — the rebuild
 
-gtheme is being rebuilt from the ground up as a GTK4/libadwaita desktop app.
-The v1 command-line tool is preserved in full on the `legacy-v1` branch and at
-the `v1-final` tag; nothing from it is lost. Notable v2 changes so far:
+gtheme was a command-line tool. It is now an app: a GTK4/libadwaita window for
+GNOME, written for someone whose first Linux computer is the one in front of
+them. v1 is preserved in full on the `legacy-v1` branch and at the `v1-final`
+tag; nothing from it is lost, and the state it wrote is never touched.
 
-- **The app is a window, not a terminal.** v1's CLI is replaced by a native
-  GNOME app; a small `gtheme` command remains for the headless rescue path.
-- **Looks are declarative only.** Preset format v2 has no hooks section and the
-  engine has no script-execution machinery. A Look can change settings and
-  write files it owns — it can never run a program on your computer. v1 presets
-  are imported by a converter that warns, per hook, about what it dropped.
-- **`themes/index.json` stays where it is.** The community registry path and
-  the repo name are load-bearing and do not change. The index gains fields
-  (`format`, `screenshots`, `min_shell`, provenance) as a superset, so v1
-  clients reading it may need updating.
+### The app
+
+- **Fifteen pages in one window**, in four groups: Home and Looks; the eight
+  "change one thing" pages (wallpaper, colours, icons and pointer, fonts, top
+  bar, windows and desktops, add-ons, terminal); three system pages plus a
+  catch-all; and Undo & Restore Points.
+- **You can see your current setup.** GNOME's own Appearance panel cannot show
+  you which app style, icon set or text style you are actually using. The Home
+  page reads all of it back in plain words.
+- **Every control carries a sentence** saying what it does, and the words used
+  are checked by a test. A list of about ninety terms — the settings machinery,
+  the platform vocabulary, the font-rendering physics — may not appear in any
+  string the user sees. The app says "add-on", "top bar", "highlight colour",
+  "text sharpness".
+- **Ctrl+F searches everything**: every setting, its explanation, its synonyms
+  in the words a Windows or macOS switcher would use, every Look and every
+  add-on. Hits deep-link to the row and flash it.
+- **Nothing was left out, and it is machine-checked.** Every setting a GNOME 50
+  desktop has is dispositioned in a manifest; anything without a hand-written
+  home renders automatically on the More Settings page, from the system's own
+  description, labelled as such.
+- **A four-slide introduction on first run** that ends in a real action —
+  saving your desktop exactly as it is — rather than a "Get Started" button
+  that does nothing.
+
+### Safety
+
+- **Restore points, which no other GNOME customisation tool has.** One is taken
+  automatically before every change, you can take one whenever you like, and
+  "Before gtheme" — how the computer looked before this app ever ran — is kept
+  forever.
+- **Undo is not a second engine.** Applying a saved moment builds an ordinary
+  transaction and goes down the identical path, with the identical preflight,
+  recording, ownership tracking and rollback.
+- **All-or-nothing applies.** Any failure rolls the whole thing back and says
+  what happened in terms of your desktop.
+- **`gtheme rescue`** — a headless "put it back" command that imports no GTK
+  and needs no graphical session, for the day the desktop itself will not come
+  up.
+- **Every version 1 defect tag is now a named regression test.** AS4, AS5, AS8,
+  R1, R3, R4, R5, R6, F1, L1, X1 and E1 were re-grepped from the legacy source
+  and pinned before the new engine was written.
+
+### Breaking changes
+
+- **Looks are declarative only.** Format v2 has no hooks section and the engine
+  has no script-execution machinery, so *Looks only change settings; they can't
+  run programs on your computer* is a property rather than a policy. **v1
+  presets no longer validate** — they are converted, and the converter names
+  every hook it dropped and what that hook used to do. Nothing is lost
+  silently, but some v1 capabilities (magma's Plymouth theme, nightbloom's
+  reseed engines) genuinely do not come across, and each bundled Look's
+  `README.md` names its own exclusions.
+- **`themes/index.json` is now `version = 2`.** The path and the repository name
+  are load-bearing and do not change, and the six fields v1 clients read are
+  still there and still mean the same thing — but the top-level version bump is
+  a documented break. Four fields are added: `format`, `screenshots`,
+  `min_shell` and `provenance`.
+- **The interactive text menu is gone.** So are `new`, `build`, `capture` and
+  `export` as commands: capturing and sharing a desktop are now buttons in the
+  app. The `gtheme` command keeps exactly three subcommands — `gui` (the
+  default), `rescue`, and `validate <folder>` for Look authors.
+- **v2 state lives under `~/.local/state/gtheme/v2/`.** v1's files in
+  `~/.local/state/gtheme/` are never written to and never deleted, and a
+  read-only copy of them is what materialises the "Before gtheme" restore
+  point.
+- **Requirements moved up**: GNOME 49 or 50 with libadwaita 1.9 or newer. On
+  anything older gtheme shows a screen saying so and changes nothing.
+
+### Looks
+
+- **Four bundled**: HYPERCLASS (Gilded Void), MAGMA (Obsidian Flow), NETRUNNER
+  and NIGHTBLOOM (the glasshouse after dark). The first three are conversions
+  of their v1 originals; NIGHTBLOOM is new. Wallpapers ship in the repository
+  rather than being fetched, so applying one needs no internet connection.
+- Each Look's folder carries a `README.md` naming what did not survive
+  conversion.
+
+### Add-ons
+
+- **Search, install, configure and update from inside the app.** Installing
+  goes through GNOME's own confirmation box; gtheme never installs one behind
+  it.
+- **Twenty-four hand-written settings panels** for popular add-ons, so their
+  options are explained in the same voice as the rest of the app. Everything
+  else gets a generic panel, honestly labelled.
+- **Add-ons that fight each other** are offered as either/or, and combinations
+  known to break things carry a warning phrased as what will happen to you.
+- **Identifiers are never shown.** Not in a list, not in an error.
+- **The log-out question is answered honestly.** GNOME scans for add-ons once,
+  at start-up; one installed afterwards is invisible to it, and there is no
+  rescan. gtheme asks the desktop what it actually knows and says either "it's
+  on" or "it starts working after you log out and back in". That verdict was
+  measured by experiment and is pinned as a permanent test.
+
+### Under the hood
+
+- Engine rewritten as `core/`, which imports no GTK at all — checked three
+  ways, ending with an import with PyGObject removed entirely.
+- Settings go through one seam with three implementations (native, subprocess,
+  and an in-memory one that is the test seam), one key grammar with four
+  address forms, and typed errors rather than matched error text.
+- Controls are data: every row in the app is an entry in a `.toml` file, with a
+  mandatory plain-language subtitle and search synonyms next to the setting it
+  describes.
+- Three test tiers — 1157 unit and regression tests, 381 widget tests, and 69
+  that boot a real headless GNOME Shell on a private session bus and prove
+  after every one of them that the live desktop was untouched. The thirty
+  screenshots in the README are produced by that last tier and then checked for
+  being pictures of actually different things.
+- Packaging is pure `pyproject.toml` plus a `PKGBUILD` and an `install.sh`; no
+  meson, and no `curl | bash` anywhere in the project.
 
 ## [Unreleased] (v1)
 
