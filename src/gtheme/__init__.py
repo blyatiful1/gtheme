@@ -4,7 +4,7 @@ The version below is the single source of truth: ``pyproject.toml`` reads it
 via ``[tool.hatch.version]``, and the app surfaces it in the About dialog.
 """
 
-__version__ = "2.0.0.dev0"
+__version__ = "2.0.0"
 
 #: Reverse-DNS application id. This exact string is used in three places that
 #: must agree or the shell will not group the window with its launcher:

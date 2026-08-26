@@ -113,7 +113,7 @@ how to build and install one program. gtheme ships one, so on Arch you can
 install it as a proper package that `pacman -R` removes cleanly.
 
 If none of those words apply to you, use
-[the easy way](README.md#the-easy-way) instead.
+[the easy way](README.md#-the-easy-way-recommended) instead.
 
 ### dconf
 

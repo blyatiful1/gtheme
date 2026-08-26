@@ -109,7 +109,7 @@
   </requires>
 
   <releases>
-    <release version="2.0.0" type="development" date="2026-08-25">
+    <release version="2.0.0" type="stable" date="2026-08-26">
       <description>
         <p>The v2 rebuild: gtheme becomes a graphical app.</p>
       </description>
