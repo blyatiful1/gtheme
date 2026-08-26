@@ -160,3 +160,21 @@ def test_the_header_button_runs_the_same_undo(window, backend, tmp_path):
 def test_build_is_the_factory_the_manifest_names(window, backend, tmp_path):
     widget = home.build(window, backend=backend, root=tmp_path, thumbnails=False)
     assert isinstance(widget, Gtk.Widget)
+
+
+def test_the_card_says_which_look_you_are_using(window, backend, tmp_path):
+    """Named the way the person picking it saw it named — its title, not its
+    folder name."""
+    from gtheme.core.ledger import set_current_look
+
+    set_current_look("magma", label="MAGMA — Molten Glass")
+    page = _page(window, backend, tmp_path)
+    assert _subtitles(page)["look"] == "MAGMA — Molten Glass"
+
+
+def test_the_card_says_so_when_there_is_no_look_rather_than_going_blank(
+    window, backend, tmp_path
+):
+    """A desktop changed one thing at a time has no Look, and that is a state."""
+    page = _page(window, backend, tmp_path)
+    assert _subtitles(page)["look"] == home.COPY["no-look"]

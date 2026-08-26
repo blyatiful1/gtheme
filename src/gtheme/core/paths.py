@@ -34,6 +34,7 @@ from pathlib import Path
 __all__ = [
     "V1_BACKUP_DIRNAME",
     "baseline_dir",
+    "current_file",
     "dest_root",
     "ledger_file",
     "lock_file",
@@ -91,6 +92,19 @@ def baseline_dir() -> Path:
 def ledger_file() -> Path:
     """The ownership ledger: which Look owns which file and which setting."""
     return state_dir() / "ownership.json"
+
+
+def current_file() -> Path:
+    """Which Look is applied right now, if any.
+
+    A separate question from the ledger's. The ledger answers "what does each
+    Look own", which stays true for every Look that still has something on the
+    desktop; this answers "which one did the person choose", which is one
+    answer or none. v1 kept the same thing in a file called ``current``, and
+    keeping it was the difference between the Terminal page knowing whose
+    colours to offer and having to guess.
+    """
+    return state_dir() / "current.json"
 
 
 def lock_file() -> Path:

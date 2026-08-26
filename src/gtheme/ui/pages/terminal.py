@@ -31,7 +31,6 @@ import shutil
 from typing import Any
 
 from ...core.backends import get_backend
-from ...core.ledger import read_ledger
 from ...core.settings_backend import BackendError
 from ...panels.descriptor import Choice, Row, WidgetKind
 from ...panels.schema_probe import SchemaProbe
@@ -132,25 +131,31 @@ _ANSI_NAMES: tuple[str, ...] = (
 def applied_look(looks: list[Any] | None = None) -> Any | None:
     """The Look currently in use, or None when gtheme did not apply one.
 
-    Which Look is in use is not a setting anywhere: it is whatever gtheme
-    recorded as owning the changes it made. Restore points are recorded the
-    same way, so an entry only counts when a Look of that name is actually
-    installed, and only when exactly one is — two would mean the app cannot
-    tell, and guessing which set of colours somebody meant is worse than
-    saying so.
+    Which Look is in use is recorded when it is applied, and read back here.
+
+    It used to be *guessed*, by intersecting the ownership ledger's keys with
+    the list of installed Looks and accepting the answer only when exactly one
+    matched. That guess was wrong in three ways at once. The ledger is keyed by
+    a Look's title and the match was against its folder name, so any Look whose
+    title differs from its name — which is most of them — never matched at all.
+    Saved moments are ledger owners too, so a moment labelled the same as a
+    Look would have counted as one. And a Look that still owns one leftover
+    file is not the Look you are using; it is a Look you used once.
+
+    None is still a real answer and a common one: a desktop nobody has applied
+    a Look to, or one that has been put back to a saved moment since.
     """
+    from ...core.ledger import current_look
     from ...preset import loader as preset_loader
 
-    owners = set(read_ledger())
-    if not owners:
+    name = current_look()
+    if not name:
         return None
     available = looks if looks is not None else preset_loader.load_all()
-    matches = [
-        result
-        for result in available
-        if getattr(result, "preset", None) is not None and result.name in owners
-    ]
-    return matches[0] if len(matches) == 1 else None
+    for result in available:
+        if getattr(result, "preset", None) is not None and result.name == name:
+            return result
+    return None
 
 
 def _pick(palette: dict[str, str], *names: str) -> str | None:

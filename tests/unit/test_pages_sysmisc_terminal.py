@@ -119,22 +119,43 @@ def test_every_bundled_look_converts_to_a_usable_terminal_palette():
 
 
 # -- which Look is in use ---------------------------------------------------
+#
+# CONTRACT CHANGED BY RULING (Wave-2 gate, R12): this was guessed by
+# intersecting the ownership ledger's keys with the list of installed Looks.
+# The guess was wrong three ways at once -- the ledger is keyed by a Look's
+# title and the match was against its folder name, saved moments are ledger
+# owners too, and a Look that still owns one leftover file is not the Look you
+# are using. It is recorded when a Look is applied now, and read back.
 
 
-def test_no_look_is_applied_when_gtheme_owns_nothing(state_dir):
+def test_no_look_is_applied_when_nothing_recorded_one(state_dir):
     assert terminal.applied_look() is None
 
 
-def test_the_one_owned_look_is_the_applied_one(state_dir, monkeypatch):
+def test_the_recorded_look_is_the_applied_one(state_dir):
     from gtheme.core import ledger
 
-    ledger.write_entry("magma", [], [])
+    ledger.set_current_look("magma", label="MAGMA — Molten Glass")
     looks = [_Look(_Preset(dict(_SIXTEEN)), "magma"), _Look(_Preset({}), "netrunner")]
     assert terminal.applied_look(looks).name == "magma"
 
 
-def test_two_owned_looks_mean_gtheme_says_it_cannot_tell(state_dir):
-    """Guessing which set of colours somebody meant is worse than saying so."""
+def test_a_look_whose_title_differs_from_its_name_is_still_found(state_dir):
+    """The bug the guess had. A Look's ledger key is its *title*.
+
+    Every bundled Look has a title unlike its folder name, so the old
+    intersection matched none of them and the Terminal page offered nobody's
+    colours on a desktop that had a Look applied.
+    """
+    from gtheme.core import ledger
+
+    ledger.set_current_look("magma", label="MAGMA — Molten Glass")
+    assert ledger.read_ledger() == {}, "no ledger entry at all, and it still works"
+    assert terminal.applied_look([_Look(_Preset({}), "magma")]).name == "magma"
+
+
+def test_a_look_that_owns_something_but_is_not_current_is_not_the_applied_one(state_dir):
+    """Owning a leftover file is not the same as being the Look in use."""
     from gtheme.core import ledger
 
     ledger.write_entry("magma", [], [])
@@ -143,11 +164,19 @@ def test_two_owned_looks_mean_gtheme_says_it_cannot_tell(state_dir):
     assert terminal.applied_look(looks) is None
 
 
-def test_a_restore_point_in_the_ledger_is_not_a_look(state_dir):
-    """The ledger records restore points too; only an installed Look counts."""
+def test_a_saved_moment_is_not_a_look(state_dir):
+    """Saved moments are ledger owners too, and were never Looks."""
     from gtheme.core import ledger
 
     ledger.write_entry("before", [], [])
+    ledger.set_current_look("before")
+    assert terminal.applied_look([_Look(_Preset({}), "magma")]) is None
+
+
+def test_a_recorded_look_that_is_no_longer_installed_is_an_honest_none(state_dir):
+    from gtheme.core import ledger
+
+    ledger.set_current_look("uninstalled-since")
     assert terminal.applied_look([_Look(_Preset({}), "magma")]) is None
 
 

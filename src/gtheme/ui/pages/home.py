@@ -118,6 +118,8 @@ COPY: dict[str, str] = {
     ),
     "explore-title": "Change something",
     "row-background": "Background picture",
+    "row-look": "Look",
+    "no-look": "None — you have changed things one at a time",
     "row-light-or-dark": "Light or dark",
     "row-highlight": "Highlight colour",
     "row-app-style": "App style",
@@ -188,6 +190,20 @@ def summarise_setting(value: str | None) -> str:
     if value is None:
         return COPY["unreadable"]
     return value or COPY["unknown"]
+
+
+def current_look_label() -> str:
+    """The Look in use, named the way the person picking it saw it named.
+
+    "None" here is a real state and a common one — a desktop somebody has
+    changed one thing at a time on has no Look, and the row says which of the
+    two it is rather than going blank.
+    """
+    from ...core.ledger import current_record
+
+    record = current_record()
+    label = record.get("label") or record.get("name")
+    return str(label) if label else COPY["no-look"]
 
 
 def current_wallpaper(backend: SettingsBackend, *, dark: bool | None = None) -> Path | None:
@@ -351,6 +367,7 @@ class HomePage(Adw.Bin):
         )
         card.add(self._picture)
         for name, title in (
+            ("look", COPY["row-look"]),
             ("light-or-dark", COPY["row-light-or-dark"]),
             ("highlight", COPY["row-highlight"]),
             ("app-style", COPY["row-app-style"]),
@@ -441,6 +458,7 @@ class HomePage(Adw.Bin):
     def refresh(self) -> None:
         """Re-read everything the card shows."""
         accent = read(self.backend, "highlight")
+        self._set("look", current_look_label())
         self._set("light-or-dark", describe_light_or_dark(read(self.backend, "light-or-dark")))
         self._set("highlight", describe_accent(accent))
         self._set("app-style", summarise_setting(read(self.backend, "app-style")))

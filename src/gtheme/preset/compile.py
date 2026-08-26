@@ -174,5 +174,8 @@ def compile_preset(
         [*files, *settings, *extensions],
         dest_root=dest_root,
         label=preset.meta.title or preset.meta.name,
+        # The label is the title, which is what a person was shown. The name is
+        # the folder, which is what a lookup matches on. Both are recorded.
+        look=preset.meta.name,
     )
     return CompileResult(transaction=transaction, warnings=warnings)

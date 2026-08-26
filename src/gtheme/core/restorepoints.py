@@ -486,6 +486,16 @@ def apply_point(
     result.unset = sorted(op.key for op in outcome.applied if isinstance(op, SettingReset))
     result.removed = sorted(op.dest for op in outcome.applied if isinstance(op, FileRemove))
     result.warnings.extend(reason for _op, reason in outcome.skipped)
+
+    # Going back to a saved moment means you are no longer using the Look you
+    # were using — you are using the desktop as it was at that moment, which
+    # may or may not have been a Look and which nothing here can honestly name.
+    # A saved moment carries a label ("My desktop, 25 August") and applying it
+    # runs a real transaction, so the one thing to be careful of is letting
+    # that label be mistaken for a Look's. It is not passed as one.
+    from . import ledger as ledger_store
+
+    ledger_store.clear_current_look()
     return result
 
 

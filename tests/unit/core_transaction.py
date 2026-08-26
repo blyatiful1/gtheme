@@ -532,3 +532,115 @@ def test_the_new_ops_pass_the_jargon_rules(state_dir):
 
     for text in ("Put back to how the system had it", "Remove 3 files", "Remove a-file.conf"):
         assert jargon.check(text) == []
+
+
+# -- which Look is applied right now ---------------------------------------
+#
+# A third question the state directory answers, and the one the app used to
+# guess at. The ledger says what each Look owns and stays true for every Look
+# that still has anything on the desktop; this says which one the person chose,
+# and has one answer or none.
+
+
+def test_applying_a_look_records_which_look_it_was(bench):
+    from gtheme.core.ledger import current_look, current_record
+
+    assert current_look() is None, "nothing applied, nothing recorded"
+
+    source = bench.add_file("f", "the look's file")
+    Transaction(
+        [FileWrite(src=source, dest="~/.config/demo/f")],
+        dest_root=str(bench.root),
+        label="MAGMA — Molten Glass",
+        look="magma",
+    ).apply(restore_point=False)
+
+    assert current_look() == "magma"
+    # Both are kept: the name is what a lookup matches on, the label is what
+    # the person was shown. Recording only one of the two is how the guess
+    # this replaced went wrong.
+    assert current_record() == {"name": "magma", "label": "MAGMA — Molten Glass"}
+
+
+def test_a_change_made_from_a_page_is_not_a_look_and_records_none(bench):
+    """One deliberate edit does not make the desktop "a Look"."""
+    from gtheme.core.ledger import current_look
+
+    Transaction(
+        [SettingWrite(key=WORD, value="'a single edit'")], dest_root=str(bench.root)
+    ).apply(restore_point=False)
+    assert current_look() is None
+
+
+def test_a_page_edit_does_not_clear_the_look_you_are_using(bench):
+    """Changing one thing by hand leaves you on the Look you picked."""
+    from gtheme.core.ledger import current_look, set_current_look
+
+    set_current_look("magma", label="MAGMA — Molten Glass")
+    Transaction(
+        [SettingWrite(key=WORD, value="'a single edit'")], dest_root=str(bench.root)
+    ).apply(restore_point=False)
+    assert current_look() == "magma"
+
+
+def test_switching_looks_replaces_the_recorded_one(bench):
+    from gtheme.core.ledger import current_look
+
+    for name, label in (("magma", "MAGMA"), ("netrunner", "NETRUNNER")):
+        Transaction(
+            [SettingWrite(key=WORD, value=f"'{name}'")],
+            dest_root=str(bench.root),
+            label=label,
+            look=name,
+        ).apply(restore_point=False)
+    assert current_look() == "netrunner"
+
+
+def test_a_look_that_applied_nothing_is_not_recorded_as_the_one_you_are_using(bench):
+    """AS4's other half.
+
+    A transaction where everything was skipped did not apply anything, and
+    recording it as the current Look would be a lie the Undo page then has to
+    live with — v1's exact bug, which wrote the theme name into ``current``
+    before finding out nothing worked.
+    """
+    from gtheme.core.ledger import current_look
+
+    with pytest.raises(TransactionError, match="nothing could be changed"):
+        Transaction(
+            [SettingReset(key="gsettings:org.absent.thing a-key")],
+            dest_root=str(bench.root),
+            label="GHOST",
+            look="ghost",
+        ).apply(restore_point=False)
+    assert current_look() is None
+
+
+def test_a_failed_switch_leaves_you_on_the_look_you_had(bench):
+    from gtheme.core.ledger import current_look, set_current_look
+
+    set_current_look("magma", label="MAGMA")
+    with pytest.raises(TransactionError):
+        Transaction(
+            [SettingReset(key="gsettings:org.absent.thing a-key")],
+            dest_root=str(bench.root),
+            label="GHOST",
+            look="ghost",
+        ).apply(restore_point=False)
+    assert current_look() == "magma"
+
+
+def test_going_back_to_a_saved_moment_means_you_are_on_no_look(bench):
+    """You are using the desktop as it was, which nothing here can name."""
+    from gtheme.core import restorepoints
+    from gtheme.core.ledger import current_look, set_current_look
+
+    set_current_look("magma", label="MAGMA")
+    bench.backend.set(WORD, "'before'")
+    point = restorepoints.capture([WORD], label="My desktop, 25 August", kind="manual")
+    bench.backend.set(WORD, "'after'")
+
+    restorepoints.apply_point(point.id, backend=bench.backend, dest_root=str(bench.root))
+
+    assert bench.backend.get(WORD) == "'before'"
+    assert current_look() is None

@@ -32,9 +32,20 @@ from pathlib import Path
 
 from .atomic import atomic_write_json, load_json
 from .baseline import Baseline
-from .paths import ledger_file
+from .paths import current_file, ledger_file
 
-__all__ = ["CleanupReport", "drop_entry", "read_ledger", "switch_cleanup", "write_entry", "write_ledger"]
+__all__ = [
+    "CleanupReport",
+    "clear_current_look",
+    "current_look",
+    "current_record",
+    "drop_entry",
+    "read_ledger",
+    "set_current_look",
+    "switch_cleanup",
+    "write_entry",
+    "write_ledger",
+]
 
 
 def read_ledger(path: str | Path | None = None) -> dict[str, dict]:
@@ -146,3 +157,57 @@ def switch_cleanup(
             "automatically — the Undo page can still recover them"
         )
     return report
+
+
+# ---------------------------------------------------------------------------
+# which Look is applied right now
+# ---------------------------------------------------------------------------
+#
+# A third question, and the one the app was answering by guessing. The ledger
+# above says what each Look owns, and stays true for every Look that still has
+# a file or a setting on the desktop. "Which Look am I using" is a different
+# question with one answer or none, and it was being inferred by intersecting
+# the ledger's keys with the list of installed Looks — which fails silently
+# whenever a Look's title differs from its folder name (the ledger is keyed by
+# title), whenever two Looks still own something, and whenever a saved moment's
+# label happens to match a Look's name. v1 kept a file for this. So does v2.
+
+
+def current_look(path: str | Path | None = None) -> str | None:
+    """The name of the Look applied right now, or None.
+
+    None is a real answer and a common one: a desktop nobody has applied a Look
+    to, or one that has been put back to a saved moment since.
+    """
+    target = Path(path) if path is not None else current_file()
+    data, _warning = load_json(target, None)
+    if not isinstance(data, dict):
+        return None
+    name = data.get("name")
+    return str(name) if name else None
+
+
+def current_record(path: str | Path | None = None) -> dict:
+    """Everything recorded about the current Look. ``{}`` when there is none."""
+    target = Path(path) if path is not None else current_file()
+    data, _warning = load_json(target, {})
+    return data if isinstance(data, dict) else {}
+
+
+def set_current_look(name: str, *, label: str | None = None, path: str | Path | None = None) -> None:
+    """Record that ``name`` is the Look now applied.
+
+    Both the name and the label are kept. The name is the Look's folder name,
+    which is what a lookup matches on; the label is what a person was shown
+    when they picked it, which is what to say back to them. Storing only one of
+    the two is how the guess this replaces went wrong.
+    """
+    target = Path(path) if path is not None else current_file()
+    atomic_write_json(target, {"name": name, "label": label or name})
+
+
+def clear_current_look(path: str | Path | None = None) -> None:
+    """Forget which Look is applied. No Look is a state, not a missing value."""
+    target = Path(path) if path is not None else current_file()
+    target.unlink(missing_ok=True)
+    target.with_name(target.name + ".bak").unlink(missing_ok=True)

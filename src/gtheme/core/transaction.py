@@ -447,7 +447,16 @@ class Transaction:
         dest_root: the root every file write must stay inside. Defaults to the
             user's home; ``GTHEME_DEST_ROOT`` overrides it, and that override
             is the seam the test suite uses to keep off the real desktop.
-        label: what to call this in the restore-point list ("NIGHTBLOOM").
+        label: what to call this in the saved-moment list ("NIGHTBLOOM"). Also
+            the ledger owner name, and the flag that says this is a whole Look
+            rather than one change made from a page — which is what turns the
+            switch cleanup on.
+        look: the Look's own folder name, when this transaction is a Look being
+            applied. Separate from ``label`` on purpose: a Look's label is its
+            title, which is what a person was shown, and its name is what a
+            lookup matches on. Recording only the title is how the guess this
+            replaced went wrong — and a saved moment being put back carries a
+            label too ("My desktop, 25 August") and is emphatically not a Look.
     """
 
     def __init__(
@@ -456,10 +465,12 @@ class Transaction:
         *,
         dest_root: str | None = None,
         label: str | None = None,
+        look: str | None = None,
     ) -> None:
         self.ops: Sequence[Op] = tuple(ops)
         self.dest_root = dest_root
         self.label = label
+        self.look = look
 
     # -- shared machinery --------------------------------------------------
 
@@ -882,6 +893,12 @@ class Transaction:
         ledger_store.write_entry(
             owner, prior_files | set(planned_files), prior_settings | set(planned_settings)
         )
+        # The same rule for the same reason: written before the change it
+        # describes, so an interrupt leaves a record that claims slightly too
+        # much rather than a desktop nothing admits to having changed.
+        previous_current = ledger_store.current_record()
+        if self.look:
+            ledger_store.set_current_look(self.look, label=self.label)
 
         try:
             self._write_files(dests, context, baseline, journal, fresh_files, result, report)
@@ -901,7 +918,7 @@ class Transaction:
         except TransactionError as exc:
             baseline.save()
             rolled_back = self._roll_back(journal, baseline, fresh_files, fresh_settings, report)
-            self._restore_ledger(owner, prior_files, prior_settings)
+            self._restore_ledger(owner, prior_files, prior_settings, previous_current)
             shutil.rmtree(journal_dir, ignore_errors=True)
             raise TransactionError(str(exc), op=exc.op, rolled_back=rolled_back) from exc
         except BaseException:
@@ -919,7 +936,7 @@ class Transaction:
         # happened did not apply anything, and recording it as the current Look
         # would be a lie the Undo page then has to live with.
         if not result.applied and result.skipped:
-            self._restore_ledger(owner, prior_files, prior_settings)
+            self._restore_ledger(owner, prior_files, prior_settings, previous_current)
             report(Progress.ROLLED_BACK, "Nothing was changed")
             raise TransactionError(
                 "nothing could be changed — " + result.skipped[0][1],
@@ -1292,14 +1309,31 @@ class Transaction:
         baseline.forget_settings([key for key in fresh_settings if key in settings.done])
         return not files.warnings and not settings.warnings
 
-    def _restore_ledger(self, owner: str, files: set[str], settings: set[str]) -> None:
+    def _restore_ledger(
+        self,
+        owner: str,
+        files: set[str],
+        settings: set[str],
+        previous_current: dict | None = None,
+    ) -> None:
         """Undo the R4 early write, keeping ownership from earlier applies.
 
         An owner that already owned things before this transaction still owns
         them — they are still on disk. Only the claim this transaction added is
-        withdrawn.
+        withdrawn, and that includes the claim to be the Look in use: AS4's
+        whole point is that a transaction which applied nothing did not apply
+        anything, and recording it as the current Look would be a lie the Undo
+        page then has to live with.
         """
         if files or settings:
             ledger_store.write_entry(owner, files, settings)
         else:
             ledger_store.drop_entry(owner)
+        if self.look:
+            name = (previous_current or {}).get("name")
+            if name:
+                ledger_store.set_current_look(
+                    str(name), label=(previous_current or {}).get("label")
+                )
+            else:
+                ledger_store.clear_current_look()

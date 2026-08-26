@@ -62,6 +62,7 @@ def test_everything_the_engine_writes_is_under_the_state_override(monkeypatch, t
         paths.state_dir(),
         paths.baseline_dir(),
         paths.ledger_file(),
+        paths.current_file(),
         paths.lock_file(),
         paths.restore_points_dir(),
     ):
