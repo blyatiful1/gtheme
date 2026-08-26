@@ -156,10 +156,10 @@ COPY: dict[str, str] = {
     "browse-retry": "Try again",
     "browse-here": "Already on this computer",
     "browse-open": "Open it",
-    "browse-not-yet": (
-        "Downloading a Look from other people isn't built yet. This list shows what "
-        "has been published so far."
-    ),
+    "browse-get": "Get this look",
+    "browse-getting": "Getting it now…",
+    "browse-get-failed": "That look could not be downloaded",
+    "browse-got": "{name} is on your computer now. Open it to try it out.",
 }
 
 #: Provenance to the badge shown on a tile. The wording is the one from
@@ -908,10 +908,52 @@ class LooksPage(Gtk.Box):
             return
         dialog = Adw.AlertDialog(
             heading=entry.title or entry.name,
-            body=f"{entry.description}\n\n{COPY['browse-not-yet']}".strip(),
+            body=f"{entry.description}\n\n{COPY['safety']}".strip(),
         )
         dialog.add_response("close", COPY["close"])
+        dialog.add_response("get", COPY["browse-get"])
+        dialog.set_response_appearance("get", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("get")
+        dialog.connect("response", self._on_community_response, entry)
         dialog.present(self)
+
+    def _on_community_response(self, dialog: Adw.AlertDialog, response: str, entry: Any) -> None:
+        if response != "get":
+            return
+        self._download(entry)
+
+    def _download(self, entry: Any) -> None:
+        """Fetch a Look and say what is happening while it happens.
+
+        No thread. The fetch is asynchronous on the main loop already, so the
+        progress dialog is updated straight from the callback -- HTTP on a
+        worker thread is how a slow network becomes a frozen window, and it is
+        the one thing the transport was built to avoid.
+        """
+        progress = Adw.AlertDialog(
+            heading=entry.title or entry.name, body=COPY["browse-getting"]
+        )
+        progress.present(self)
+
+        def done(path: Any, error: str | None) -> None:
+            if not self._alive:
+                return
+            progress.close()
+            if error is not None or path is None:
+                failed = Adw.AlertDialog(
+                    heading=COPY["browse-get-failed"], body=error or COPY["browse-failed"]
+                )
+                failed.add_response("close", COPY["close"])
+                failed.present(self)
+                return
+            self.reload()
+            # The community list badges what is already here, so it has to be
+            # asked again or the tile the user just used still says "get".
+            self._start_browse(force=True)
+            self._stack.set_visible_child_name("installed")
+            self._toast(COPY["browse-got"].format(name=entry.title or entry.name))
+
+        look_registry.fetch_look_async(entry, done)
 
     # -- small helpers -----------------------------------------------------
 

@@ -467,3 +467,121 @@ def test_a_destroyed_page_stops_answering_its_own_callbacks(config_dir, themes_d
     assert page._alive is False
     page._on_index(None, "arrives too late")
     assert page._browse_stack.get_visible_child_name() != "error"
+
+
+# -- getting a Look somebody else published ---------------------------------
+#
+# CONTRACT CHANGED BY RULING (Wave-2 gate, R11): "Downloading a Look from other
+# people isn't built yet" is gone, and so is the dialog that said it. No network
+# here either — the page is handed a fetcher that answers out of a dict.
+
+
+COMMUNITY_TOML = """\
+format = 2
+
+[meta]
+name = "seaglass"
+title = "Seaglass"
+description = "A quiet green."
+author = "somebody"
+version = "1.0.0"
+screenshots = ["shot.png"]
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface accent-color"
+value = "'green'"
+component = "colors"
+"""
+
+
+def _community_entry():
+    from gtheme.preset.registry import IndexEntry
+
+    return IndexEntry(
+        name="seaglass",
+        title="Seaglass",
+        description="A quiet green.",
+        author="somebody",
+        version="1.0.0",
+        screenshots=["shot.png"],
+        provenance="community",
+    )
+
+
+def _served(monkeypatch, into, routes):
+    """Point the page's fetch at a dict of recorded addresses."""
+    from gtheme.preset import registry as look_registry
+
+    def fake(url, on_done, _timeout):
+        tail = url.rsplit("/main/themes/", 1)[-1]
+        if tail in routes:
+            on_done(routes[tail].encode() if isinstance(routes[tail], str) else routes[tail], None)
+        else:
+            on_done(None, "it is not available right now (404)")
+
+    real = look_registry.fetch_look_async  # captured before the patch replaces it
+
+    def fetch_look_async(entry, on_done, **kwargs):
+        kwargs.setdefault("into", into)
+        kwargs["fetch"] = fake
+        return real(entry, on_done, **kwargs)
+
+    monkeypatch.setattr(looks.look_registry, "fetch_look_async", fetch_look_async)
+
+
+def test_getting_a_community_look_installs_it_and_shows_it(
+    config_dir, themes_dir, backend, monkeypatch
+):
+    _served(
+        monkeypatch,
+        themes_dir,
+        {"seaglass/theme.toml": COMMUNITY_TOML, "seaglass/shot.png": b"pretend png"},
+    )
+    window = FakeWindow(Prefs())
+    page = looks.build(window)
+    assert "seaglass" not in [tile.name for tile in page._tiles], "nothing installed yet"
+
+    page._download(_community_entry())
+
+    assert (themes_dir / "seaglass" / "theme.toml").is_file()
+    assert "seaglass" in [tile.name for tile in page._tiles], "the grid was not reloaded"
+    assert page._stack.get_visible_child_name() == "installed"
+
+
+def test_a_downloaded_look_is_badged_as_somebody_elses_not_as_yours(
+    config_dir, themes_dir, backend, monkeypatch
+):
+    """It lands in the same folder as a Look the user made themselves."""
+    _served(monkeypatch, themes_dir, {"seaglass/theme.toml": COMMUNITY_TOML})
+    page = looks.build(FakeWindow(Prefs()))
+    page._download(_community_entry())
+
+    tile = next(tile for tile in page._tiles if tile.name == "seaglass")
+    assert tile.badge == looks.BADGES["community"]
+
+
+def test_a_download_that_fails_says_so_and_installs_nothing(
+    config_dir, themes_dir, backend, monkeypatch
+):
+    _served(monkeypatch, themes_dir, {})  # nothing published at that address
+    page = looks.build(FakeWindow(Prefs()))
+    page._download(_community_entry())
+
+    assert list(themes_dir.iterdir()) == []
+    assert "seaglass" not in [tile.name for tile in page._tiles]
+
+
+def test_a_destroyed_page_does_not_finish_a_download_it_started(
+    config_dir, themes_dir, backend, monkeypatch
+):
+    """The liveness rule every async landing point on this page obeys."""
+    _served(monkeypatch, themes_dir, {"seaglass/theme.toml": COMMUNITY_TOML})
+    page = looks.build(FakeWindow(Prefs()))
+    page._alive = False
+    page._download(_community_entry())
+    assert "seaglass" not in [tile.name for tile in page._tiles]
+
+
+def test_every_sentence_about_getting_a_look_passes_the_jargon_lint():
+    for key in ("browse-get", "browse-getting", "browse-get-failed", "browse-got"):
+        assert jargon.check(looks.COPY[key], where=f"COPY[{key}]") == []

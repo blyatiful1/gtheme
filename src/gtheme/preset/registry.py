@@ -20,22 +20,37 @@ without a network.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+import os
+import shutil
+import tomllib
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
+from urllib.parse import quote
 
-from .loader import load
-from .model import Component, Preset
+from pydantic import ValidationError
+
+from ..core.confine import ConfinementError, confine_src, safe_name
+from .loader import ORIGIN_FILENAME, load, user_themes_dir
+from .model import PRESET_FILENAME, Component, Preset
 
 __all__ = [
     "INDEX_URL",
     "INDEX_VERSION",
+    "LOOK_BASE_URL",
+    "MAX_LOOK_FILE_BYTES",
+    "ORIGIN_FILENAME",
     "IndexEntry",
+    "LookFetchError",
     "build_index",
     "entry_for",
     "fetch_index_async",
+    "fetch_look_async",
+    "install_look",
+    "look_url",
     "parse_index",
+    "wanted_files",
     "write_index",
 ]
 
@@ -234,3 +249,292 @@ def fetch_index_async(
             on_done(None, str(exc))
 
     session.send_and_read_async(message, GLib.PRIORITY_DEFAULT, None, _finished)
+
+
+# ---------------------------------------------------------------------------
+# downloading a community Look
+# ---------------------------------------------------------------------------
+#
+# v1 downloaded a Look by cloning the whole repository with git and copying one
+# folder out of it. That is not available here — there is no git in a Flatpak
+# and no reason to fetch forty megabytes to get one Look — so the transport is
+# the one this module already uses for the registry, and what is ported from v1
+# is the part that mattered: validate the payload, then move it, atomically,
+# through a staging folder that is never the destination.
+#
+# The rule that a Look cannot run code is not enforced here by inspection. It
+# is enforced by the format: `Preset` forbids unknown fields, so a v1 file with
+# a `[hooks]` section does not validate as v2 and there is no path by which a
+# downloaded Look can smuggle a command onto somebody's machine. Validating
+# before installing is what turns that from a property of the format into a
+# property of the download.
+
+#: Where a Look's own files live, beside the registry that lists them. Derived
+#: from :data:`INDEX_URL` rather than written out again: two spellings of one
+#: location is one of them going stale.
+LOOK_BASE_URL = INDEX_URL.rsplit("/", 1)[0]
+
+#: A downloaded Look is one folder. Nothing may reach outside it, and nothing
+#: may be enormous: a Look is settings text and a picture.
+MAX_LOOK_FILE_BYTES = 40 * 1024 * 1024
+
+
+class LookFetchError(Exception):
+    """A Look could not be downloaded or could not be trusted."""
+
+
+def look_url(name: str, relative: str, *, base_url: str = LOOK_BASE_URL) -> str:
+    """The address of one file inside one published Look.
+
+    The name is checked before it becomes part of a URL *and* before it becomes
+    part of a path, because they are different checks and only one of them is
+    :func:`~gtheme.core.confine.safe_name`'s job.
+    """
+    safe = safe_name(name)
+    parts = [quote(part, safe="") for part in PurePosixPath(relative).parts]
+    if not parts or ".." in PurePosixPath(relative).parts:
+        raise LookFetchError(f"this look asked for a file outside itself: {relative}")
+    return f"{base_url.rstrip('/')}/{quote(safe, safe='')}/{'/'.join(parts)}"
+
+
+def wanted_files(preset: Preset) -> list[str]:
+    """Everything a Look's own description says it carries, in fetch order.
+
+    Only what the Look declares. There is no directory listing and there is
+    deliberately no attempt to make one: a Look is a declaration, and anything
+    the declaration does not mention is not part of it.
+    """
+    seen: dict[str, None] = {}
+    for entry in preset.files:
+        seen.setdefault(entry.src, None)
+    for shot in preset.meta.screenshots:
+        seen.setdefault(shot, None)
+    return list(seen)
+
+
+def install_look(
+    entry: IndexEntry,
+    files: Mapping[str, bytes],
+    *,
+    into: Path | str | None = None,
+) -> Path:
+    """Write a downloaded Look into place. The pure half, and the careful one.
+
+    Args:
+        entry: the registry entry it came from — its name is the folder name.
+        files: ``{relative path: contents}``. ``theme.toml`` must be among them.
+        into: the Looks folder to install under. Defaults to the user's.
+
+    Returns:
+        The installed Look's folder.
+
+    Raises:
+        LookFetchError: the name is unusable, a file would land outside the
+            Look's own folder, or the Look does not validate. Nothing is
+            written in any of those cases — validation happens against the
+            staging folder, and the staging folder is discarded.
+
+    Four things are ported from v1's installer, each of them a bug it had
+    already paid for: the name is checked before it becomes a path component;
+    the source and destination are never allowed to overlap; the copy is
+    assembled in a hidden sibling of the destination, on the same filesystem,
+    so the last step is one atomic rename; and the staging folder is cleaned up
+    from a ``BaseException`` handler, so an interrupt cannot strand it.
+    """
+    try:
+        name = safe_name(entry.name)
+    except ConfinementError as exc:
+        raise LookFetchError(f"that look's name cannot be used as a folder: {exc}") from exc
+
+    root = Path(into) if into is not None else user_themes_dir()
+    root.mkdir(parents=True, exist_ok=True)
+    destination = root / name
+    staging = root / f".{name}.downloading"
+
+    if PRESET_FILENAME not in files:
+        raise LookFetchError("that look has no description file, so there is nothing to install")
+
+    shutil.rmtree(staging, ignore_errors=True)
+    try:
+        staging.mkdir(parents=True)
+        for relative, payload in files.items():
+            target = _confined(relative, staging)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(payload)
+
+        # Validate the folder, not the bytes: this is the same loader the app
+        # uses, so a Look that installs is a Look that opens.
+        result = load(staging)
+        if result.preset is None or result.errors:
+            problems = "; ".join(result.errors) or "it could not be read"
+            raise LookFetchError(f"that look could not be used: {problems}")
+
+        (staging / ORIGIN_FILENAME).write_text(
+            json.dumps(
+                {"provenance": "community", "name": entry.name, "author": entry.author},
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        shutil.rmtree(destination, ignore_errors=True)
+        os.replace(staging, destination)
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    return destination
+
+
+def _confined(relative: str, staging: Path) -> Path:
+    """Where one downloaded file may be written, or an honest refusal.
+
+    Every one of these strings came off the internet inside a document somebody
+    else wrote. ``files/wallpaper/first-light.png`` is the benign shape;
+    ``../../.bashrc`` is the shape being refused.
+    """
+    if PurePosixPath(relative).is_absolute() or ".." in PurePosixPath(relative).parts:
+        raise LookFetchError(f"that look tried to write outside its own folder: {relative}")
+    try:
+        return confine_src(relative, staging)
+    except ConfinementError as exc:
+        raise LookFetchError(str(exc)) from exc
+
+
+def _soup_fetch(url: str, on_done: Callable[[bytes | None, str | None], None], timeout: int) -> None:
+    """Fetch one address. The only place in this module that touches a socket.
+
+    Separated from :func:`fetch_look_async` so the interesting half — which
+    files to ask for, what to refuse, where they land — is testable with no
+    network, which is the same split the registry fetch already uses.
+    """
+    try:
+        import gi
+
+        gi.require_version("Soup", "3.0")
+        from gi.repository import GLib, Soup
+    except (ImportError, ValueError):  # pragma: no cover - needs PyGObject
+        on_done(None, "gtheme cannot reach the internet on this system")
+        return
+
+    session = Soup.Session()
+    session.set_timeout(timeout)
+    message = Soup.Message.new("GET", url)
+
+    def _finished(source: Any, result: Any) -> None:
+        # ``session`` is referenced here on purpose: the closure is what keeps
+        # it alive for exactly as long as the request it belongs to. A Look is
+        # several requests one after another, and a session collected between
+        # two of them is how the second one fails.
+        keep_alive = session
+        assert keep_alive is not None
+        try:
+            body = source.send_and_read_finish(result)
+        except GLib.Error as exc:
+            on_done(None, f"it could not be downloaded: {exc.message}")
+            return
+        status = int(message.get_status())
+        if status != 200:
+            on_done(None, f"it is not available right now ({status})")
+            return
+        data = bytes(body.get_data() or b"")
+        if len(data) > MAX_LOOK_FILE_BYTES:
+            on_done(None, "one of its files is far larger than a look should be")
+            return
+        on_done(data, None)
+
+    session.send_and_read_async(message, GLib.PRIORITY_DEFAULT, None, _finished)
+
+
+def fetch_look_async(
+    entry: IndexEntry,
+    on_done: Callable[[Path | None, str | None], None],
+    *,
+    base_url: str = LOOK_BASE_URL,
+    into: Path | str | None = None,
+    timeout: int = 30,
+    fetch: Callable[[str, Callable[[bytes | None, str | None], None], int], None] | None = None,
+) -> None:
+    """Download one community Look and install it. Never blocks the interface.
+
+    Calls ``on_done(path, None)`` when the Look is installed and
+    ``on_done(None, message)`` when it is not, always on the main loop, and
+    always exactly once.
+
+    The description file is fetched first and validated before anything else is
+    asked for, because it is the description that says what else there is. A
+    Look that declares a file outside its own folder is refused at that point,
+    before a single byte of it has been requested.
+
+    Args:
+        fetch: how to get one address. The seam the tests use; the default
+            talks to libsoup3 asynchronously, never a thread — HTTP on a thread
+            is how a slow network becomes a frozen window.
+    """
+    getter = fetch if fetch is not None else _soup_fetch
+    collected: dict[str, bytes] = {}
+
+    def fail(reason: str) -> None:
+        on_done(None, f"{entry.title or entry.name} could not be downloaded — {reason}")
+
+    def finish() -> None:
+        try:
+            path = install_look(entry, collected, into=into)
+        except LookFetchError as exc:
+            fail(str(exc))
+        except OSError as exc:
+            fail(f"it could not be saved: {exc}")
+        else:
+            on_done(path, None)
+
+    def next_file(remaining: list[str]) -> None:
+        if not remaining:
+            finish()
+            return
+        relative, rest = remaining[0], remaining[1:]
+        try:
+            url = look_url(entry.name, relative, base_url=base_url)
+        except (LookFetchError, ConfinementError) as exc:
+            fail(str(exc))
+            return
+
+        def landed(payload: bytes | None, error: str | None) -> None:
+            if error is not None or payload is None:
+                # One missing picture must not lose the whole Look: the
+                # description is the only file that is not optional, and it has
+                # already arrived by the time this runs.
+                collected.setdefault(relative, b"")
+                del collected[relative]
+                next_file(rest)
+                return
+            collected[relative] = payload
+            next_file(rest)
+
+        getter(url, landed, timeout)
+
+    def described(payload: bytes | None, error: str | None) -> None:
+        if error is not None or payload is None:
+            fail(error or "it could not be downloaded")
+            return
+        collected[PRESET_FILENAME] = payload
+        try:
+            preset = Preset.model_validate(tomllib.loads(payload.decode("utf-8")))
+        except (UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+            fail(f"its description file could not be read: {exc}")
+            return
+        except ValidationError:
+            fail("its description file is not one this version of gtheme understands")
+            return
+        wanted = wanted_files(preset)
+        for relative in wanted:
+            if PurePosixPath(relative).is_absolute() or ".." in PurePosixPath(relative).parts:
+                fail(f"it asks for a file outside its own folder: {relative}")
+                return
+        next_file(wanted)
+
+    try:
+        described_url = look_url(entry.name, PRESET_FILENAME, base_url=base_url)
+    except (LookFetchError, ConfinementError) as exc:
+        fail(str(exc))
+        return
+    getter(described_url, described, timeout)

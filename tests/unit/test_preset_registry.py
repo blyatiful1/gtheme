@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from gtheme.preset import registry
+from gtheme.preset.loader import ORIGIN_FILENAME, load
 from gtheme.preset.registry import (
     INDEX_URL,
     INDEX_VERSION,
@@ -260,3 +262,197 @@ def test_the_bundled_looks_all_pass_the_publish_gate(repo_root: Path):
     """
     result = _run_build_index(repo_root, repo_root / "themes", "--check")
     assert result.returncode == 0, result.stderr
+
+
+# ── downloading a community Look ───────────────────────────────────────────
+#
+# No network anywhere below. A fake fetcher answers out of a dict and raises on
+# an address nobody recorded, so a test that silently gained a network
+# dependency fails here rather than passing on a good day and failing in CI.
+
+
+LOOK_TOML = """\
+format = 2
+
+[meta]
+name = "seaglass"
+title = "Seaglass"
+description = "A quiet green."
+author = "somebody"
+version = "1.0.0"
+screenshots = ["shot.png"]
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface accent-color"
+value = "'green'"
+component = "colors"
+
+[[files]]
+src = "files/gtk.css"
+dest = "~/.config/gtk-4.0/gtk.css"
+"""
+
+
+def _entry(name: str = "seaglass", **overrides) -> IndexEntry:
+    base = {
+        "name": name,
+        "title": "Seaglass",
+        "description": "A quiet green.",
+        "author": "somebody",
+        "version": "1.0.0",
+        "provenance": "community",
+    }
+    return IndexEntry(**{**base, **overrides})
+
+
+class FakeServer:
+    """Answers recorded addresses. Anything else is a test's mistake."""
+
+    def __init__(self, routes: dict[str, bytes | str]) -> None:
+        self.routes = {k: v.encode() if isinstance(v, str) else v for k, v in routes.items()}
+        self.asked: list[str] = []
+
+    def __call__(self, url, on_done, _timeout):
+        self.asked.append(url)
+        tail = url.rsplit("/main/themes/", 1)[-1]
+        if tail not in self.routes:
+            on_done(None, "it is not available right now (404)")
+            return
+        on_done(self.routes[tail], None)
+
+
+def _published(toml: str = LOOK_TOML, name: str = "seaglass") -> dict[str, bytes | str]:
+    return {
+        f"{name}/theme.toml": toml,
+        f"{name}/files/gtk.css": "/* nothing */",
+        f"{name}/shot.png": b"pretend png",
+    }
+
+
+def _fetch(entry, server, into):
+    landed: list[tuple] = []
+    registry.fetch_look_async(entry, lambda p, e: landed.append((p, e)), into=into, fetch=server)
+    assert len(landed) == 1, "on_done must be called exactly once"
+    return landed[0]
+
+
+def test_a_published_look_is_downloaded_and_becomes_usable(tmp_path):
+    server = FakeServer(_published())
+    path, error = _fetch(_entry(), server, tmp_path)
+
+    assert error is None, error
+    assert path == tmp_path / "seaglass"
+    assert (path / "theme.toml").is_file()
+    assert (path / "files" / "gtk.css").read_text() == "/* nothing */"
+    assert (path / "shot.png").read_bytes() == b"pretend png"
+
+    result = load(path)
+    assert result.ok, result.errors
+    assert result.preset.meta.name == "seaglass"
+
+
+def test_a_downloaded_look_is_badged_as_somebody_elses(tmp_path):
+    """It lands in the user's own folder; without a marker it would say "Yours"."""
+    path, _error = _fetch(_entry(), FakeServer(_published()), tmp_path)
+    assert (path / ORIGIN_FILENAME).is_file()
+    assert load(path).provenance == "community"
+
+
+def test_only_what_the_look_declares_is_asked_for(tmp_path):
+    """A Look is a declaration. There is no directory listing to walk."""
+    server = FakeServer({**_published(), "seaglass/secret.txt": "not declared"})
+    path, _error = _fetch(_entry(), server, tmp_path)
+    assert not (path / "secret.txt").exists()
+    assert not any("secret" in url for url in server.asked)
+    assert server.asked[0].endswith("/seaglass/theme.toml"), "the description comes first"
+
+
+def test_a_look_that_could_run_a_command_does_not_validate_and_is_not_installed(tmp_path):
+    """The declarative-only promise, enforced by the format rather than a scan.
+
+    A v1 Look with a [[hooks]] table does not validate as v2 — Preset forbids
+    unknown fields — so there is no path by which a downloaded Look smuggles a
+    command onto somebody's machine. Validating *before* installing is what
+    makes that a property of the download and not only of the format.
+    """
+    hooked = LOOK_TOML + '\n[[hooks]]\nscript = "pwn.sh"\nsudo = true\n'
+    path, error = _fetch(_entry(), FakeServer(_published(hooked)), tmp_path)
+
+    assert path is None
+    assert "understand" in error
+    assert list(tmp_path.iterdir()) == [], "nothing was written at all"
+
+
+@pytest.mark.parametrize(
+    "escape",
+    ["../../.bashrc", "/etc/passwd", "files/../../../.ssh/authorized_keys"],
+)
+def test_a_look_that_reaches_outside_its_own_folder_is_refused(tmp_path, escape):
+    """These strings come off the internet inside a document somebody wrote."""
+    toml = LOOK_TOML.replace('src = "files/gtk.css"', f'src = "{escape}"')
+    server = FakeServer(_published(toml))
+    path, error = _fetch(_entry(), server, tmp_path)
+
+    assert path is None
+    assert "outside its own folder" in error
+    assert list(tmp_path.iterdir()) == []
+    assert not any(escape.split("/")[-1] in url for url in server.asked), (
+        "it must be refused before a single byte of it is requested"
+    )
+
+
+def test_a_look_whose_name_could_escape_is_refused_before_anything_is_asked(tmp_path):
+    server = FakeServer(_published())
+    path, error = _fetch(_entry(name="../../etc"), server, tmp_path)
+    assert path is None
+    assert "name" in error
+    assert server.asked == []
+
+
+def test_a_missing_picture_costs_the_picture_and_not_the_look(tmp_path):
+    """One 404 on an optional file must not lose the whole download."""
+    published = _published()
+    del published["seaglass/shot.png"]
+    path, error = _fetch(_entry(), FakeServer(published), tmp_path)
+
+    assert error is None, error
+    assert (path / "theme.toml").is_file()
+    assert not (path / "shot.png").exists()
+
+
+def test_a_description_that_cannot_be_downloaded_is_an_honest_refusal(tmp_path):
+    path, error = _fetch(_entry(), FakeServer({}), tmp_path)
+    assert path is None
+    assert "Seaglass could not be downloaded" in error
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_a_description_that_is_not_readable_at_all_is_an_honest_refusal(tmp_path):
+    path, error = _fetch(_entry(), FakeServer({"seaglass/theme.toml": "not toml ["}), tmp_path)
+    assert path is None
+    assert "description file could not be read" in error
+
+
+def test_downloading_over_a_look_of_the_same_name_replaces_it_whole(tmp_path):
+    """No half-replaced Look. The old folder is swapped, never edited."""
+    existing = tmp_path / "seaglass"
+    (existing / "files").mkdir(parents=True)
+    (existing / "leftover.txt").write_text("from the old one", encoding="utf-8")
+
+    path, error = _fetch(_entry(), FakeServer(_published()), tmp_path)
+    assert error is None, error
+    assert not (path / "leftover.txt").exists()
+
+
+def test_a_refused_download_leaves_no_staging_folder_behind(tmp_path):
+    _fetch(_entry(), FakeServer(_published(LOOK_TOML + '\n[[hooks]]\nscript = "x.sh"\n')), tmp_path)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_the_look_address_is_built_from_the_registry_url_not_a_second_one():
+    """Two spellings of one location is one of them going stale."""
+    assert registry.LOOK_BASE_URL == INDEX_URL.rsplit("/", 1)[0]
+    assert registry.look_url("seaglass", "files/gtk.css") == (
+        "https://raw.githubusercontent.com/blyatiful1/gtheme/main/themes/"
+        "seaglass/files/gtk.css"
+    )

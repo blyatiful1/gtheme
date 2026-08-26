@@ -23,6 +23,7 @@ never writes there (DESIGN.md F1).
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -97,7 +98,9 @@ class LoadResult:
         preset: the validated Look, or None when it could not be loaded.
         errors: why it cannot be applied at all. Non-empty means broken.
         warnings: things that will not apply, named so nobody is surprised.
-        provenance: ``"bundled"`` or ``"user"`` — what the Looks page badges.
+        provenance: ``"bundled"``, ``"community"`` or ``"user"`` — what the
+            Looks page badges. A downloaded Look lives in the same folder as
+            one the user made, so the difference is a marker file inside it.
     """
 
     path: Path
@@ -115,16 +118,31 @@ class LoadResult:
         return self.preset.meta.name if self.preset else self.path.name
 
 
+#: Written into a Look that was downloaded rather than made here. Without it a
+#: downloaded Look sits in the user's own folder and is indistinguishable from
+#: one they made, so the Looks page would badge somebody else's work "Yours".
+ORIGIN_FILENAME = ".gtheme-origin.json"
+
+
 def _provenance_for(path: Path) -> str:
     try:
         bundled = bundled_themes_dir().resolve()
     except OSError:  # pragma: no cover - unreadable bundled dir
-        return "user"
+        bundled = None
+    if bundled is not None:
+        try:
+            path.resolve().relative_to(bundled)
+        except ValueError:
+            pass
+        else:
+            return "bundled"
+    marker = path / ORIGIN_FILENAME
     try:
-        path.resolve().relative_to(bundled)
-    except ValueError:
+        recorded = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
         return "user"
-    return "bundled"
+    given = recorded.get("provenance") if isinstance(recorded, dict) else None
+    return str(given) if given in ("community", "bundled", "user") else "user"
 
 
 def _check_contents(preset: Preset, directory: Path) -> list[str]:
