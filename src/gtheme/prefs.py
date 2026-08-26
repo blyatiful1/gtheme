@@ -40,11 +40,24 @@ PREFS_FILENAME = "prefs.json"
 
 #: Banner ids that have a defined meaning. Keeping them here rather than
 #: scattered through the pages means the "show all explainers again" action can
-#: be exhaustive.
+#: be exhaustive, and means there is one list to read when asking what this app
+#: explains to a first-time user.
+#:
+#: A test walks ``src/`` and asserts this set is exactly the set of ids the
+#: pages actually use — in both directions, so an id that is added here and
+#: never shown is as much a failure as one shown and never listed. It was six
+#: short when that test was written: every page in the "Change one thing"
+#: section had grown a first-visit banner without saying so here.
 KNOWN_BANNERS: frozenset[str] = frozenset(
     {
         "onboarding-complete",
+        "first-visit-home",
         "first-visit-looks",
+        "first-visit-colors",
+        "first-visit-icons",
+        "first-visit-fonts",
+        "first-visit-topbar",
+        "first-visit-windows",
         "first-visit-addons",
         "first-visit-terminal",
         "first-visit-more",

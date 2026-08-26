@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import os
+from pathlib import Path
 
 import pytest
 
-from gtheme.prefs import Prefs, default_prefs_path
+from gtheme.prefs import KNOWN_BANNERS, Prefs, default_prefs_path
 from gtheme.prefs import config_dir as prefs_config_dir
 
 
@@ -120,3 +122,74 @@ def test_explicit_path_beats_the_env_seam(tmp_path, config_dir):
     prefs.set("k", "v")
     assert elsewhere.is_file()
     assert not (config_dir / "prefs.json").exists()
+
+
+# -- the banner registry ----------------------------------------------------
+
+
+def _banner_ids_used_in_source(src: Path) -> dict[str, str]:
+    """Every banner id the app actually shows, to the file that shows it.
+
+    Read out of the syntax tree rather than by grepping, so a string that
+    merely looks like a banner id ("first-visit" in a copy table, say) is not
+    mistaken for one. An id counts when it is:
+
+    * assigned to a name ending in ``BANNER_ID``,
+    * passed as a ``banner_id=`` keyword, or
+    * the first argument to one of the three banner methods.
+    """
+    calls = {"should_show_banner", "mark_banner_seen", "banner_seen"}
+    found: dict[str, str] = {}
+
+    def record(node: ast.AST, where: str) -> None:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            found.setdefault(node.value, where)
+
+    for path in sorted(src.rglob("*.py")):
+        if path.name == "prefs.py":
+            continue  # the registry itself is the other side of the comparison
+        where = str(path.relative_to(src))
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id.upper().endswith("BANNER_ID"):
+                        record(node.value, where)
+            elif isinstance(node, ast.Call):
+                for keyword in node.keywords:
+                    if keyword.arg == "banner_id":
+                        record(keyword.value, where)
+                function = node.func
+                if isinstance(function, ast.Attribute) and function.attr in calls and node.args:
+                    record(node.args[0], where)
+    return found
+
+
+def test_known_banners_is_exactly_what_the_pages_show(repo_root):
+    """Both directions, because both are real failures.
+
+    An id a page shows and this list does not name is an explainer that "show
+    all explainers again" would not bring back — the user asks for their
+    explanations and gets some of them. An id this list names and no page shows
+    is a promise about a banner that does not exist.
+    """
+    used = _banner_ids_used_in_source(repo_root / "src" / "gtheme")
+
+    missing = sorted(set(used) - KNOWN_BANNERS)
+    assert missing == [], (
+        "these banner ids are shown but not listed in prefs.KNOWN_BANNERS: "
+        + ", ".join(f"{name} ({used[name]})" for name in missing)
+    )
+    unused = sorted(KNOWN_BANNERS - set(used))
+    assert unused == [], f"prefs.KNOWN_BANNERS names banners nothing shows: {unused}"
+
+
+def test_every_page_that_can_show_a_banner_is_covered(repo_root):
+    """A sanity floor under the test above: it must be finding things at all.
+
+    A collector that silently matched nothing would make the equality assertion
+    pass by being vacuous on both sides.
+    """
+    used = _banner_ids_used_in_source(repo_root / "src" / "gtheme")
+    assert len(used) >= 13, sorted(used)
+    assert "first-visit-home" in used
+    assert "onboarding-complete" in used

@@ -72,6 +72,18 @@ def test_page_module_if_present_exposes_build(page_id, _section, module):
     exist yet is expected and fine — the window renders a distinct placeholder
     for it. What is never fine is a module that exists and does not have the
     entry point the manifest promises.
+
+    Two absences are tolerated, and only two:
+
+    * the module is not written yet (``ModuleNotFoundError`` naming it, above);
+    * the machine has PyGObject but no GTK 4 or libadwaita *typelib*, which is
+      the CI unit job (DESIGN.md F10 installs ``python3-gi`` and the GLib
+      typelib only, so ``core`` can be imported without a desktop). Every page
+      module calls ``gi.require_version("Gtk", "4.0")`` at import time, and
+      that raises ``ValueError`` when the typelib is missing. Skipping is
+      right — the Adw job in the archlinux container is what proves these
+      pages import — but it is skipped by *name*, so a ``ValueError`` from
+      anywhere else in the page's own code is still a failure.
     """
     name = f"gtheme.ui.pages.{module}"
     try:
@@ -80,8 +92,55 @@ def test_page_module_if_present_exposes_build(page_id, _section, module):
         if exc.name != name:
             raise  # the page exists and one of ITS imports is broken
         pytest.skip(f"{name} is not written yet")
+    except ValueError as exc:
+        if not _is_missing_typelib(exc):
+            raise  # a real ValueError raised while importing the page
+        pytest.skip(f"{name} needs a typelib this machine does not have: {exc}")
     build = getattr(imported, "build", None)
     assert callable(build), f"{name} must expose a callable build()"
+
+
+def _is_missing_typelib(exc: ValueError) -> bool:
+    """Is this the ``gi.require_version`` "no such namespace" ValueError?
+
+    Matched on the message because PyGObject raises a bare ``ValueError`` for
+    it and gives us nothing else to go on. Deliberately narrow: a page whose
+    own code raises ``ValueError`` while importing must stay a failure, and a
+    broad ``except ValueError: skip`` would turn every one of those green.
+    """
+    text = str(exc)
+    return "amespace" in text and ("not available" in text or "available versions" in text)
+
+
+def test_a_missing_typelib_is_recognised_but_nothing_else_is():
+    """The skip above must not swallow a page's own ValueError.
+
+    The messages below are the ones PyGObject actually produces; the first is
+    provoked live so a future PyGObject that reworded it turns this test red
+    rather than turning every page-import failure into a silent skip. The
+    second form (a namespace that exists at another version) is asserted as a
+    literal, because provoking it needs a namespace no other test has loaded
+    and this suite loads Gtk and Adw.
+    """
+    import gi
+
+    with pytest.raises(ValueError) as caught:
+        gi.require_version("NoSuchTypelibAnywhere", "9.9")
+    assert str(caught.value) == "Namespace NoSuchTypelibAnywhere not available"
+    assert _is_missing_typelib(caught.value)
+
+    assert _is_missing_typelib(ValueError("Namespace Gtk not available for version 9.9"))
+
+    # Everything else is a failure, including the messages that are nearest to
+    # the two above. "already loaded" in particular is what require_version
+    # says when a *different* version is in play, which is a real problem.
+    for other in (
+        "a page said no",
+        "Namespace is a fine word",
+        "not available anywhere",
+        "Namespace Gtk is already loaded with version 4.0",
+    ):
+        assert not _is_missing_typelib(ValueError(other)), other
 
 
 def test_floor_page_is_in_the_manifest():
