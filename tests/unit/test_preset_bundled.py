@@ -27,7 +27,15 @@ from gtheme.preset.loader import load
 from gtheme.preset.model import Preset
 
 BUNDLED = ("hyperclass", "magma", "netrunner", "nightbloom")
+#: The v1 tree the bundled Looks were converted from. It is a checkout that
+#: may or may not exist on the machine running this, so the conversion tests
+#: that need only the v1 *manifests* read them from a frozen copy committed
+#: alongside these tests instead — three theme.toml/palette.toml pairs, taken
+#: from the legacy-v1 branch, so "did the conversion lose anything" is
+#: answered on every machine rather than skipped on most of them.
 LEGACY = Path("/home/crocco/gtheme-rebuild/legacy-worktree/themes")
+LEGACY_MANIFESTS = Path(__file__).resolve().parents[1] / "fixtures" / "v1"
+CONVERTED = ("magma", "netrunner", "hyperclass")
 
 
 @pytest.fixture(params=BUNDLED)
@@ -224,10 +232,9 @@ def test_the_converted_looks_ship_no_executable_payload(repo_root: Path):
 # ── the conversion is faithful ───────────────────────────────────────────
 
 
-@pytest.mark.skipif(not LEGACY.is_dir(), reason="the v1 source tree is not on this machine")
-@pytest.mark.parametrize("name", ["magma", "netrunner", "hyperclass"])
+@pytest.mark.parametrize("name", CONVERTED)
 def test_every_v1_setting_survived_the_conversion(repo_root: Path, name):
-    v1 = tomllib.loads((LEGACY / name / "theme.toml").read_text(encoding="utf-8"))
+    v1 = tomllib.loads((LEGACY_MANIFESTS / name / "theme.toml").read_text(encoding="utf-8"))
     converted = load(repo_root / "themes" / name).preset
     got = {s.key for s in converted.settings}
     for entry in v1["settings"]:
@@ -238,19 +245,19 @@ def test_every_v1_setting_survived_the_conversion(repo_root: Path, name):
         assert prefix + key in got, f"{name} lost {key}"
 
 
-@pytest.mark.skipif(not LEGACY.is_dir(), reason="the v1 source tree is not on this machine")
-@pytest.mark.parametrize("name", ["magma", "netrunner", "hyperclass"])
+@pytest.mark.parametrize("name", CONVERTED)
 def test_every_v1_add_on_survived_the_conversion(repo_root: Path, name):
-    v1 = tomllib.loads((LEGACY / name / "theme.toml").read_text(encoding="utf-8"))
+    v1 = tomllib.loads((LEGACY_MANIFESTS / name / "theme.toml").read_text(encoding="utf-8"))
     converted = load(repo_root / "themes" / name).preset
     for uuid in v1.get("requires", {}).get("extensions", []):
         assert uuid in converted.extensions.enable, f"{name} lost {uuid}"
 
 
-@pytest.mark.skipif(not LEGACY.is_dir(), reason="the v1 source tree is not on this machine")
-@pytest.mark.parametrize("name", ["magma", "netrunner", "hyperclass"])
+@pytest.mark.parametrize("name", CONVERTED)
 def test_the_palette_survived_the_conversion(repo_root: Path, name):
-    v1_palette = tomllib.loads((LEGACY / name / "palette.toml").read_text(encoding="utf-8"))
+    v1_palette = tomllib.loads(
+        (LEGACY_MANIFESTS / name / "palette.toml").read_text(encoding="utf-8")
+    )
     converted = load(repo_root / "themes" / name).preset
     flat = {k: v for k, v in v1_palette.items() if isinstance(v, str)}
     for key, value in flat.items():

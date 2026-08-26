@@ -1,0 +1,520 @@
+# MAGMA — Obsidian Flow desktop theme.
+# Palette in palette.toml; terminal/monitor/editor/gtk render from it.
+
+[meta]
+name = "magma"
+title = "MAGMA — Obsidian Flow"
+description = "Obsidian glass over a living magma chamber: ember orange, lava gold, one cool teal vein. Molten-glass blur and a terminal full of fluid sims — lava lamp, DOOM fire, cracking obsidian."
+author = "blyatiful1"
+version = "2.0.0"
+
+[requires]
+packages = ["alacritty", "starship", "btop", "micro", "fastfetch", "papirus-icon-theme", "papirus-folders", "ptyxis", "cava", "adw-gtk-theme"]
+extensions = ["dash-to-dock@micxgx.gmail.com", "blur-my-shell@aunetx", "just-perfection-desktop@just-perfection", "logomenu@aryan_k", "tilingshell@ferrarodomenico.com", "compiz-windows-effect@hermes83.github.com", "desktop-cube@schneegans.github.com", "hanabi-extension@jeffshee.github.io", "hotedge@jonathan.jdoda.ca", "impatience@gfxmonk.net", "user-theme@gnome-shell-extensions.gcampax.github.com"]
+fonts = ["MesloLGS Nerd Font"]
+
+[build]
+# "gtk" is deliberately NOT managed: files/gtk/*.css are hand-tuned (obsidian
+# glass for Nautilus) and `gtheme build` would overwrite them.
+managed = ["terminal", "monitor", "editor"]
+
+[[files]]
+component = "wallpaper"
+src = "files/wallpaper/obsidian-flow.png"
+dest = "~/.local/share/backgrounds/magma/obsidian-flow.png"
+
+[[files]]
+component = "wallpaper"
+src = "files/wallpaper/molten-core.png"
+dest = "~/.local/share/backgrounds/magma/molten-core.png"
+
+[[files]]
+component = "wallpaper"
+src = "files/wallpaper/ember-drift.png"
+dest = "~/.local/share/backgrounds/magma/ember-drift.png"
+
+[[files]]
+component = "wallpaper"
+src = "files/wallpaper/magma-slideshow.xml"
+dest = "~/.local/share/backgrounds/magma/magma-slideshow.xml"
+# Rendered through {{ home }} substitution at apply time so the slideshow
+# resolves to the running user's backgrounds dir, not the author's.
+template = true
+
+# Live wallpaper loop played by the Hanabi extension (seamless 20 s render;
+# regenerate with tools/gen-live-wallpaper.py). The XML slideshow above stays
+# as the gsettings background, so if Hanabi ever fails the desktop degrades
+# gracefully to the static slides.
+[[files]]
+component = "wallpaper"
+src = "files/wallpaper/magma-loop.mp4"
+dest = "~/.local/share/backgrounds/magma/magma-loop.mp4"
+
+[[files]]
+component = "terminal"
+src = "files/ptyxis/Magma.palette"
+dest = "~/.local/share/org.gnome.Ptyxis/palettes/Magma.palette"
+
+[[files]]
+component = "terminal"
+src = "files/alacritty/magma.toml"
+dest = "~/.config/alacritty/magma.toml"
+
+[[files]]
+component = "terminal"
+src = "files/alacritty/alacritty.toml"
+dest = "~/.config/alacritty/alacritty.toml"
+
+[[files]]
+component = "prompt"
+# Minimal single-line prompt (the old powerline config was retired — heavy
+# segment backgrounds fight the translucent terminal).
+src = "files/starship/starship.toml"
+dest = "~/.config/starship.toml"
+
+# GNOME Shell user theme: obsidian-glass quick settings / calendar / popovers,
+# loaded by the user-theme extension. Panel, overview and dash are deliberately
+# NOT styled (blur-my-shell + dash-to-dock own those).
+[[files]]
+component = "shell"
+src = "files/shell-theme/gnome-shell.css"
+dest = "~/.local/share/themes/Magma/gnome-shell/gnome-shell.css"
+
+[[files]]
+component = "monitor"
+src = "files/btop/magma.theme"
+dest = "~/.config/btop/themes/magma.theme"
+
+[[files]]
+component = "monitor"
+src = "files/btop/btop.conf"
+dest = "~/.config/btop/btop.conf"
+
+[[files]]
+component = "editor"
+src = "files/micro/magma.micro"
+dest = "~/.config/micro/colorschemes/magma.micro"
+
+[[files]]
+component = "editor"
+src = "files/micro/settings.json"
+dest = "~/.config/micro/settings.json"
+
+[[files]]
+component = "fastfetch"
+src = "files/fastfetch/magma-logo.txt"
+dest = "~/.config/fastfetch/magma-logo.txt"
+
+[[files]]
+component = "fastfetch"
+src = "files/fastfetch/config.jsonc"
+dest = "~/.config/fastfetch/config.jsonc"
+
+[[files]]
+component = "gtk"
+src = "files/gtk/gtk4.css"
+dest = "~/.config/gtk-4.0/gtk.css"
+
+[[files]]
+component = "gtk"
+src = "files/gtk/gtk3.css"
+dest = "~/.config/gtk-3.0/gtk.css"
+
+# cava audio visualizer — molten gradient over the glass terminal.
+[[files]]
+component = "visualizer"
+src = "files/cava/config"
+dest = "~/.config/cava/config"
+
+[[files]]
+component = "shell"
+src = "files/shell/magma-flame.svg"
+dest = "~/.local/share/gtheme/assets/magma/magma-flame.svg"
+
+[[files]]
+component = "shell-cfg"
+src = "files/fish/config.fish"
+dest = "~/.config/fish/config.fish"
+
+# NOTE: runtime payload lives under assets/, NOT ~/.local/share/gtheme/themes/
+# — that namespace is owned by `gtheme install` and is rmtree'd on update/remove.
+[[files]]
+component = "commands"
+src = "files/bin"
+dest = "~/.local/share/gtheme/assets/magma/bin"
+mode = "755"
+
+[[files]]
+component = "ascii"
+src = "files/ascii"
+dest = "~/.local/share/gtheme/assets/magma/ascii"
+
+[[settings]]
+component = "desktop"
+backend = "gsettings"
+key = "org.gnome.desktop.interface accent-color"
+value = "'orange'"
+
+[[settings]]
+component = "desktop"
+backend = "gsettings"
+# NOTE: this is a dark design; vanilla GNOME defaults to the light scheme, so
+# without prefer-dark the theme looks half-applied on a stock install.
+key = "org.gnome.desktop.interface color-scheme"
+value = "'prefer-dark'"
+
+[[settings]]
+component = "desktop"
+backend = "gsettings"
+key = "org.gnome.desktop.interface icon-theme"
+# Papirus-Dark with folders recoloured orange (papirus-folders -C orange -t Papirus-Dark).
+# Package install + recolour are a one-time sudo step; see [requires].packages.
+value = "'Papirus-Dark'"
+
+[[settings]]
+component = "terminal"
+backend = "dconf"
+key = "/org/gnome/Ptyxis/Profiles/{{ ptyxis_default_profile }}/palette"
+value = "'Magma'"
+
+[[settings]]
+component = "terminal"
+backend = "gsettings"
+key = "org.gnome.Ptyxis use-system-font"
+value = "false"
+
+[[settings]]
+component = "terminal"
+backend = "gsettings"
+key = "org.gnome.Ptyxis font-name"
+value = "'MesloLGS Nerd Font Mono 11'"
+
+[[settings]]
+component = "terminal"
+backend = "dconf"
+# Molten glass: Ptyxis has native per-profile opacity (applies live). The
+# blur behind it comes from blur-my-shell's application whitelist.
+key = "/org/gnome/Ptyxis/Profiles/{{ ptyxis_default_profile }}/opacity"
+value = "0.85"
+
+[[settings]]
+component = "desktop"
+backend = "gsettings"
+# Nerd Font as the system monospace so gnome-text-editor & friends match.
+key = "org.gnome.desktop.interface monospace-font-name"
+value = "'MesloLGS Nerd Font Mono 11'"
+
+[[settings]]
+component = "wallpaper"
+backend = "gsettings"
+key = "org.gnome.desktop.background picture-uri"
+value = "'file://{{ home }}/.local/share/backgrounds/magma/magma-slideshow.xml'"
+
+[[settings]]
+component = "wallpaper"
+backend = "gsettings"
+key = "org.gnome.desktop.background picture-uri-dark"
+value = "'file://{{ home }}/.local/share/backgrounds/magma/magma-slideshow.xml'"
+
+[[settings]]
+component = "wallpaper"
+backend = "gsettings"
+key = "org.gnome.desktop.background picture-options"
+value = "'zoom'"
+
+[[settings]]
+component = "wallpaper"
+backend = "gsettings"
+key = "org.gnome.desktop.background primary-color"
+value = "'#0D0A0F'"
+
+# ── Hanabi: live video wallpaper ─────────────────────────────────────────
+[[settings]]
+component = "wallpaper"
+backend = "dconf"
+# Plain filesystem path, NOT a file:// URI.
+key = "/io/github/jeffshee/hanabi-extension/video-path"
+value = "'{{ home }}/.local/share/backgrounds/magma/magma-loop.mp4'"
+
+[[settings]]
+component = "wallpaper"
+backend = "dconf"
+key = "/io/github/jeffshee/hanabi-extension/mute"
+value = "true"
+
+[[settings]]
+component = "wallpaper"
+backend = "dconf"
+# Gtk.ContentFit: 2 = COVER (crop-to-fill, right for a wallpaper).
+key = "/io/github/jeffshee/hanabi-extension/content-fit"
+value = "2"
+
+[[settings]]
+component = "wallpaper"
+backend = "dconf"
+# Give the shell a moment at login before the video starts (races otherwise).
+key = "/io/github/jeffshee/hanabi-extension/startup-delay"
+value = "2000"
+
+[[settings]]
+component = "wallpaper"
+backend = "dconf"
+# 2 = pause playback while any window is fullscreen — no GPU spent unseen.
+key = "/io/github/jeffshee/hanabi-extension/pause-on-maximize-or-fullscreen"
+value = "2"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/dock-position"
+value = "'BOTTOM'"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/transparency-mode"
+value = "'FIXED'"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/custom-background-color"
+value = "true"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/background-color"
+value = "'#181019'"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+# Low tint: blur-my-shell blurs the dock, so the glass carries the depth.
+key = "/org/gnome/shell/extensions/dash-to-dock/background-opacity"
+value = "0.40"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/running-indicator-style"
+value = "'DOTS'"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/custom-theme-customize-running-dots"
+value = "true"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/custom-theme-running-dots-color"
+value = "'#FF6D3A'"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/custom-theme-running-dots-border-color"
+value = "'#FFC145'"
+
+[[settings]]
+component = "dock"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/dash-to-dock/custom-theme-running-dots-border-width"
+value = "1"
+
+# gtheme MERGES this list with whatever the user already has enabled, so a
+# fresh login activates every sideloaded extension without clobbering others.
+[[settings]]
+component = "shell"
+backend = "gsettings"
+key = "org.gnome.shell enabled-extensions"
+# Order matters: apply MERGES into the user's list preserving their order, but
+# diff compares values order-sensitively — keep this in the live merged order
+# (user-theme last) or diff never converges. hidetopbar was removed 2026-07-07
+# after it locked the user out of the panel.
+value = "['blur-my-shell@aunetx', 'just-perfection-desktop@just-perfection', 'logomenu@aryan_k', 'tilingshell@ferrarodomenico.com', 'compiz-windows-effect@hermes83.github.com', 'desktop-cube@schneegans.github.com', 'dash-to-dock@micxgx.gmail.com', 'hanabi-extension@jeffshee.github.io', 'hotedge@jonathan.jdoda.ca', 'impatience@gfxmonk.net', 'user-theme@gnome-shell-extensions.gcampax.github.com']"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/panel/blur"
+value = "true"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/overview/blur"
+value = "true"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/dash-to-dock/blur"
+value = "true"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/dash-to-dock/pipeline"
+value = "'pipeline_default_rounded'"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+# true: blur-my-shell owns the dock background (glass), dash-to-dock's own
+# tint above stays low (0.40) as the color cast.
+key = "/org/gnome/shell/extensions/blur-my-shell/dash-to-dock/override-background"
+value = "true"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+# 1 = default artifact mitigation for ShellBlurEffect clipped redraws.
+key = "/org/gnome/shell/extensions/blur-my-shell/hacks-level"
+value = "1"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/Logo-menu/use-custom-icon"
+value = "true"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/Logo-menu/custom-icon-path"
+value = "'{{ home }}/.local/share/gtheme/assets/magma/magma-flame.svg'"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/Logo-menu/symbolic-icon"
+value = "false"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/just-perfection/startup-status"
+value = "0"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+# Shell animation speed: 4 = "Faster" (0 off, 1 default, 3 fastest … 8 slowest).
+key = "/org/gnome/shell/extensions/just-perfection/animation"
+value = "4"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+# Tiling Shell draws a colored border around the focused window by default —
+# explicitly off; the glass/blur look needs clean edges.
+key = "/org/gnome/shell/extensions/tilingshell/enable-window-border"
+value = "false"
+
+# (Hide Top Bar removed 2026-07-07: hiding the panel locked the user out.
+#  The panel stays visible and gets the glass treatment in the shell theme.)
+
+# ── Desktop Cube: drag gestures off ──────────────────────────────────────
+# Upstream bug Schneegans/Desktop-Cube#196 (open): click-dragging the desktop
+# or panel to rotate the cube makes windows on secondary monitors invisible
+# until the overview is toggled. Keyboard / Super+scroll switching is fine.
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/desktop-cube/enable-desktop-dragging"
+value = "false"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/desktop-cube/enable-panel-dragging"
+value = "false"
+
+# ── Shell glass surfaces (user-theme extension loads themes/Magma) ────────
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/user-theme/name"
+value = "'Magma'"
+
+# ── Impatience: shell animations at 0.6× duration ─────────────────────────
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/net/gfxmonk/impatience/speed-factor"
+value = "0.6"
+
+# ── Hot Edge: bottom-edge press opens the overview ────────────────────────
+[[settings]]
+component = "shell"
+backend = "dconf"
+# Staggered above dash-to-dock's reveal (~100): a light push at the bottom
+# edge reveals the dock, a firm push opens the overview.
+key = "/org/gnome/shell/extensions/hotedge/pressure-threshold"
+value = "uint32 200"
+
+# ── Legacy GTK3 apps follow the dark libadwaita look (needs adw-gtk-theme) ─
+[[settings]]
+component = "gtk"
+backend = "gsettings"
+key = "org.gnome.desktop.interface gtk-theme"
+value = "'adw-gtk3-dark'"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/applications/blur"
+value = "true"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/applications/enable-all"
+value = "false"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+# Wayland app_ids / WM_CLASSes that get the blurred-glass treatment.
+key = "/org/gnome/shell/extensions/blur-my-shell/applications/whitelist"
+value = "['Alacritty', 'org.gnome.Ptyxis', 'org.gnome.Nautilus']"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+# Full actor opacity: the terminals and Nautilus bring their OWN background
+# alpha (alacritty 0.82, ptyxis 0.85, gtk4.css rgba) so text stays crisp;
+# blur-my-shell must not additionally fade the whole window (default is 215).
+key = "/org/gnome/shell/extensions/blur-my-shell/applications/opacity"
+value = "255"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/applications/sigma"
+value = "24"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/applications/static-blur"
+value = "false"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/applications/dynamic-opacity"
+value = "false"
+
+[[settings]]
+component = "shell"
+backend = "dconf"
+key = "/org/gnome/shell/extensions/blur-my-shell/applications/corner-radius"
+value = "12"
+
+# NOTE: rounded-window-corners@fxgn (Reborn) is deliberately NOT used — it is
+# broken on GNOME 50 (shader crash strands shadow actors on the Shell stage).
+# Native libadwaita rounding covers window top-corners.
