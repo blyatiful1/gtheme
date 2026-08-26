@@ -204,31 +204,56 @@ def test_a_domain_title_with_an_ampersand_does_not_crash_the_group(
 # -- the shell-theme picker (topbarstyle.toml, kind=picker) ------------------
 
 
-def test_the_shell_theme_picker_is_built_by_this_page_not_the_frozen_library(
+def test_the_top_bar_style_is_a_way_through_to_colours_and_style(
     window: FakeWindow, backend: MemoryBackend
 ):
-    """``picker`` is a kind the base row library refuses to build at all
-    (``UnsupportedRowKind``) — proof this page supplies its own."""
+    """CONTRACT CHANGED BY RULING (Wave-2 gate, R7): one owner for one setting.
+
+    This page used to build its own picker for the top bar's style, and so
+    does Colours & Style. Two pickers on one setting is two lists of installed
+    styles that can disagree — and only one of the two knew that the setting
+    does nothing until the User Themes add-on is switched on, and offered to
+    switch it on. A person who changes the style on the page without that
+    offer sees nothing happen.
+
+    So the owner is the page with the fix in it, and this page signposts.
+    """
     with backends.use_backend(backend):
         topbar.build(window)
-    entry = window.rows.lookup("org.gnome.shell.extensions.user-theme:name")
-    assert entry is not None
-    assert isinstance(entry.widget, Adw.ComboRow)
+
+    assert window.rows.lookup("org.gnome.shell.extensions.user-theme:name") is None, (
+        "this page must not own the top bar style row any more"
+    )
+    entry = window.rows.lookup("link:page:colors")
+    assert entry is not None, "the signpost is missing"
+    assert isinstance(entry.widget, Adw.ActionRow)
+    assert not isinstance(entry.widget, Adw.ComboRow), "still a picker"
+    assert entry.widget.get_activatable()
 
 
-def test_the_turn_it_on_button_enables_the_user_theme_addon(
+def test_the_signpost_actually_goes_to_colours_and_style(
     window: FakeWindow, backend: MemoryBackend
 ):
+    """A link that says where it goes and does not go there is worse than none."""
+    with backends.use_backend(backend):
+        topbar.build(window)
+    entry = window.rows.lookup("link:page:colors")
+    entry.widget.emit("activated")
+    assert window.shown == ["colors"]
+
+
+def test_the_turn_it_on_offer_belongs_to_the_one_owner_now(
+    window: FakeWindow, backend: MemoryBackend
+):
+    """CONTRACT CHANGED BY RULING (Wave-2 gate, R7).
+
+    The add-on offer moved with the setting. It is covered where it now lives,
+    in ``test_pages_colors.py``; asserted absent here so the two pages cannot
+    quietly grow a second copy of it again.
+    """
     with backends.use_backend(backend):
         widget = topbar.build(window)
-        buttons = _find_buttons_labelled(widget, "Turn it on")
-        # The add-on may already be enabled on the machine running this test
-        # (it is a real, popular add-on) — the button only exists when it
-        # is not, so this is conditional rather than unconditional.
-        if buttons:
-            buttons[0].emit("clicked")
-            enabled = backend.get("gsettings:org.gnome.shell enabled-extensions")
-            assert "user-theme@gnome-shell-extensions.gcampax.github.com" in enabled
+    assert _find_buttons_labelled(widget, "Turn it on") == []
 
 
 # -- one-shot first-visit banners -------------------------------------------
