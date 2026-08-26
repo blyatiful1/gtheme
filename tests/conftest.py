@@ -19,10 +19,34 @@ An isolation seam is one of:
 The guard skips rather than fails, so that a suite run without seams is quiet
 rather than red; but the skip reason names the missing seam, so a test that was
 *meant* to have one cannot be mistaken for a test that passed.
+
+TWO LAYERS BELOW THAT GUARD, ADDED AFTER A REAL LEAK. Wave 2 shipped three
+tests that handed a page ``root=tmp_path`` and believed that was the whole
+seam. It was half of one: the page read saved moments from the temporary
+directory, but the transaction the page then ran took its *automatic* restore
+point through :func:`gtheme.core.paths.restore_points_dir`, which reads the
+environment and not the page's argument. Seven junk restore points recording
+the real desktop appeared in ``~/.local/state/gtheme/v2`` during a plain suite
+run. So:
+
+* :func:`_quarantine_state_dir` gives **every** test its own throwaway v2 state
+  root, whether it asked for one or not. A test that wants a specific one still
+  requests the ``state_dir`` fixture and wins; a test that deliberately probes
+  the default still ``delenv``\\ s the variable and wins.
+* :func:`_live_state_dir_unchanged` photographs the real
+  ``~/.local/state/gtheme/v2`` before the first test and again after the last
+  one, and fails the run — loudly, by name — if a single byte moved.
+
+Because the quarantine sets ``GTHEME_STATE_DIR`` for everything, that variable
+on its own can no longer *prove* a test is isolated. :func:`_active_seams`
+therefore ignores the value the quarantine parked there and counts only a value
+some test chose for itself. The ``mutating`` guard is exactly as strict as it
+was before.
 """
 
 from __future__ import annotations
 
+import hashlib
 import os
 from collections.abc import Iterator
 from pathlib import Path
@@ -74,10 +98,26 @@ SEAM_FIXTURES = (
 #: Set by the ``memory_settings`` fixture for the duration of a test.
 _MEMORY_BACKEND_ACTIVE = "_gtheme_memory_backend_active"
 
+#: Where :func:`_quarantine_state_dir` parked this test's throwaway v2 state
+#: root. Recorded on the node so :func:`_active_seams` can tell "the harness
+#: put a safety net under you" apart from "you asked for isolation".
+_AUTO_STATE_DIR = "_gtheme_auto_state_dir"
+
 
 def _active_seams(request: pytest.FixtureRequest) -> list[str]:
-    """Which isolation seams are in effect for this test."""
-    seams = [name for name in SEAM_ENV_VARS if os.environ.get(name)]
+    """Which isolation seams are in effect for this test.
+
+    ``GTHEME_STATE_DIR`` counts only when the test chose the value. Every test
+    gets a quarantined state root from :func:`_quarantine_state_dir`, and a
+    safety net nobody asked for is not evidence that a test is isolated.
+    """
+    auto_state_dir = getattr(request.node, _AUTO_STATE_DIR, None)
+    seams = [
+        name
+        for name in SEAM_ENV_VARS
+        if os.environ.get(name)
+        and not (name == "GTHEME_STATE_DIR" and os.environ[name] == auto_state_dir)
+    ]
     if getattr(request.node, _MEMORY_BACKEND_ACTIVE, False):
         seams.append("memory_settings")
     seams.extend(name for name in SEAM_FIXTURES if name in request.fixturenames)
@@ -100,6 +140,81 @@ def enforce_isolation(request: pytest.FixtureRequest) -> None:
         "tmp_dest_root or memory_settings fixture, or set one of "
         + ", ".join(SEAM_ENV_VARS)
     )
+
+
+def live_state_dir() -> Path:
+    """The real v2 state root this machine's gtheme uses.
+
+    Deliberately *not* :func:`gtheme.core.paths.state_dir`: that function reads
+    ``GTHEME_STATE_DIR``, which the quarantine below always sets, so asking it
+    would only ever photograph the throwaway directory.
+    """
+    base = os.environ.get("XDG_STATE_HOME")
+    root = Path(base).expanduser() if base else Path.home() / ".local" / "state"
+    return root / "gtheme" / "v2"
+
+
+def _fingerprint(root: Path) -> dict[str, str]:
+    """Path to content hash for every file under ``root``. Empty if absent."""
+    if not root.exists():
+        return {}
+    out: dict[str, str] = {}
+    for path in sorted(root.rglob("*")):
+        rel = str(path.relative_to(root))
+        if path.is_dir():
+            out[rel + "/"] = "dir"
+        else:
+            try:
+                out[rel] = hashlib.sha256(path.read_bytes()).hexdigest()
+            except OSError as exc:  # pragma: no cover - unreadable is a change
+                out[rel] = f"unreadable: {exc}"
+    return out
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _live_state_dir_unchanged() -> Iterator[None]:
+    """Fail the whole run if the suite moved the real v2 state directory.
+
+    The ``mutating`` guard protects the desktop's *settings*; this protects
+    gtheme's own record of them — the restore points a person's undo depends
+    on. A test that writes here has escaped its seam even if every assertion
+    passed, so this is an error, not a warning.
+    """
+    root = live_state_dir()
+    before = _fingerprint(root)
+    yield
+    after = _fingerprint(root)
+    if before == after:
+        return
+    added = sorted(set(after) - set(before))
+    removed = sorted(set(before) - set(after))
+    changed = sorted(k for k in set(before) & set(after) if before[k] != after[k])
+    raise AssertionError(
+        f"the test suite changed the REAL state directory {root}.\n"
+        f"  added:   {added}\n"
+        f"  removed: {removed}\n"
+        f"  changed: {changed}\n"
+        "Some test reached past its seam: a page's root= argument does not "
+        "reach the transaction machinery, which resolves GTHEME_STATE_DIR."
+    )
+
+
+@pytest.fixture(autouse=True)
+def _quarantine_state_dir(
+    request: pytest.FixtureRequest,
+    tmp_path_factory: pytest.TempPathFactory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Point ``GTHEME_STATE_DIR`` at a throwaway directory for every test.
+
+    Declared before :func:`_mutating_guard` so the node attribute exists by the
+    time the guard reads it, and before the ``state_dir`` fixture — which is
+    not autouse and therefore runs later, so a test that asks for a specific
+    state root still gets exactly that one.
+    """
+    path = tmp_path_factory.mktemp("auto-state")
+    monkeypatch.setenv("GTHEME_STATE_DIR", str(path))
+    setattr(request.node, _AUTO_STATE_DIR, str(path))
 
 
 @pytest.fixture(autouse=True)

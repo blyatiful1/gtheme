@@ -1,4 +1,12 @@
-"""Undo & Restore Points: what it saves, and how honestly it describes it."""
+"""Undo & Restore Points: what it saves, and how honestly it describes it.
+
+``root=tmp_path`` tells the restore-point *store* where to live, but undoing
+runs a real :class:`~gtheme.core.transaction.Transaction`, and the automatic
+restore point, ownership ledger and baseline it writes all resolve from
+``GTHEME_STATE_DIR`` rather than from that argument. Half a seam is not a seam:
+before :func:`_state_root` was added, ``test_undo_picks_the_newest_and_puts_the_value_back``
+was writing into the real ``~/.local/state/gtheme/v2``.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +21,12 @@ from gtheme.core.restorepoints import RestorePoint  # noqa: E402
 from gtheme.core.settings_backend import MemoryBackend  # noqa: E402
 from gtheme.ui import jargon  # noqa: E402
 from gtheme.ui.pages import restore  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _state_root(tmp_path, monkeypatch):
+    """The engine's state root is the same tmp_path the store is handed."""
+    monkeypatch.setenv("GTHEME_STATE_DIR", str(tmp_path))
 
 
 def test_default_label_is_a_date_a_person_would_say():

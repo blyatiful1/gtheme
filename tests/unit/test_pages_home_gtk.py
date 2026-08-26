@@ -3,6 +3,13 @@
 Marked ``gtk``: real libadwaita widgets are built. Nothing is presented, so
 nothing appears on the developer's screen, and every value is read from an
 in-memory settings backend, so the live desktop is neither read nor written.
+
+The undo test needs one thing more than that. ``root=tmp_path`` aims the
+*page* at a temporary directory, but undoing runs a real
+:class:`~gtheme.core.transaction.Transaction`, whose automatic restore point,
+ownership ledger and baseline all resolve from ``GTHEME_STATE_DIR`` — so that
+test was writing into the real ``~/.local/state/gtheme/v2``.
+:func:`_state_root` points the engine at the same directory the page uses.
 """
 
 from __future__ import annotations
@@ -58,6 +65,12 @@ def backend():
     settings.set("gsettings:org.gnome.desktop.interface accent-color", "'green'")
     settings.set("gsettings:org.gnome.desktop.interface icon-theme", "'Papirus-Dark'")
     return settings
+
+
+@pytest.fixture(autouse=True)
+def _state_root(tmp_path, monkeypatch):
+    """The engine's state root is the same tmp_path the page is handed."""
+    monkeypatch.setenv("GTHEME_STATE_DIR", str(tmp_path))
 
 
 def _page(window, backend, tmp_path, **kwargs):

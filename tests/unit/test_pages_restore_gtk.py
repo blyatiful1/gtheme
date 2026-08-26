@@ -3,6 +3,14 @@
 Marked ``gtk``: real libadwaita widgets. Nothing is presented; saved moments go
 to a temporary directory and settings to an in-memory backend, so the desktop
 this suite runs on is neither read nor written.
+
+That last sentence used to be false. ``root=tmp_path`` tells the *page* where
+to read and write saved moments, but applying one runs a real
+:class:`~gtheme.core.transaction.Transaction`, and the automatic restore point
+it takes first resolves :func:`gtheme.core.paths.restore_points_dir` from the
+environment — so two tests in this file were writing junk restore points into
+the real ``~/.local/state/gtheme/v2``. :func:`_state_root` closes that: one
+temporary directory, agreed on by the page argument and by the engine.
 """
 
 from __future__ import annotations
@@ -53,6 +61,17 @@ def backend():
     settings = MemoryBackend()
     settings.set(ACCENT, "'green'")
     return settings
+
+
+@pytest.fixture(autouse=True)
+def _state_root(tmp_path, monkeypatch):
+    """The engine's state root is the same tmp_path the page is handed.
+
+    Without this the page's ``root=`` is only half a seam: the automatic
+    restore point a transaction takes lands wherever ``GTHEME_STATE_DIR``
+    points, and on a developer's machine that is the real desktop's.
+    """
+    monkeypatch.setenv("GTHEME_STATE_DIR", str(tmp_path))
 
 
 def _page(window, backend, tmp_path):
