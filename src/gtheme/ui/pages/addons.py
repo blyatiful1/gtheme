@@ -53,7 +53,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
 
-from ...core.backends import AutoBackend, get_backend, has_session_bus  # noqa: E402
+from ...core.backends import get_backend, has_session_bus  # noqa: E402
 from ...core.settings_backend import BackendError, SettingsBackend  # noqa: E402
 from ...ego.client import DiskCache, EgoClient, EgoError, SoupTransport  # noqa: E402
 from ...ego.install import (  # noqa: E402
@@ -310,24 +310,18 @@ def summary_of(text: str, limit: int = 140) -> str:
 def backend_for_schema(probe: SchemaProbe, schema_id: str) -> SettingsBackend:
     """The backend an add-on's own settings can be read and written through.
 
-    :func:`~gtheme.core.backends.get_backend` is the app's backend and is what
-    everything else uses. An add-on, though, keeps the description of its
-    settings inside its own folder, and the system knows nothing about it — a
-    backend without that description in hand reports every one of its settings
-    as missing.
+    An add-on keeps the description of its settings inside its own folder, and
+    the system knows nothing about it — a backend without that description in
+    hand reports every one of its settings as missing. So this asks the probe
+    where the add-on's descriptions are and asks
+    :func:`~gtheme.core.backends.get_backend` for a backend scoped to them.
 
-    So the app's backend is used unchanged whenever something has deliberately
-    put one in place (which is what the test suite does, and what keeps the
-    tests off the real desktop), and only the plain default is re-made carrying
-    the add-on's own descriptions.
+    The rule that a forced backend wins regardless lives there now rather than
+    here. It is what keeps the tests off the real desktop, it was written out
+    twice in this app, and it is exactly the rule a page is likeliest to walk
+    past while reaching for a schema.
     """
-    backend = get_backend()
-    if not isinstance(backend, AutoBackend) or backend.schema_source is not None:
-        return backend
-    source = probe.source_for(schema_id)
-    if source is None:
-        return backend
-    return AutoBackend(source)
+    return get_backend(schema_source=probe.source_for(schema_id))
 
 
 #: Add-on authors write their own one-line summaries for programmers, and a
@@ -1038,25 +1032,30 @@ class AddonsPage(Adw.Bin):
         # looking at what is on disk, and a setting this version of the add-on
         # does not have goes grey a frame later instead of holding the window.
         if rows:
-            source = probe_rows_idle(self.probe, rows, self._grey_if_missing(widgets, backend))
+            source = probe_rows_idle(
+                self.probe, rows, self._grey_if_missing(widgets), backend=backend
+            )
             self._sources.append(source)
             dialog.connect("closed", lambda *_a, s=source: self._drop_source(s))
 
         return self._present(dialog)
 
     def _grey_if_missing(
-        self, widgets: dict[str, Adw.PreferencesRow], backend: SettingsBackend
+        self, widgets: dict[str, Adw.PreferencesRow]
     ) -> Callable[[Row, Any], None]:
         """Turn a probe verdict into a row that is visibly, honestly off.
 
-        The verdict is asked for again with the backend in hand. The idle probe
-        cannot pass one, and without it the add-ons that keep their settings in
-        a file of their own are all reported as unreadable — which would grey
-        the one panel on this machine that works hardest to be live.
+        The verdict arrives already made. This used to throw it away and ask
+        again with the backend in hand, because the idle probe could not be
+        given one — and without one, an add-on that keeps its settings in a
+        file of its own has no way to say which file is in use and comes back
+        "cannot be read", which would grey the one panel on this machine that
+        works hardest to be live. ``probe_rows_idle`` takes a backend now, so
+        the verdict it hands over is the one to act on.
         """
 
-        def _on_result(row: Row, _availability: Any) -> None:
-            verdict = self.probe.availability(row, backend)
+        def _on_result(row: Row, availability: Any) -> None:
+            verdict = availability
             if verdict.ok:
                 return
             widget = widgets.get(row.id)

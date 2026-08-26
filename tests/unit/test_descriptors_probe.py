@@ -316,3 +316,39 @@ def test_an_ordinary_row_is_never_rewritten(bmw_backend):
 
     row = _row("org.gnome.desktop.interface", "color-scheme")
     assert resolve_row(row, bmw_backend) is row
+
+
+def test_the_idle_probe_hands_the_backend_on_so_a_keyfile_row_is_not_greyed(
+    probe, bmw_backend, tmp_path
+):
+    """CONTRACT CHANGED BY RULING (Wave-2 gate, R4).
+
+    ``probe_rows_idle`` took no backend, so it always answered the pessimistic
+    way for the add-ons that keep their settings in a file of their own — and
+    the Add-ons page, which is exactly where those appear, worked around it by
+    throwing the verdict away and asking again itself. Now the verdict it
+    hands over is the one to act on.
+    """
+    from gi.repository import GLib
+
+    profile = tmp_path / "1787167433969725.conf"
+    profile.write_text("[burn-my-windows-profile]\n", encoding="utf-8")
+    bmw_backend.set(BMW_ACTIVE, f"'{profile}'")
+    rows = [_row(BMW_PROFILE, "fire-enable-effect")]
+
+    def run(**kwargs) -> Presence:
+        seen: list[Presence] = []
+        loop = GLib.MainLoop()
+        probe_rows_idle(
+            probe, rows, lambda _row, verdict: seen.append(verdict.presence),
+            on_done=loop.quit, **kwargs
+        )
+        GLib.timeout_add(5000, loop.quit)
+        loop.run()
+        assert seen, "the probe never reported"
+        return seen[0]
+
+    assert run(backend=bmw_backend) is Presence.AVAILABLE
+    # Without one it is still pessimistic, which is the right answer to
+    # "nobody checked" and the reason the parameter had to exist.
+    assert run() is Presence.STORED_ELSEWHERE

@@ -20,7 +20,13 @@ import shutil
 
 import pytest
 
-from gtheme.core.backends import AutoBackend, has_session_bus, is_missing
+from gtheme.core.backends import (
+    AutoBackend,
+    get_backend,
+    has_session_bus,
+    is_missing,
+    use_backend,
+)
 from gtheme.core.settings_backend import (
     BackendError,
     BackendErrorKind,
@@ -448,3 +454,40 @@ def test_the_memory_backend_holds_a_settings_file_key_in_memory(
     backend.set(key, "'in memory only'")
     assert backend.get(key) == "'in memory only'"
     assert not target.exists(), "the memory backend must not reach the disk"
+
+
+# -- asking for a backend scoped to somebody else's schemas -----------------
+#
+# An add-on keeps the description of its settings inside its own folder. A
+# backend without that description in hand reports every one of its settings as
+# missing, so a page showing an add-on's settings needs one scoped to the
+# source the schema probe found. Two pages had each written the rule out; the
+# one that matters is the one below, and it is the one a page walks past.
+
+
+def test_a_scoped_backend_reads_a_schema_the_system_does_not_know(schema_source_factory):
+    source = schema_source_factory(SCHEMA_XML)
+    scoped = get_backend(schema_source=source)
+    assert scoped.schema_source is source
+    assert get_backend().schema_source is not source, "the app's backend must not change"
+
+
+def test_a_forced_backend_is_returned_even_when_a_source_is_asked_for(schema_source_factory):
+    """The rule that keeps the whole suite off the real desktop.
+
+    A page reaching for an add-on's schemas must not quietly build a second,
+    real backend and walk straight past the MemoryBackend the tests forced.
+    """
+    forced = MemoryBackend()
+    with use_backend(forced):
+        assert get_backend(schema_source=schema_source_factory(SCHEMA_XML)) is forced
+        assert get_backend() is forced
+
+
+def test_a_scoped_backend_is_not_cached_and_handed_to_the_next_caller(schema_source_factory):
+    """Two add-ons, two sources. Reusing one would show the wrong settings."""
+    first = schema_source_factory(SCHEMA_XML)
+    second = schema_source_factory(SCHEMA_XML)
+    assert get_backend(schema_source=first).schema_source is first
+    assert get_backend(schema_source=second).schema_source is second
+    assert get_backend().schema_source is None

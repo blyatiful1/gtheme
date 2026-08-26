@@ -466,6 +466,7 @@ def probe_rows_idle(
     rows: Sequence[Row],
     on_result: Callable[[Row, Availability], None],
     *,
+    backend: Any | None = None,
     on_done: Callable[[], None] | None = None,
     chunk: int = 8,
 ) -> int:
@@ -475,10 +476,20 @@ def probe_rows_idle(
     delayed by disk work; a few rows at a time keeps any single callback well
     under a frame. Remove the returned source with ``GLib.source_remove`` if
     the page is torn down before the probe finishes.
+
+    Args:
+        backend: passed straight through to :meth:`SchemaProbe.availability`,
+            and the reason this parameter exists. Without one, an add-on that
+            keeps its settings in a file of its own has no way to say which
+            file is in use, and :meth:`availability` answers the pessimistic
+            way — so every row of the panel that works hardest to be live comes
+            back "cannot be read". The Add-ons page used to work around that by
+            throwing the verdict away and asking again itself; a caller that
+            has a backend should hand it over instead.
     """
     from gi.repository import GLib
 
-    pending = probe.probe(rows)
+    pending = probe.probe(rows, backend)
 
     def step() -> bool:
         for _ in range(max(1, chunk)):

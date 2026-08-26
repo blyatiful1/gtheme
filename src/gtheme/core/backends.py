@@ -102,17 +102,37 @@ class AutoBackend(SettingsBackend):
         self._pick(key).reset(key)
 
 
-def get_backend() -> SettingsBackend:
+def get_backend(*, schema_source: Any | None = None) -> SettingsBackend:
     """The backend the engine should use right now.
 
     An override set by :func:`set_backend` or :func:`use_backend` always wins.
     Otherwise a single :class:`AutoBackend` is built once and reused, because
     ``Gio.Settings`` objects are worth caching and building one per key is how
     a preview of forty rows becomes slow.
+
+    Args:
+        schema_source: the settings descriptions to read through, for the case
+            where the system's own do not include them. An add-on keeps the
+            description of its settings inside its own folder; a backend
+            without that in hand reports every one of them as missing, so a
+            page showing an add-on's settings needs a backend scoped to the
+            source the schema probe found.
+
+            An override is returned **untouched** even when a source is asked
+            for, and that is the whole point of routing this through here: the
+            test suite forces a ``MemoryBackend`` precisely so nothing reaches
+            the real desktop, and a caller that quietly built a second real
+            backend to get at a schema would have walked straight past that.
+            Two pages had each grown their own version of this rule; there is
+            one now.
     """
     global _DEFAULT
     if _OVERRIDE is not None:
         return _OVERRIDE
+    if schema_source is not None:
+        # Not cached: a scoped backend is per add-on and short-lived, and
+        # caching it would hand the next caller somebody else's schemas.
+        return AutoBackend(schema_source)
     if _DEFAULT is None:
         _DEFAULT = AutoBackend()
     return _DEFAULT
