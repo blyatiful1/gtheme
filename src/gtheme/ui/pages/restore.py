@@ -37,13 +37,14 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw, Gtk  # noqa: E402
+from gi.repository import Adw, GLib, Gtk  # noqa: E402
 
 from ...core import restorepoints  # noqa: E402
 from ...core.backends import get_backend  # noqa: E402
 from ...core.restorepoints import RestorePoint  # noqa: E402
 from ...core.settings_backend import SettingsBackend  # noqa: E402
 from ...panels.loader import load_corpus  # noqa: E402
+from ..applyrunner import ApplyRunner  # noqa: E402
 from ..widgets.rows import key_for  # noqa: E402
 
 __all__ = [
@@ -96,6 +97,8 @@ COPY: dict[str, str] = {
     "confirm-body": "Here is what will change on your desktop:",
     "confirm-cancel": "Keep things as they are",
     "confirm-accept": "Go back",
+    "working-heading": "Putting your desktop back",
+    "working": "Going back to how it was…",
     "done": "Your desktop is back the way it was.",
     "saved": "Saved how your desktop looks right now. You can come back to it any time.",
     "failed": "Nothing was changed. Your desktop is exactly as it was.",
@@ -469,7 +472,7 @@ class RestorePage(Adw.Bin):
         except OSError as exc:
             self._toast(f"Could not save how your desktop looks: {exc.strerror or exc}")
             return
-        self.refresh()
+        self._changed()
         self._toast(COPY["saved"])
 
     def _on_undo(self) -> None:
@@ -479,7 +482,7 @@ class RestorePage(Adw.Bin):
         if point is None:
             self._toast(COPY["undo-nothing"])
             return
-        self._report(result)
+        self._finish_apply(result)
 
     def _on_forget(self, point: RestorePoint) -> None:
         restorepoints.delete(point.id, root=self.root)
@@ -515,9 +518,33 @@ class RestorePage(Adw.Bin):
     def _on_response(self, response: str, point: RestorePoint) -> None:
         if response != "apply":
             return
-        self.apply_point(point)
+        self.start_apply(point)
 
-    def apply_point(self, point: RestorePoint) -> restorepoints.RestoreResult:
+    def start_apply(self, point: RestorePoint) -> None:
+        """Go back to a saved moment, on the shared runner.
+
+        Going back copies files and writes several dozen settings — the
+        "Before gtheme" moment on this machine has forty-six of them — and
+        doing that on the main loop is how a window stops repainting halfway
+        through the one operation the user is most anxious about. So the click
+        handler comes here, and :meth:`apply_point` is the same work with no
+        window around it, which is what a test drives.
+        """
+        runner = self._runner()
+        if runner is None:
+            self._finish_apply(self.apply_point(point))
+            return
+        runner.run(
+            lambda _narrate: self.apply_point(point, report=False),
+            heading=COPY["working-heading"],
+            starting=COPY["working"],
+            on_done=self._finish_apply,
+            on_failed=lambda _error: self._toast(COPY["failed"]),
+        )
+
+    def apply_point(
+        self, point: RestorePoint, *, report: bool = True
+    ) -> restorepoints.RestoreResult:
         """Go back to a saved moment and say what happened."""
         result = restorepoints.apply_point(
             point.id,
@@ -526,12 +553,41 @@ class RestorePage(Adw.Bin):
             backend=self.backend,
             dest_root=self.dest_root,
         )
-        self._report(result)
-        self.refresh()
+        if report:
+            self._finish_apply(result)
         return result
 
-    def _progress(self, *_args: Any) -> None:
-        """Narration hook. Wave 3 owns the shared progress surface."""
+    def _finish_apply(self, result: restorepoints.RestoreResult | None) -> None:
+        self._report(result)
+        self._changed()
+
+    def _progress(self, *args: Any) -> None:
+        """Narration. The shared runner's dialog is where it lands.
+
+        This was the empty seam Wave 2 left. The engine narrates each step of
+        going back; the runner owns the only surface in the app that can say
+        so, and this is the one line joining them. With no runner — a page
+        built by a test — the engine still narrates and nothing listens, which
+        is exactly what should happen.
+        """
+        runner = self._runner()
+        dialog = getattr(runner, "dialog", None)
+        text = next((value for value in args if isinstance(value, str) and value), "")
+        if dialog is not None and text:
+            GLib.idle_add(_narrate, dialog, text)
+
+    def _runner(self) -> ApplyRunner | None:
+        """The window's runner, or None when this page is not in a window."""
+        runner = getattr(self.window, "runner", None)
+        return runner if isinstance(runner, ApplyRunner) else None
+
+    def _changed(self) -> None:
+        """The desktop moved. Everything on screen re-reads itself."""
+        after = getattr(self.window, "after_change", None)
+        if callable(after):
+            after()
+        else:
+            self.refresh()
 
     def _report(self, result: restorepoints.RestoreResult | None) -> None:
         if result is None:
@@ -541,6 +597,12 @@ class RestorePage(Adw.Bin):
             self._toast(result.warnings[0] or COPY["failed"])
             return
         self._toast(COPY["done"])
+
+
+def _narrate(dialog: Adw.AlertDialog, text: str) -> bool:
+    """Put one sentence into the progress dialog. Always on the main loop."""
+    dialog.set_body(text)
+    return GLib.SOURCE_REMOVE
 
 
 def build(window: Any | None = None, **kwargs: Any) -> Gtk.Widget:

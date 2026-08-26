@@ -530,6 +530,7 @@ class HomePage(Adw.Bin):
             self._toast(f"Could not save how your desktop looks: {exc.strerror or exc}")
             return None
         self._toast(restore_page.COPY["saved"])
+        self._changed()
         return point
 
     def undo_last_change(self) -> Any:
@@ -542,8 +543,21 @@ class HomePage(Adw.Bin):
             self._toast(result.warnings[0] or restore_page.COPY["failed"])
             return result
         self._toast(restore_page.COPY["done"])
-        self.refresh()
+        self._changed()
         return result
+
+    def _changed(self) -> None:
+        """The desktop moved. Everything on screen re-reads itself.
+
+        The Undo page's list has a new entry in it, the card above has new
+        values, and search has a new saved moment to find. This page knows
+        about none of that; the window does.
+        """
+        after = getattr(self.window, "after_change", None)
+        if callable(after):
+            after()
+        else:
+            self.refresh()
 
 
 def header_button(page: HomePage) -> Gtk.Button:

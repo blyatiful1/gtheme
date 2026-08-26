@@ -143,6 +143,54 @@ def test_the_confirmation_shows_what_would_change_before_it_changes_it(
     assert backend.get(ACCENT) == "'green'"
 
 
+def test_going_back_narrates_into_the_shared_progress_dialog(window, backend, tmp_path):
+    """The seam Wave 2 left empty.
+
+    The engine narrates each step of going back; the runner owns the only
+    surface in the app that can say so. ``_progress`` is the one line joining
+    them, and it used to be a docstring.
+    """
+    from gtheme.ui.applyrunner import ApplyRunner
+
+    window.runner = ApplyRunner(threaded=False)
+    page = _page(window, backend, tmp_path)
+    page._on_save()
+    backend.set(ACCENT, "'purple'")
+
+    said: list[str] = []
+    original = page._progress
+
+    def watching(*args):
+        said.append(next((a for a in args if isinstance(a, str) and a), ""))
+        original(*args)
+
+    page._progress = watching
+    page.start_apply(page.points()[0])
+
+    assert backend.get(ACCENT) == "'green'"
+    assert any(said), "the engine narrated nothing at all"
+    assert window.toasts[-1] == restore.COPY["done"]
+
+
+def test_going_back_without_a_window_still_works(window, backend, tmp_path):
+    """A page with no runner narrates to nobody, which is the right answer."""
+    page = _page(window, backend, tmp_path)
+    page._on_save()
+    backend.set(ACCENT, "'purple'")
+    page.start_apply(page.points()[0])
+    assert backend.get(ACCENT) == "'green'"
+
+
+def test_a_change_tells_the_rest_of_the_app_rather_than_just_this_page(
+    window, backend, tmp_path
+):
+    told = []
+    window.after_change = lambda: told.append("told")
+    page = _page(window, backend, tmp_path)
+    page._on_save()
+    assert told == ["told"]
+
+
 def test_a_moment_that_has_gone_is_reported_rather_than_raised(window, backend, tmp_path):
     page = _page(window, backend, tmp_path)
     page._on_save()
