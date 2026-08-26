@@ -36,6 +36,11 @@ echo "== pytest (unit + regression + gtk) =="
 "$VENV_PY" -m pytest -q
 
 if [[ "$FULL" == "1" ]]; then
+    # Stamped BEFORE the page walk, checked after it. This is what makes
+    # "fresh screenshots" mean "from this run" rather than "from some run".
+    GTHEME_SCREENSHOT_RUN_START="$(date +%s)"
+    export GTHEME_SCREENSHOT_RUN_START
+
     echo "== pytest (sandbox) =="
     # NEVER '|| true': a red sandbox is a red check.
     "$VENV_PY" -m pytest -q -m sandbox
@@ -51,11 +56,9 @@ if [[ "$FULL" == "1" ]]; then
             echo "== live desktop unchanged =="
             tools/check_live_baseline.sh --baseline-dir "$GTHEME_BASELINE_DIR"
         else
-            # TODO(wave-5): tools/check_live_baseline.sh is not written yet.
-            # Until it exists this gate cannot run, and saying so out loud is
-            # the point — a silently skipped safety check is worse than none.
+            # A silently skipped safety check is worse than none at all.
             echo "verify.sh: GTHEME_BASELINE_DIR is set but tools/check_live_baseline.sh" >&2
-            echo "           does not exist yet — the live-desktop gate did NOT run." >&2
+            echo "           is missing or not executable — the live-desktop gate did NOT run." >&2
             exit 1
         fi
     fi
