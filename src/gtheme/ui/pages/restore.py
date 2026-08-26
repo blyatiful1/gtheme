@@ -148,44 +148,22 @@ def descriptor_keys(corpus: Any | None = None) -> list[str]:
     return keys
 
 
-#: Dispositions whose keys gtheme can write, and which a restore point must
-#: therefore cover. ``excluded`` and ``delegated`` keys are never written.
-_CAPTURED_DISPOSITIONS = ("surfaced", "compound", "floor")
-
-
 def coverage_keys(directory: Path | str | None = None) -> list[str]:
     """The settings named in ``coverage.toml`` that gtheme is allowed to write.
 
-    Read here rather than taken from :func:`gtheme.ui.registry.resolve_surfaced`
-    because that function answers a different question — which page shows which
-    row — and deliberately drops the ``compound`` keys. A restore point that
-    dropped them would not record light-or-dark or which add-ons were on, which
-    are the two things people undo most.
+    A different question from :func:`gtheme.ui.registry.resolve_surfaced`,
+    which answers "which page shows which row" and deliberately drops the
+    ``compound`` keys. A saved moment that dropped them would not record
+    light-or-dark or which add-ons were on, which are the two things people
+    undo most.
+
+    This page used to open and parse ``coverage.toml`` itself to keep that
+    difference. The difference is a function name now, and the file has one
+    reader.
     """
-    from ...panels.loader import data_dir
+    from ...panels.loader import captured_keys
 
-    base = data_dir(directory)
-    if base is None:
-        return []
-    manifest = base / "domains" / "coverage.toml"
-    if not manifest.is_file():
-        return []
-    import tomllib
-
-    try:
-        with manifest.open("rb") as handle:
-            data = tomllib.load(handle)
-    except (OSError, tomllib.TOMLDecodeError):  # pragma: no cover - a broken file is Wave 1's
-        return []
-    keys: list[str] = []
-    for descriptor_id, disposition in (data.get("dispositions") or {}).items():
-        verb = str(disposition).partition("(")[0].strip()
-        if verb not in _CAPTURED_DISPOSITIONS:
-            continue
-        schema, _, key = str(descriptor_id).partition(":")
-        if schema and key:
-            keys.append(f"gsettings:{schema} {key}")
-    return keys
+    return captured_keys(directory)
 
 
 def default_label(when: datetime | None = None) -> str:

@@ -29,10 +29,8 @@ are ordinary data and are tested without a display.
 
 from __future__ import annotations
 
-import tomllib
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 from ..panels import loader as corpus_loader
@@ -68,84 +66,16 @@ __all__ = [
 # the join: coverage.toml -> pages -> rows
 # ---------------------------------------------------------------------------
 
-#: The per-key disposition manifest, beside the descriptor corpus.
-COVERAGE_FILENAME = "coverage.toml"
-
-
-def coverage_dispositions(directory: Path | str | None = None) -> dict[str, str]:
-    """``{descriptor_id: disposition}`` from ``data/domains/coverage.toml``.
-
-    Returns an empty mapping when the file is missing or unreadable rather than
-    raising. A packaging mistake that loses the manifest must show up as pages
-    with no rows on them — visibly wrong, and survivable — not as an app that
-    refuses to open.
-    """
-    base = corpus_loader.data_dir(directory)
-    if base is None:
-        return {}
-    path = base / "domains" / COVERAGE_FILENAME
-    try:
-        with path.open("rb") as handle:
-            data = tomllib.load(handle)
-    except (OSError, tomllib.TOMLDecodeError):
-        return {}
-    given = data.get("dispositions")
-    if not isinstance(given, dict):
-        return {}
-    return {str(key): str(value) for key, value in given.items()}
-
-
-def surfaced_ids(page_id: str, dispositions: dict[str, str] | None = None) -> list[str]:
-    """Every descriptor id that belongs on one page, floor keys included.
-
-    Raises:
-        ValueError: the manifest dispositions a key onto a page that does not
-            exist. Propagated deliberately — it means the data and
-            ``ui.registry`` have drifted, which is a bug to fix rather than a
-            condition to survive.
-    """
-    given = coverage_dispositions() if dispositions is None else dispositions
-    return registry.resolve_surfaced(given).get(page_id, [])
-
-
-def page_rows(
-    page_id: str,
-    *,
-    corpus: corpus_loader.Corpus | None = None,
-    dispositions: dict[str, str] | None = None,
-) -> list[Row]:
-    """The hand-written rows of one page, in the order they were authored.
-
-    Corpus order is authoring order — the order of the ``[[rows]]`` tables in
-    ``data/domains/<area>.toml`` — and that is deliberately what the page shows.
-    A person reading down a page is reading the sequence somebody thought about,
-    not an alphabetical accident.
-
-    Keys dispositioned ``floor`` have no hand-written row and are therefore not
-    returned here; :func:`floor_ids` is the other half.
-    """
-    wanted = set(surfaced_ids(page_id, dispositions))
-    if not wanted:
-        return []
-    loaded = corpus if corpus is not None else corpus_loader.load_corpus()
-    return [row for row in loaded.rows if row.id in wanted]
-
-
-def floor_ids(
-    page_id: str = registry.FLOOR_PAGE_ID,
-    *,
-    corpus: corpus_loader.Corpus | None = None,
-    dispositions: dict[str, str] | None = None,
-) -> list[str]:
-    """Ids on a page that no descriptor file describes. The floor's own list.
-
-    Sorted, because nobody authored an order for them: they are whatever the
-    desktop happens to have that gtheme has not written a control for, and a
-    stable alphabetical order is the only honest one.
-    """
-    loaded = corpus if corpus is not None else corpus_loader.load_corpus()
-    authored = {row.id for row in loaded.rows}
-    return sorted(d for d in surfaced_ids(page_id, dispositions) if d not in authored)
+# The coverage manifest and the joins it feeds live in :mod:`gtheme.panels
+# .loader` — the module that already owns reading the descriptor corpus off
+# disk, and now owns reading the one file that says what each key of it is
+# for. Re-exported here because this is where pages import them from and
+# there is no second meaning of the names.
+COVERAGE_FILENAME = corpus_loader.COVERAGE_FILENAME
+coverage_dispositions = corpus_loader.load_dispositions
+surfaced_ids = corpus_loader.surfaced_ids
+page_rows = corpus_loader.page_rows
+floor_ids = corpus_loader.floor_ids
 
 
 def escape_markup(text: str) -> str:

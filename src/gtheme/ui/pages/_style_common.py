@@ -27,7 +27,6 @@ Three rules this module encodes once, for all three pages:
 
 from __future__ import annotations
 
-import tomllib
 from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
@@ -43,10 +42,10 @@ from ...core.backends import get_backend  # noqa: E402
 from ...core.settings_backend import BackendError, SettingsBackend  # noqa: E402
 from ...core.transaction import Op, Transaction, TransactionError  # noqa: E402
 from ...panels.descriptor import Row  # noqa: E402
-from ...panels.loader import data_dir, load_corpus  # noqa: E402
+from ...panels.loader import load_corpus, load_dispositions  # noqa: E402
+from ...panels.loader import surfaced_ids as loader_surfaced_ids  # noqa: E402
 from ...panels.schema_probe import Availability, SchemaProbe, probe_rows_idle  # noqa: E402
 from ...panels.widgets import build_row  # noqa: E402
-from .. import registry  # noqa: E402
 from ..widgets.rows import RowBuildError, attach_reset, key_for  # noqa: E402
 
 __all__ = [
@@ -105,24 +104,10 @@ def search_text(row: Row) -> str:
 # --------------------------------------------------------------------------
 
 
-def coverage_dispositions(directory: Path | str | None = None) -> dict[str, str]:
-    """``{descriptor_id: disposition}`` from ``data/domains/coverage.toml``.
-
-    Returns an empty mapping when the file is not there rather than raising: a
-    packaging accident should cost the hand-placed rows their probe, not the
-    whole window.
-    """
-    base = data_dir(directory)
-    if base is None:
-        return {}
-    path = base / "domains" / "coverage.toml"
-    try:
-        with path.open("rb") as handle:
-            loaded = tomllib.load(handle)
-    except (OSError, tomllib.TOMLDecodeError):
-        return {}
-    dispositions = loaded.get("dispositions", {})
-    return {str(k): str(v) for k, v in dispositions.items()} if isinstance(dispositions, dict) else {}
+#: ``{descriptor_id: disposition}`` from ``data/domains/coverage.toml``. This
+#: module used to carry its own reader for that file, character-for-character
+#: the same as the one in ``ui.search``. One file, one reader.
+coverage_dispositions = load_dispositions
 
 
 def surfaced_ids(page_id: str, directory: Path | str | None = None) -> list[str]:
@@ -133,8 +118,11 @@ def surfaced_ids(page_id: str, directory: Path | str | None = None) -> list[str]
     per-page list, and the page renders what it is handed. A page therefore
     cannot quietly drop a setting — a test compares this list against what the
     page actually built.
+
+    Keeps the ``directory`` argument the three style pages pass; the shared
+    join takes dispositions rather than a directory, so it is read here.
     """
-    return registry.resolve_surfaced(coverage_dispositions(directory)).get(page_id, [])
+    return loader_surfaced_ids(page_id, load_dispositions(directory))
 
 
 def corpus_rows(directory: Path | str | None = None) -> dict[str, Row]:

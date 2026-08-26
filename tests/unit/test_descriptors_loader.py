@@ -13,11 +13,17 @@ from pathlib import Path
 import pytest
 
 from gtheme.panels.loader import (
+    CAPTURED_DISPOSITIONS,
     Corpus,
+    captured_keys,
     data_dir,
+    floor_ids,
     load_corpus,
+    load_dispositions,
     load_domains,
     load_panels,
+    page_rows,
+    surfaced_ids,
 )
 
 PANEL_TOML = """
@@ -262,3 +268,69 @@ def test_no_committed_descriptor_names_a_settings_file(repo_root):
         if "keyfile" in path.read_text(encoding="utf-8")
     ]
     assert offenders == [], f"keyfile is not an authoring field: {offenders}"
+
+
+# -- the coverage manifest has one reader -----------------------------------
+#
+# Three modules had each grown their own reader for data/domains/coverage.toml:
+# ui.search and ui.pages._style_common character-for-character the same, and
+# ui.pages.restore subtly different — it keeps the `compound` keys the other two
+# drop, because a saved moment that dropped them would not record light-or-dark
+# or which add-ons were on. Three readers of one file is three chances for the
+# manifest to mean three things.
+
+
+def test_every_module_that_asks_about_coverage_asks_the_same_reader():
+    """CONTRACT CHANGED BY RULING (Wave-2 gate, R10): one reader, re-exported.
+
+    Identity, not equality: two readers that agree today are two readers that
+    can drift tomorrow, which is the failure this ruling was about.
+    """
+    from gtheme.ui import search
+    from gtheme.ui.pages import _style_common
+
+    assert search.coverage_dispositions is load_dispositions
+    assert _style_common.coverage_dispositions is load_dispositions
+    assert search.page_rows is page_rows
+    assert search.floor_ids is floor_ids
+    assert search.surfaced_ids is surfaced_ids
+
+
+def test_the_saved_moment_reader_keeps_the_keys_the_page_join_drops():
+    """The difference between the two questions is a function name now.
+
+    ``surfaced_ids`` answers "which page shows which row" and drops compound
+    keys, which have no row anywhere. ``captured_keys`` answers "what may
+    gtheme write", and a saved moment needs those keys or undo cannot put back
+    light-or-dark.
+    """
+    dispositions = load_dispositions()
+    assert dispositions, "the shipped manifest must load"
+    assert "compound" in CAPTURED_DISPOSITIONS
+
+    compound = [
+        key for key, value in dispositions.items() if value.startswith("compound")
+    ]
+    assert compound, "the premise of this test changed"
+
+    captured = set(captured_keys())
+    for descriptor_id in compound:
+        schema, _, key = descriptor_id.partition(":")
+        assert f"gsettings:{schema} {key}" in captured, descriptor_id
+
+    from gtheme.ui import registry
+
+    everywhere = {
+        row_id
+        for page_id in registry.page_ids()
+        for row_id in surfaced_ids(page_id, dispositions)
+    }
+    assert not (set(compound) & everywhere), "a compound key has no row anywhere"
+
+
+def test_a_missing_manifest_is_empty_rather_than_fatal(monkeypatch, tmp_path):
+    """A packaging accident costs the rows, never the window."""
+    monkeypatch.setenv("GTHEME_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("XDG_DATA_DIRS", str(tmp_path))
+    assert load_dispositions() == {}
+    assert captured_keys() == []
