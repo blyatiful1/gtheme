@@ -42,12 +42,16 @@ from gi.repository import Adw, GLib, Gtk  # noqa: E402
 from gtheme.prefs import Prefs  # noqa: E402
 from gtheme.window import Window  # noqa: E402
 
-#: The window is photographed at its real size, so this is the width the
-#: screenshots end up being. 1200 is what the README shows and what
-#: packaging.md asks for; scaling a 1000px window up to it would be a blurry
-#: picture of a sharp app.
+#: The window is photographed at its real size, so this is the size the
+#: screenshots end up being. These are ``window.DEFAULT_WIDTH`` and
+#: ``DEFAULT_HEIGHT`` — the size gtheme actually opens at — rather than numbers
+#: this probe made up, so the README shows a first run and not a shape nobody's
+#: window is. ``test_window.py`` asserts the two stay equal; when they drifted,
+#: the pictures were 800px tall and cut the sidebar off mid-"Safety", and
+#: scaling a narrower window up to the README's 1200 would be a blurry picture
+#: of a sharp app.
 WINDOW_WIDTH = 1200
-WINDOW_HEIGHT = 800
+WINDOW_HEIGHT = 900
 
 #: How long to let the toolkit finish after a command before answering. The
 #: expensive page (More Settings, 243 rows) builds in about 1.4 s, and a

@@ -65,16 +65,19 @@ from ...preset.compile import compile_preset  # noqa: E402
 from ...preset.loader import LoadResult, load_all, user_themes_dir  # noqa: E402
 from ...preset.model import Component  # noqa: E402
 from ..applyrunner import ApplyRunner  # noqa: E402
-from ..preview import build_preview  # noqa: E402
+from ..preview import ASPECT_RATIO, build_preview  # noqa: E402
 from ..widgets.rows import key_for  # noqa: E402
 
 __all__ = [
     "BADGES",
     "COPY",
+    "GRID_COLUMN",
+    "TILE_WIDTH",
     "AddonBatch",
     "ApplyPlan",
     "LookTile",
     "LooksPage",
+    "TileFrame",
     "build",
     "capture_keys",
     "component_for_key",
@@ -197,6 +200,29 @@ BADGES: dict[str, str] = {
 
 #: The banner state key. Defined in ``prefs.KNOWN_BANNERS``.
 BANNER_ID = "first-visit-looks"
+
+#: How wide one tile asks to be, and the reason the grid is a grid.
+#:
+#: A ``Gtk.FlowBox`` decides how many children fit on a line from what they say
+#: they *naturally* want, and a Look's preview is a real screenshot: the
+#: ``Gtk.Picture`` inside it reports the picture's own width, 2561px for a 1440p
+#: shot, and ``Gtk.AspectFrame`` passes that straight through. So the FlowBox
+#: was answering correctly — one child per line — and the wide empty margins
+#: either side were the aspect frame centring a 320px preview inside a line it
+#: had been told was needed. :class:`TileFrame` is what turns "this tile wants
+#: the width of a cinema screen" into "this tile wants a tile".
+TILE_WIDTH = 360
+
+#: How wide the column holding a grid is allowed to get.
+#:
+#: The ``tightening_threshold`` matters as much as the maximum. An
+#: ``Adw.Clamp`` left at its default threshold of 400 hands its child *less*
+#: than the room available all the way up to the maximum — 754px out of 864 on
+#: the window this app opens at — which is exactly the kind of missing hundred
+#: pixels that costs a grid its second column. A column of tiles is not a
+#: column of prose: it wants the width it is given, up to a limit, so the
+#: threshold and the maximum are the same number here.
+GRID_COLUMN = 1000
 
 
 # --------------------------------------------------------------------------
@@ -593,6 +619,93 @@ def enabled_extension_uuids(backend: Any | None = None) -> list[str]:
 
 
 # --------------------------------------------------------------------------
+# the grid's two shared pieces
+# --------------------------------------------------------------------------
+
+
+class TileFrame(Gtk.Widget):
+    """One tile: asks for a tile's worth of width, then fills what it is given.
+
+    ``Adw.Clamp`` is the obvious tool for this and the wrong one, because it
+    caps the *allocation* as well as the request: a FlowBox stretches the
+    columns of a line to fill it, and a clamped tile inside a stretched column
+    is a picture floating in the middle of empty space — which is the defect
+    this whole exercise is about, moved rather than fixed. Capping only what
+    the tile asks for is what a grid needs: it decides the number of columns,
+    and then every tile takes its column whole.
+
+    See :data:`TILE_WIDTH` for why the request has to be capped at all.
+    """
+
+    __gtype_name__ = "GthemeLookTileFrame"
+
+    def __init__(self, child: Gtk.Widget) -> None:
+        super().__init__()
+        self._child: Gtk.Widget | None = child
+        child.set_parent(self)
+
+    def do_measure(  # noqa: D102 - GTK vfunc
+        self, orientation: Gtk.Orientation, for_size: int
+    ) -> tuple[int, int, int, int]:
+        if self._child is None:
+            return 0, 0, -1, -1
+        minimum, natural, min_baseline, nat_baseline = self._child.measure(
+            orientation, for_size
+        )
+        if orientation == Gtk.Orientation.HORIZONTAL:
+            natural = max(minimum, min(natural, TILE_WIDTH))
+        return minimum, natural, min_baseline, nat_baseline
+
+    def do_size_allocate(self, width: int, height: int, baseline: int) -> None:  # noqa: D102
+        if self._child is not None:
+            self._child.allocate(width, height, baseline, None)
+
+    def do_dispose(self) -> None:  # noqa: D102 - GTK vfunc
+        if self._child is not None:
+            self._child.unparent()
+            self._child = None
+        Gtk.Widget.do_dispose(self)
+
+
+def _tile_preview(preview: Gtk.Widget) -> Gtk.Widget:
+    """Let a tile's picture be as tall as a tile is wide, in 16:9.
+
+    ``ui.preview.build_preview`` asks for 320x180 and nothing taller, because it
+    does not know how wide the thing showing it will be. Its aspect frame then
+    keeps the ratio by *narrowing* the picture back to 320 inside whatever width
+    it was given — which is where the empty margins either side of a tile's
+    picture came from, and why they did not go away when the tiles themselves
+    stopped being a page wide. Asking for the height a :data:`TILE_WIDTH` tile
+    needs is what lets the picture fill one. The existing width request is read
+    back rather than restated, so this stays true if that default moves.
+    """
+    width, _height = preview.get_size_request()
+    preview.set_size_request(width, round(TILE_WIDTH / ASPECT_RATIO))
+    return preview
+
+
+def _tile_description(text: str) -> Gtk.Widget:
+    """A Look's own sentence about itself, cut with an ellipsis and not a knife.
+
+    ``Gtk.Inscription`` clips by default, and clipping happens wherever the
+    pixels run out — which is how "a brass hairline" became "a brass hai" at
+    the edge of a tile. Ellipsizing ends the line at a word boundary instead,
+    with the one mark that says there is more of it; the whole sentence is on
+    the tile's tooltip either way.
+    """
+    description = Gtk.Inscription(
+        text=text,
+        nat_lines=2,
+        xalign=0,
+        hexpand=True,
+        text_overflow=Gtk.InscriptionOverflow.ELLIPSIZE_END,
+    )
+    description.add_css_class("dimmed")
+    description.add_css_class("caption")
+    return description
+
+
+# --------------------------------------------------------------------------
 # the page
 # --------------------------------------------------------------------------
 
@@ -654,6 +767,12 @@ class LooksPage(Gtk.Box):
     # -- construction ------------------------------------------------------
 
     def _build_installed(self) -> Gtk.Widget:
+        # ``max_children_per_line`` is a ceiling, not a target: what actually
+        # decides how many tiles share a line is how wide a tile says it is,
+        # which is :data:`TILE_WIDTH`. ``min_children_per_line`` stays at one
+        # because this grid lives in a scroller with no horizontal bar, so a
+        # floor of two would make the whole page refuse to be narrower than two
+        # tiles — and the window is allowed down to 360px.
         self._grid = Gtk.FlowBox(
             valign=Gtk.Align.START,
             homogeneous=True,
@@ -692,7 +811,13 @@ class LooksPage(Gtk.Box):
         column.append(save)
         column.append(safety)
 
-        clamp = Adw.Clamp(maximum_size=1000, margin_start=18, margin_end=18, margin_bottom=24)
+        clamp = Adw.Clamp(
+            maximum_size=GRID_COLUMN,
+            tightening_threshold=GRID_COLUMN,
+            margin_start=18,
+            margin_end=18,
+            margin_bottom=24,
+        )
         clamp.set_child(column)
         return Gtk.ScrolledWindow(
             child=clamp, hscrollbar_policy=Gtk.PolicyType.NEVER, vexpand=True
@@ -720,7 +845,13 @@ class LooksPage(Gtk.Box):
             row_spacing=18,
             selection_mode=Gtk.SelectionMode.NONE,
         )
-        clamp = Adw.Clamp(maximum_size=1000, margin_start=18, margin_end=18, margin_bottom=24)
+        clamp = Adw.Clamp(
+            maximum_size=GRID_COLUMN,
+            tightening_threshold=GRID_COLUMN,
+            margin_start=18,
+            margin_end=18,
+            margin_bottom=24,
+        )
         clamp.set_child(self._browse_grid)
         self._browse_stack.add_named(
             Gtk.ScrolledWindow(
@@ -768,14 +899,21 @@ class LooksPage(Gtk.Box):
     def _tile_button(self, tile: LookTile) -> Gtk.Widget:
         button = Gtk.Button(has_frame=False)
         button.add_css_class("flat")
-        button.set_child(self._tile_content(tile))
+        button.set_child(TileFrame(self._tile_content(tile)))
+        # The card is a card, not a column: on a wide window the FlowBox
+        # stretches its columns, and a stretched card is empty space with a
+        # picture in the middle of it. Centring puts that space between the
+        # cards, where a grid wants it.
+        button.set_halign(Gtk.Align.CENTER)
         button.set_tooltip_text(tile.description or tile.title)
         button.connect("clicked", lambda _button, t=tile: self._on_tile_activated(t))
         return button
 
     def _tile_content(self, tile: LookTile) -> Gtk.Widget:
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        box.append(build_preview(palette=tile.palette, pictures=list(tile.pictures)))
+        box.append(
+            _tile_preview(build_preview(palette=tile.palette, pictures=list(tile.pictures)))
+        )
 
         title = Gtk.Label(label=tile.title, xalign=0, wrap=True)
         title.add_css_class("heading")
@@ -794,12 +932,7 @@ class LooksPage(Gtk.Box):
         box.append(badges)
 
         if tile.description and not tile.broken:
-            description = Gtk.Inscription(
-                text=tile.description, nat_lines=2, xalign=0, hexpand=True
-            )
-            description.add_css_class("dimmed")
-            description.add_css_class("caption")
-            box.append(description)
+            box.append(_tile_description(tile.description))
         return box
 
     # -- the apply flow ----------------------------------------------------
@@ -1094,7 +1227,7 @@ class LooksPage(Gtk.Box):
     def _community_tile(self, entry: Any) -> Gtk.Widget:
         here = any(tile.name == entry.name for tile in self._tiles)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        box.append(build_preview(palette=None))
+        box.append(_tile_preview(build_preview(palette=None)))
 
         title = Gtk.Label(label=entry.title or entry.name, xalign=0, wrap=True)
         title.add_css_class("heading")
@@ -1108,15 +1241,11 @@ class LooksPage(Gtk.Box):
         box.append(badge)
 
         if entry.description:
-            description = Gtk.Inscription(
-                text=entry.description, nat_lines=2, xalign=0, hexpand=True
-            )
-            description.add_css_class("dimmed")
-            description.add_css_class("caption")
-            box.append(description)
+            box.append(_tile_description(entry.description))
 
-        button = Gtk.Button(has_frame=False, child=box)
+        button = Gtk.Button(has_frame=False, child=TileFrame(box), halign=Gtk.Align.CENTER)
         button.add_css_class("flat")
+        button.set_tooltip_text(entry.description or entry.title or entry.name)
         button.connect("clicked", lambda _button, e=entry, h=here: self._on_community(e, h))
         return button
 

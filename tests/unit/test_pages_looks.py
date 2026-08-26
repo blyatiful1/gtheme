@@ -391,6 +391,75 @@ def test_the_grid_holds_one_tile_per_look(config_dir, themes_dir, backend):
     assert len(children) == len(page._tiles)
 
 
+def _descendants(widget):
+    child = widget.get_first_child()
+    while child is not None:
+        yield child
+        yield from _descendants(child)
+        child = child.get_next_sibling()
+
+
+def test_a_tile_asks_for_a_tiles_worth_of_width_not_a_screenshots(
+    config_dir, themes_dir, backend
+):
+    """Why the grid was one tile per row, and the fix for it.
+
+    A bundled Look ships a real screenshot, and ``Gtk.Picture`` reports the
+    picture's own width as its natural size — 2561px for a 1440p shot, passed
+    straight through by ``Gtk.AspectFrame``. ``Gtk.FlowBox`` lays out lines from
+    what its children say they naturally want, so it put one tile per line and
+    centred a 320px preview in the middle of it, which is exactly what the
+    screenshots showed. Measuring the tile is the property that matters; how
+    many end up on a line is then arithmetic the toolkit does.
+    """
+    page = looks.build(FakeWindow(Prefs()))
+    assert page._tiles, "no Looks to measure"
+
+    child = page._grid.get_first_child()
+    widest = 0
+    while child is not None:
+        widest = max(widest, child.measure(Gtk.Orientation.HORIZONTAL, -1).natural)
+        child = child.get_next_sibling()
+
+    # The clamp plus the button's own padding; nowhere near a screenshot.
+    assert widest <= looks.TILE_WIDTH + 40, widest
+
+
+def test_a_tiles_description_is_ellipsized_rather_than_cut_mid_word(
+    config_dir, themes_dir, backend
+):
+    page = looks.build(FakeWindow(Prefs()))
+    inscriptions = [
+        widget for widget in _descendants(page._grid) if isinstance(widget, Gtk.Inscription)
+    ]
+    assert inscriptions, "no Look on this grid describes itself"
+    assert all(
+        widget.get_text_overflow() == Gtk.InscriptionOverflow.ELLIPSIZE_END
+        for widget in inscriptions
+    )
+
+
+def test_a_community_tile_is_held_to_the_same_width_and_ellipsis(
+    config_dir, themes_dir, backend
+):
+    """The two grids are built by different methods; both had the same bug."""
+    page = looks.build(FakeWindow(Prefs()))
+    entry = Entry("seaglass")
+    entry.description = "A very long sentence about a Look, going on and on and on and on."
+    entry.screenshots = ()
+    tile = page._community_tile(entry)
+
+    assert tile.measure(Gtk.Orientation.HORIZONTAL, -1).natural <= looks.TILE_WIDTH + 40
+    inscriptions = [
+        widget for widget in _descendants(tile) if isinstance(widget, Gtk.Inscription)
+    ]
+    assert inscriptions and all(
+        widget.get_text_overflow() == Gtk.InscriptionOverflow.ELLIPSIZE_END
+        for widget in inscriptions
+    )
+    assert entry.description in (tile.get_tooltip_text() or "")
+
+
 def test_the_second_button_still_just_opens_the_add_ons_page(
     config_dir, themes_dir, backend
 ):
@@ -696,9 +765,13 @@ def test_a_community_entry_with_no_picture_is_never_listed(config_dir, themes_di
     titles = []
     child = page._browse_grid.get_first_child()
     while child is not None:
-        # FlowBoxChild → Button → Box → [preview, title label, badge, …]
-        column = child.get_child().get_child()
-        titles.append(column.get_first_child().get_next_sibling().get_label())
+        # The first label under a tile is its title. Found rather than walked
+        # to: the tile's boxes are a layout detail and have changed once
+        # already, and this test is about which Looks are listed.
+        label = next(
+            widget for widget in _descendants(child) if isinstance(widget, Gtk.Label)
+        )
+        titles.append(label.get_label())
         child = child.get_next_sibling()
     assert titles == ["Seen"]
 

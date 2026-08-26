@@ -57,6 +57,56 @@ def test_the_sidebar_is_the_manifest(window: Window):
     assert len(window._order) == 15
 
 
+def test_it_opens_big_enough_to_show_the_whole_sidebar(window: Window):
+    """The default size is a claim about the sidebar, so it is checked against it.
+
+    1000x720 cut the sidebar off in the middle of its last section — "Safety",
+    the one holding Undo & Restore Points, was a heading a first-time user
+    never saw. The number that matters is the sidebar's own natural height plus
+    its header bar; asserting against the sidebar rather than against 900 means
+    a fifth section added later fails here instead of silently going missing.
+    """
+    from gtheme.window import DEFAULT_HEIGHT, DEFAULT_WIDTH
+
+    assert window.get_default_size() == (DEFAULT_WIDTH, DEFAULT_HEIGHT)
+
+    wanted = window.sidebar.measure(Gtk.Orientation.VERTICAL, -1).natural
+    header = 50  # one Adw.HeaderBar above the sidebar, generously
+    assert DEFAULT_HEIGHT >= wanted + header, (
+        f"the sidebar wants {wanted}px and the window opens {DEFAULT_HEIGHT}px tall"
+    )
+    # ...and it is a default, not a floor: the window still goes small.
+    assert window.get_size_request() == (360, 294)
+
+
+def test_the_page_walk_photographs_the_window_at_its_own_default_size(window: Window):
+    """The README's screenshots must be a picture of a first run.
+
+    The page-walk probe sets the window size itself, because it runs inside the
+    sandbox and nothing else there decides it. When those numbers drifted from
+    the window's own default, the thirty screenshots became pictures of a shape
+    no user's window is — which is how a sidebar that fits everywhere but in
+    the README ended up shipped.
+    """
+    import ast
+
+    from gtheme.window import DEFAULT_HEIGHT, DEFAULT_WIDTH
+
+    probe = (
+        Path(__file__).resolve().parents[1] / "sandbox" / "probes" / "page_walk_probe.py"
+    )
+    tree = ast.parse(probe.read_text(encoding="utf-8"))
+    constants = {
+        node.targets[0].id: node.value.value
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and isinstance(node.targets[0], ast.Name)
+        and isinstance(node.value, ast.Constant)
+    }
+    assert constants["WINDOW_WIDTH"] == DEFAULT_WIDTH
+    assert constants["WINDOW_HEIGHT"] == DEFAULT_HEIGHT
+
+
 def test_it_opens_on_a_page(window: Window):
     assert window.content_page.get_title() == registry.get("home").title
     assert isinstance(window.content_view.get_content(), Gtk.Widget)
