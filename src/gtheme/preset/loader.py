@@ -77,12 +77,23 @@ def search_paths() -> list[Path]:
 
 
 def discover() -> dict[str, Path]:
-    """Map a Look's name to its folder. Installed shadows bundled."""
+    """Map a Look's name to its folder. Installed shadows bundled.
+
+    Dot-named folders are not Looks. The downloader assembles a Look in a
+    hidden sibling of its destination (``.magma.downloading``) and renames it
+    into place as the last step; a power loss between writing ``theme.toml``
+    into that folder and the rename would otherwise leave a half-downloaded
+    copy sitting in the grid as a Look named ``.magma.downloading``. Nothing
+    legitimate is hidden: :func:`gtheme.preset.registry.install_look` refuses a
+    dot-leading name, so no Look gtheme writes can have one.
+    """
     found: dict[str, Path] = {}
     for base in search_paths():
         if not base.is_dir():
             continue
         for child in sorted(base.iterdir()):
+            if child.name.startswith("."):
+                continue
             if child.name in found or not (child / PRESET_FILENAME).is_file():
                 continue
             found[child.name] = child

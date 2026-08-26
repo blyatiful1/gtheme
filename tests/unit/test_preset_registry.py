@@ -454,6 +454,55 @@ def test_saying_replace_installs_over_it(tmp_path):
     assert "Seaglass" in (path / "theme.toml").read_text()
 
 
+def test_a_replace_that_fails_at_the_last_step_keeps_the_look_that_was_there(tmp_path, monkeypatch):
+    """Pins review finding preset/registry.py:406 (the replace half).
+
+    The old order deleted the destination and *then* renamed the validated
+    staging copy over it; a failure in between lost both — the Look the user
+    had and the one just downloaded, since the BaseException handler removes
+    staging. The old copy is now moved aside and put back.
+    """
+    (tmp_path / "seaglass").mkdir()
+    (tmp_path / "seaglass" / "theme.toml").write_text(
+        LOOK_TOML.replace("Seaglass", "The one I already had"), encoding="utf-8"
+    )
+
+    real_replace = registry.os.replace
+
+    def explode(src, dst):
+        if Path(src).name.endswith(".downloading"):
+            raise OSError("no space left on device")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(registry.os, "replace", explode)
+
+    landed = []
+    registry.fetch_look_async(
+        _entry(),
+        lambda p, e: landed.append((p, e)),
+        into=tmp_path,
+        replace=True,
+        fetch=FakeServer(_published()),
+    )
+    path, error = landed[0]
+    assert path is None and error
+    assert "The one I already had" in (tmp_path / "seaglass" / "theme.toml").read_text()
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["seaglass"]
+
+
+def test_a_look_whose_name_starts_with_a_dot_is_refused(tmp_path):
+    """Pins review finding preset/registry.py:406 (the hidden-folder half).
+
+    discover() skips dot-named folders so an abandoned '.name.downloading'
+    staging folder is never listed as a Look; a Look actually called '.x'
+    would therefore install and then be invisible, so it is refused instead.
+    """
+    with pytest.raises(registry.LookFetchError) as raised:
+        registry.install_look(_entry(name=".sneaky"), {"theme.toml": b"format = 2\n"}, into=tmp_path)
+    assert "dot" in str(raised.value)
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_the_refusal_names_which_kind_of_collision_it_is(tmp_path):
     (tmp_path / "seaglass").mkdir()
     (tmp_path / "seaglass" / "theme.toml").write_text("format = 2\n", encoding="utf-8")

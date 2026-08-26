@@ -42,9 +42,23 @@ def _preset(**extra) -> Preset:
     return Preset(**base)
 
 
+def _ship(directory: Path, *relatives: str) -> Path:
+    """Put real bytes at each relative source, because compiling now checks.
+
+    A Look that names a file it does not ship compiles to *fewer* operations
+    plus a warning (see the missing-source tests at the bottom of this file),
+    so a test about the shape of a FileWrite has to give it a file that exists.
+    """
+    for relative in relatives:
+        target = Path(directory) / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("body\n", encoding="utf-8")
+    return Path(directory)
+
+
 def test_files_become_file_writes_with_absolute_sources(tmp_path):
     preset = _preset(files=[FileEntry(src="a/b.css", dest="~/.config/b.css", mode="0644")])
-    result = compile_preset(preset, tmp_path)
+    result = compile_preset(preset, _ship(tmp_path, "a/b.css"))
     (op,) = result.ops
     assert isinstance(op, FileWrite)
     assert op.src == str(tmp_path / "a/b.css")
@@ -83,16 +97,16 @@ def test_a_list_union_setting_keeps_its_merge_mode():
     assert op.merge == "list-union"
 
 
-def test_files_are_emitted_before_settings():
+def test_files_are_emitted_before_settings(tmp_path):
     preset = _preset(
         files=[FileEntry(src="a", dest="~/a")],
         settings=[SettingEntry(key="gsettings:a.b c", value="1")],
     )
-    kinds = [type(op) for op in compile_preset(preset, ".").ops]
+    kinds = [type(op) for op in compile_preset(preset, _ship(tmp_path, "a")).ops]
     assert kinds == [FileWrite, SettingWrite]
 
 
-def test_nothing_a_look_compiles_to_can_execute():
+def test_nothing_a_look_compiles_to_can_execute(tmp_path):
     """The closed operation set is the guarantee, so assert on the whole set."""
     preset = _preset(
         files=[FileEntry(src="a", dest="~/a", mode="0755")],
@@ -100,7 +114,73 @@ def test_nothing_a_look_compiles_to_can_execute():
         extensions=ExtensionsBlock(enable=["x@y"]),
     )
     allowed = (FileWrite, SettingWrite, ExtensionEnable, ExtensionInstall)
-    assert all(isinstance(op, allowed) for op in compile_preset(preset, ".").ops)
+    ops = compile_preset(preset, _ship(tmp_path, "a")).ops
+    assert ops and all(isinstance(op, allowed) for op in ops)
+
+
+# ── a Look that does not ship one of its files ───────────────────────────
+
+
+def test_a_missing_source_is_skipped_and_named_not_fatal(tmp_path):
+    """Pins review finding preset/loader.py:162.
+
+    The loader has always promised a partial apply for a Look missing one of
+    its sources ("… is missing, so <dest> will not be written"), but compiling
+    emitted the write anyway, and Transaction.plan() then refused the whole
+    transaction — the Look could not be previewed or applied at all, not even
+    the file that WAS there. Before the fix this compiled two FileWrites and
+    warned about nothing.
+    """
+    preset = _preset(
+        files=[
+            FileEntry(src="here.css", dest="~/.config/here.css"),
+            FileEntry(src="gone.css", dest="~/.config/gone.css"),
+        ]
+    )
+    result = compile_preset(preset, _ship(tmp_path, "here.css"))
+
+    writes = [op for op in result.ops if isinstance(op, FileWrite)]
+    assert [op.dest for op in writes] == ["~/.config/here.css"]
+    assert result.warnings == ["'gone.css' is missing, so ~/.config/gone.css will not be written"]
+
+
+def test_a_look_missing_a_file_can_still_be_planned(tmp_path):
+    """Pins review finding preset/loader.py:162 — the end-to-end half.
+
+    The compiled transaction has to be plannable, since that is what the Looks
+    page needs to show a preview at all; before the fix plan() raised
+    TransactionError('this look is missing one of its files').
+    """
+    directory = _ship(tmp_path / "look", "here.css")
+    dest_root = tmp_path / "dest"
+    dest_root.mkdir()
+    preset = _preset(
+        files=[
+            FileEntry(src="here.css", dest=f"{dest_root}/here.css"),
+            FileEntry(src="gone.css", dest=f"{dest_root}/gone.css"),
+        ]
+    )
+    result = compile_preset(preset, directory, dest_root=str(dest_root))
+
+    diff = result.transaction.plan()
+    assert [entry.op.dest for entry in diff.entries] == [f"{dest_root}/here.css"]
+
+
+def test_a_folder_where_a_file_was_promised_is_skipped_and_named(tmp_path):
+    """Pins review finding preset/loader.py:162 (the folder half).
+
+    A Look copies one file at a time; a src that is a directory used to reach
+    the transaction and break it in the same way a missing one did.
+    """
+    (tmp_path / "adir").mkdir()
+    preset = _preset(files=[FileEntry(src="adir", dest="~/.config/adir")])
+    result = compile_preset(preset, tmp_path)
+
+    assert list(result.ops) == []
+    assert result.warnings == [
+        "'adir' is a folder — a Look copies one file at a time, "
+        "so ~/.config/adir will not be written"
+    ]
 
 
 # ── add-ons ──────────────────────────────────────────────────────────────

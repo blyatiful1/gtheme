@@ -7,7 +7,6 @@ touches nothing on the machine running it.
 
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -31,6 +30,10 @@ SCHEMA_XML = f"""<?xml version="1.0" encoding="UTF-8"?>
     <key name="icon-theme" type="s"><default>'Adwaita'</default></key>
     <key name="empty-list" type="as"><default>[]</default></key>
   </schema>
+  <schema id="org.gnome.desktop.background" path="/org/gtheme/test/background/">
+    <key name="picture-uri" type="s"><default>''</default></key>
+    <key name="picture-uri-dark" type="s"><default>''</default></key>
+  </schema>
 </schemalist>
 """
 
@@ -43,6 +46,11 @@ def backend(memory_settings, schema_source_factory):
 
 def key(name: str) -> str:
     return f"gsettings:{SCHEMA_ID} {name}"
+
+
+def bg_key(name: str) -> str:
+    """A real wallpaper key. The bundling in capture_share matches on these."""
+    return f"gsettings:org.gnome.desktop.background {name}"
 
 
 # ── reading ──────────────────────────────────────────────────────────────
@@ -88,74 +96,19 @@ def test_components_are_carried_through(backend):
     assert entries[0].component == Component.ICONS
 
 
-# ── saved moments ────────────────────────────────────────────────────────
+# ── where things live, and finding the wallpaper ─────────────────────────
 #
 # CONTRACT CHANGED BY RULING (Wave-2 gate, R5): one store, one format, one
 # reader. This module used to write saved moments in its own format (a
 # theme.toml in a YYYYmmdd-HHMMSS folder) into the same directory
 # core.restorepoints writes its own (a restore-point.json in a
-# YYYY-mm-ddTHH-MM-SS one), with its own lister and its own pruner. The pruner
-# was the dangerous half: it deleted the oldest folders by name whatever they
-# were, where the engine's refuses to touch a moment somebody asked for by hand
-# or the "Before gtheme" one that cannot be recreated. So these tests moved
-# from "capture keeps its own store correctly" to "capture writes into the one
-# store".
-
-
-@mutating
-def test_a_moment_captured_here_is_one_the_engine_can_find(backend, state_dir: Path):
-    """The unification, stated as the one thing that has to be true."""
-    backend.set(key("color-scheme"), "'prefer-dark'")
-    result = cap.capture_restore_point([key("color-scheme")], backend, label="My desktop")
-
-    found = restorepoints.list_restore_points()
-    assert len(found) == 1
-    assert found[0].label == "My desktop"
-    assert found[0].path == result.path
-    assert found[0].settings[key("color-scheme")] == "'prefer-dark'"
-
-
-@mutating
-def test_a_moment_captured_by_the_engine_appears_in_the_same_list(backend, state_dir: Path):
-    """The other direction. One list means both paths are on it.
-
-    The two moments are given different times, which is what a reader of this
-    list expects to see. They no longer *have* to be: the same-second collision
-    this test used to document — where the second moment landed in the first
-    one's folder and overwrote it — is closed in ``core.restorepoints._new_id``
-    and pinned by its own test over there, where it belongs.
-    """
-    backend.set(key("color-scheme"), "'default'")
-    cap.capture_restore_point(
-        [key("color-scheme")], backend, label="from the page",
-        now=datetime(2026, 8, 25, 12, 0, 0),
-    )
-    restorepoints.capture(
-        [key("color-scheme")], label="from the engine", backend=backend,
-        when=datetime(2026, 8, 25, 12, 0, 1),
-    )
-
-    labels = {point.label for point in restorepoints.list_restore_points()}
-    assert labels == {"from the page", "from the engine"}
-
-
-@mutating
-def test_a_captured_moment_is_still_described_as_a_look(backend, state_dir: Path):
-    """The Look view is what the pages show; it is no longer a second store."""
-    backend.set(key("color-scheme"), "'prefer-dark'")
-    result = cap.capture_restore_point([key("color-scheme")], backend, label="My desktop")
-    assert result.preset.format == 2
-    assert result.preset.settings[0].value == "'prefer-dark'"
-    assert result.path is not None
-    assert not (result.path / "theme.toml").exists(), "the second format is gone"
-
-
-@mutating
-def test_a_moment_lands_under_the_v2_state_folder(backend, state_dir: Path):
-    cap.capture_restore_point([key("color-scheme")], backend, label="x")
-    assert paths.state_dir() == state_dir
-    assert paths.restore_points_dir() == state_dir / "restore-points"
-    assert len(restorepoints.list_restore_points()) == 1
+# YYYY-mm-ddTHH-MM-SS one), with its own lister and its own pruner.
+#
+# CONTRACT CHANGED AGAIN (review finding capture.py:195): the wrapper left
+# behind, capture_restore_point, had no caller anywhere in the app — every real
+# path goes through restore.create_restore_point -> restorepoints.capture. It
+# and its tests are gone rather than left standing as a feature that never ran;
+# the store's own behaviour is tested in tests/unit/test_restorepoints.py.
 
 
 def test_the_state_folder_never_touches_v1s(monkeypatch, tmp_path):
@@ -189,71 +142,6 @@ def test_a_wallpaper_that_is_not_a_findable_image_is_not_used(value):
         key="gsettings:org.gnome.desktop.background picture-uri", value=value
     )
     assert cap._wallpaper_source([entry]) is None
-
-
-@mutating
-def test_a_moment_with_no_findable_wallpaper_says_so(backend, state_dir: Path):
-    result = cap.capture_restore_point([key("color-scheme")], backend, label="x")
-    assert any("no picture" in w for w in result.warnings)
-
-
-@mutating
-def test_owned_files_are_snapshotted_by_the_engine(backend, state_dir, tmp_path):
-    """The copy is the engine's, in the engine's numbered-blob layout."""
-    owned = tmp_path / "gnome-shell.css"
-    owned.write_text("/* mine */", encoding="utf-8")
-    dest = str(tmp_path / "gnome-shell.css")
-    result = cap.capture_restore_point(
-        [key("color-scheme")], backend, label="x", owned_files=[(owned, dest)]
-    )
-    point = restorepoints.list_restore_points()[0]
-    assert point.files[dest] is not None
-    assert (point.path / "files" / point.files[dest]).read_text() == "/* mine */"
-    assert result.preset.files[0].dest == dest
-
-
-@mutating
-def test_enabled_add_ons_are_recorded_so_they_can_be_put_back(backend, state_dir):
-    result = cap.capture_restore_point(
-        [key("color-scheme")], backend, label="x", enabled_extensions=["a@x", "b@x"]
-    )
-    assert result.preset.extensions.enable == ["a@x", "b@x"]
-
-
-@mutating
-def test_pruning_is_the_engines_and_spares_what_somebody_asked_for(backend, state_dir: Path):
-    """The reason there must be one pruner.
-
-    This module's pruner deleted the oldest folders by name whatever they were.
-    The engine's refuses to touch a moment a person asked for by hand, so a
-    capture from this path defaults to "manual" and survives.
-    """
-    for minute in range(13):
-        cap.capture_restore_point(
-            [key("color-scheme")], backend, label="auto", kind="auto", cap=10,
-            now=datetime(2026, 8, 25, 12, minute, 0),
-        )
-    kept = restorepoints.list_restore_points()
-    assert len(kept) == 10
-    assert kept[0].id.endswith("12-12-00"), kept[0].id  # newest first
-    assert kept[-1].id.endswith("12-03-00"), kept[-1].id
-
-    mine = cap.capture_restore_point([key("color-scheme")], backend, label="mine")
-    restorepoints.prune(cap=0)
-    survivors = [point.label for point in restorepoints.list_restore_points()]
-    assert survivors == ["mine"], survivors
-    assert mine.path.is_dir()
-
-
-@mutating
-def test_leaving_the_cap_alone_is_the_default(backend, state_dir: Path):
-    """A capture taken on the user's behalf does not quietly shorten the list."""
-    for minute in range(3):
-        cap.capture_restore_point(
-            [key("color-scheme")], backend, label="x", kind="auto",
-            now=datetime(2026, 8, 25, 12, minute, 0),
-        )
-    assert len(restorepoints.list_restore_points()) == 3
 
 
 @mutating
@@ -321,3 +209,127 @@ def test_the_secret_scanner_is_deliberately_broad(name):
 
 def test_an_ordinary_setting_is_not_mistaken_for_a_secret():
     assert not cap._looks_secret("gsettings:org.gnome.desktop.interface icon-theme", "'Adwaita'")
+
+
+# ── the wallpaper travels with the Look ──────────────────────────────────
+
+
+@mutating
+def test_a_shared_look_bundles_the_wallpaper_it_points_at(backend, tmp_path):
+    """Pins review finding preset/capture.py:297 (v1 regression).
+
+    capture_share used to copy the wallpaper in only as a preview picture and
+    ship the captured picture-uri with the original path merely genericised —
+    'file://{{ home }}/Pictures/w.png' — which resolves, on the machine the
+    Look is given to, to a file that was never there. The Look's most visible
+    part silently did nothing. v1 bundled the image and rewrote the URI to the
+    bundled destination; so does this again.
+    """
+    picture = tmp_path / "Pictures" / "w.png"
+    picture.parent.mkdir(parents=True)
+    picture.write_bytes(b"pretend png")
+    backend.set(bg_key("picture-uri"), f"'file://{picture}'")
+
+    out = tmp_path / "look"
+    result = cap.capture_share(
+        [bg_key("picture-uri")], backend, out_dir=out, name="mine", title="Mine"
+    )
+
+    bundled = result.preset.files
+    assert [(f.src, f.dest) for f in bundled] == [
+        ("files/w.png", "~/.local/share/backgrounds/mine/w.png")
+    ]
+    assert (out / "files" / "w.png").read_bytes() == b"pretend png"
+    assert result.preset.settings[0].value == (
+        "'file://{{ home }}/.local/share/backgrounds/mine/w.png'"
+    )
+    assert any("copied into this Look" in w for w in result.warnings)
+
+
+@mutating
+def test_the_bundled_wallpaper_is_also_the_looks_picture(backend, tmp_path):
+    """One copy, not two: the shipped image is what the grid shows."""
+    picture = tmp_path / "w.png"
+    picture.write_bytes(b"pretend png")
+    backend.set(bg_key("picture-uri"), f"'file://{picture}'")
+
+    out = tmp_path / "look"
+    result = cap.capture_share(
+        [bg_key("picture-uri")], backend, out_dir=out, name="mine", title="Mine"
+    )
+    assert result.preset.meta.screenshots == ["files/w.png"]
+    assert not (out / "picture.png").exists()
+
+
+@mutating
+def test_a_light_and_dark_wallpaper_are_both_bundled(backend, tmp_path):
+    """Pins preset/capture.py:297 for the dark key, which shares the code."""
+    light = tmp_path / "day.png"
+    dark = tmp_path / "night.png"
+    light.write_bytes(b"day")
+    dark.write_bytes(b"night")
+    backend.set(bg_key("picture-uri"), f"'file://{light}'")
+    backend.set(bg_key("picture-uri-dark"), f"'file://{dark}'")
+
+    out = tmp_path / "look"
+    result = cap.capture_share(
+        [bg_key("picture-uri"), bg_key("picture-uri-dark")],
+        backend,
+        out_dir=out,
+        name="mine",
+        title="Mine",
+    )
+    assert sorted(f.src for f in result.preset.files) == ["files/day.png", "files/night.png"]
+    assert sorted(s.value for s in result.preset.settings) == [
+        "'file://{{ home }}/.local/share/backgrounds/mine/day.png'",
+        "'file://{{ home }}/.local/share/backgrounds/mine/night.png'",
+    ]
+
+
+@mutating
+def test_a_shared_look_that_bundles_its_wallpaper_still_loads(backend, tmp_path):
+    """The bundled file entry and picture have to survive the loader's checks."""
+    from gtheme.preset.loader import load
+
+    picture = tmp_path / "w.png"
+    picture.write_bytes(b"pretend png")
+    backend.set(bg_key("picture-uri"), f"'file://{picture}'")
+
+    out = tmp_path / "mine"  # the folder is the Look's name, as the app writes it
+    cap.capture_share([bg_key("picture-uri")], backend, out_dir=out, name="mine", title="Mine")
+    result = load(out)
+    assert result.errors == []
+    assert result.warnings == []
+
+
+def test_capture_exposes_nothing_the_app_never_calls():
+    """Pins review finding preset/capture.py:195.
+
+    capture_restore_point sat in __all__ describing a "Look view of a saved
+    moment" that no page ever asked for — every real path goes through
+    restore.create_restore_point -> restorepoints.capture. Dead code that
+    documents a feature is worse than no code, so this walks the package and
+    fails if a public name here is referenced nowhere but its own module.
+    """
+    import ast
+
+    import gtheme
+
+    source_root = Path(gtheme.__file__).resolve().parent
+
+    # Only real uses count. A name in __all__ is an ast.Constant string and a
+    # definition is a FunctionDef, so neither makes a function look used — the
+    # claim is exactly what is being checked.
+    used: set[str] = set()
+    for path in source_root.rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name):
+                used.add(node.id)
+            elif isinstance(node, ast.Attribute):
+                used.add(node.attr)
+            elif isinstance(node, ast.alias):
+                used.add(node.name.rsplit(".", 1)[-1])
+
+    assert not hasattr(cap, "capture_restore_point")
+    assert [name for name in cap.__all__ if name not in used] == []

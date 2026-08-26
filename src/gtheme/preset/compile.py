@@ -106,9 +106,26 @@ def compile_preset(
     extensions: list[Op] = []
 
     for entry in preset.files:
+        source = base / entry.src
+        # A Look that names a file it does not ship still applies, minus that
+        # file. The loader has always promised exactly this ("… is missing, so
+        # <dest> will not be written"), but compiling the write anyway made the
+        # transaction unplannable — one absent source and the Look could
+        # neither be previewed nor applied at all, not even the parts that were
+        # there. It is a real end state: the downloader keeps a Look whose file
+        # failed to fetch. So the entry is dropped here and named as a warning,
+        # which is the same sentence the Looks page already shows.
+        if not source.is_file():
+            reason = (
+                "is a folder — a Look copies one file at a time"
+                if source.is_dir()
+                else "is missing"
+            )
+            warnings.append(f"{entry.src!r} {reason}, so {entry.dest} will not be written")
+            continue
         files.append(
             FileWrite(
-                src=str(base / entry.src),
+                src=str(source),
                 dest=entry.dest,
                 mode=entry.mode,
                 template=entry.template,

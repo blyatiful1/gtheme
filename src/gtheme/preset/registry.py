@@ -395,6 +395,11 @@ def install_look(
         name = safe_name(entry.name)
     except ConfinementError as exc:
         raise LookFetchError(f"that look's name cannot be used as a folder: {exc}") from exc
+    if name.startswith("."):
+        # A dot-leading folder is hidden, and discover() skips those so an
+        # abandoned staging folder is never mistaken for a Look. A downloaded
+        # Look called ".magma" would install and then be invisible.
+        raise LookFetchError("that look's name cannot start with a dot")
 
     root = Path(into) if into is not None else user_themes_dir()
     held_by = name_conflict(name, into=root)
@@ -404,6 +409,7 @@ def install_look(
     root.mkdir(parents=True, exist_ok=True)
     destination = root / name
     staging = root / f".{name}.downloading"
+    superseded = root / f".{name}.replaced"
 
     if PRESET_FILENAME not in files:
         raise LookFetchError("that look has no description file, so there is nothing to install")
@@ -432,8 +438,19 @@ def install_look(
             + "\n",
             encoding="utf-8",
         )
-        shutil.rmtree(destination, ignore_errors=True)
-        os.replace(staging, destination)
+        # Replacing moves the old copy aside rather than deleting it first: a
+        # failure between the delete and the rename used to lose both the Look
+        # that was there and the one that was just validated.
+        if destination.exists():
+            shutil.rmtree(superseded, ignore_errors=True)
+            os.replace(destination, superseded)
+        try:
+            os.replace(staging, destination)
+        except BaseException:
+            if superseded.exists() and not destination.exists():
+                os.replace(superseded, destination)
+            raise
+        shutil.rmtree(superseded, ignore_errors=True)
     except BaseException:
         shutil.rmtree(staging, ignore_errors=True)
         raise

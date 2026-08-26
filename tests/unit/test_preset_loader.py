@@ -60,6 +60,25 @@ def test_a_folder_without_a_manifest_is_not_a_look(looks):
     assert loader.discover() == {}
 
 
+def test_an_abandoned_download_folder_is_not_a_look(looks):
+    """Pins review finding preset/registry.py:406.
+
+    install_look assembles a download in a hidden sibling of its destination
+    ('.magma.downloading') and renames it into place last; theme.toml is
+    written into that folder well before the rename, so a power loss in
+    between strands one. discover() listed it as a Look called
+    '.magma.downloading' and the grid showed it. Dot-named folders are not
+    Looks — install_look now refuses a dot-leading name outright.
+    """
+    user, _bundled = looks
+    _write(user, "magma")
+    _write(user, ".magma.downloading")
+    _write(user, ".magma.replaced")
+
+    assert sorted(loader.discover()) == ["magma"]
+    assert [r.name for r in loader.load_all()] == ["magma"]
+
+
 def test_provenance_distinguishes_bundled_from_user(looks):
     user, bundled = looks
     _write(bundled, "b")
