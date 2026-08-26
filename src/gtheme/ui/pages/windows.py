@@ -24,13 +24,14 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw, GLib, Gtk  # noqa: E402
+from gi.repository import Adw, Gtk  # noqa: E402
 
 from ...core.backends import get_backend  # noqa: E402
 from ...panels.descriptor import DomainDescriptor, Row, WidgetKind  # noqa: E402
 from ...panels.loader import load_domains  # noqa: E402
 from ...panels.schema_probe import SchemaProbe  # noqa: E402
 from ...panels.widgets import build_row, set_link_handler  # noqa: E402
+from ...ui.widgets.rows import set_plain_text  # noqa: E402
 
 __all__ = ["build"]
 
@@ -43,16 +44,6 @@ _DOMAIN_IDS = ("windows", "shortcuts", "mediakeys")
 #: Where the impatience cross-link sits: right after the domain's own
 #: animation-speed row, so the hint appears next to the control it extends.
 _ANIMATION_ROW_ID = "org.gnome.desktop.interface:enable-animations"
-
-
-def _group_title(domain: DomainDescriptor) -> str:
-    """``domain.title`` as markup — three of the five domain files this page
-    renders use a literal "&" (DESIGN.md doesn't say a title may not; nothing
-    upstream of here does either), and every Adw widget that takes a
-    ``title`` parses it as Pango markup. Escaping at the render boundary is
-    cheaper than asking the data files to know about markup.
-    """
-    return GLib.markup_escape_text(domain.title)
 
 
 def _search_text(row: Row) -> str:
@@ -105,7 +96,11 @@ def _basic_and_advanced(domain: DomainDescriptor) -> tuple[list[Row], list[Row]]
 
 def _open_group(window, page: Adw.PreferencesPage, domain: DomainDescriptor, *, backend, probe) -> None:
     """``windows.toml`` — rendered directly, since this is the main event."""
-    group = Adw.PreferencesGroup(title=_group_title(domain))
+    # Three of the five domain files this page renders have a literal "&" in
+    # their title. set_plain_text turns Pango markup off where the widget can
+    # (a row) and escapes where it cannot (a group), so neither one vanishes.
+    group = Adw.PreferencesGroup()
+    set_plain_text(group, title=domain.title)
     basic, advanced = _basic_and_advanced(domain)
     for row in basic:
         _add_row(window, group, row, backend=backend, probe=probe, into_expander=False)
@@ -126,8 +121,10 @@ def _collapsed_group(
     """``shortcuts.toml`` / ``mediakeys.toml`` — a folded list of many rows."""
     noun = "keys" if domain.id == "mediakeys" else "shortcuts"
     group = Adw.PreferencesGroup()
-    expander = Adw.ExpanderRow(
-        title=_group_title(domain),
+    expander = Adw.ExpanderRow()
+    set_plain_text(
+        expander,
+        title=domain.title,
         subtitle=f"{len(domain.rows)} {noun} you can set or change",
     )
     for row in domain.rows:

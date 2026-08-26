@@ -45,6 +45,7 @@ __all__ = [
     "build_row",
     "key_for",
     "register_kind",
+    "set_plain_text",
     "warn_banner",
 ]
 
@@ -80,12 +81,67 @@ def key_for(row: Row) -> str:
     return f"gsettings:{row.schema_id} {row.key}"
 
 
+def set_plain_text(
+    widget: Any,
+    *,
+    title: str | None = None,
+    subtitle: str | None = None,
+    description: str | None = None,
+) -> None:
+    """Put text on a widget as text. The one place a row's words are set.
+
+    Every ``Adw`` widget that takes a ``title`` parses it as Pango markup, and
+    the failure is the worst kind: an unescaped ``&`` — in "Mouse, Touchpad &
+    Keyboard", in "Colours & Style", in a description GNOME's own schema wrote —
+    does not render as an ampersand and does not render as an error. The label
+    renders as **nothing at all**, and the only sign is a warning on a console
+    the user will never see.
+
+    None of this text is markup. Row titles come from descriptor files, from
+    gschema summaries, and from the names of things people installed; none of
+    those sources is asked to know about Pango, and a Look called ``<b>`` is a
+    Look, not a formatting instruction.
+
+    So markup is turned **off** where the widget can turn it off — every
+    ``Adw.PreferencesRow`` and ``Adw.Banner`` has ``use-markup`` — and the text
+    goes through untouched. Where it cannot (``Adw.PreferencesGroup``,
+    ``Adw.StatusPage``: title and description, no ``use-markup``) the text is
+    escaped instead. Both paths render the same characters; only the second one
+    has to alter the string to do it.
+
+    Turning markup off happens **before** the text is set, deliberately. Setting
+    it afterwards also renders correctly, but the widget has already tried to
+    parse the markup by then and printed the warning on the way.
+    """
+    passthrough = getattr(widget, "set_use_markup", None)
+    if passthrough is not None:
+        passthrough(False)
+
+        def prepare(text: str) -> str:
+            return text
+    else:
+        prepare = _escape_markup
+
+    if title is not None:
+        widget.set_title(prepare(title))
+    if subtitle is not None:
+        widget.set_subtitle(prepare(subtitle))
+    if description is not None:
+        widget.set_description(prepare(description))
+
+
+def _escape_markup(text: str) -> str:
+    """For the widgets that have no ``use-markup`` to turn off."""
+    return GLib.markup_escape_text(text or "")
+
+
 def warn_banner(text: str) -> Adw.Banner:
     """The consequence banner shown above a row or group.
 
     Phrased as what will happen, never as a warning triangle with a shrug.
     """
-    banner = Adw.Banner(title=text, revealed=True)
+    banner = Adw.Banner(revealed=True)
+    set_plain_text(banner, title=text)
     banner.add_css_class("warning")
     return banner
 
@@ -103,7 +159,8 @@ def _unavailable(row: Row, exc: BackendError) -> Adw.ActionRow:
         reason = "The add-on on this computer is a different version and doesn't have this."
     else:
         reason = "This setting can't be read on this computer."
-    action = Adw.ActionRow(title=row.title, subtitle=reason, sensitive=False)
+    action = Adw.ActionRow(sensitive=False)
+    set_plain_text(action, title=row.title, subtitle=reason)
     action.add_suffix(Gtk.Image(icon_name="action-unavailable-symbolic"))
     return action
 
@@ -152,7 +209,8 @@ def _write(backend: SettingsBackend, row: Row, value: str) -> None:
 
 
 def _build_toggle(backend: SettingsBackend, row: Row) -> tuple[Adw.PreferencesRow, Callable[[], None]]:
-    widget = Adw.SwitchRow(title=row.title, subtitle=row.subtitle)
+    widget = Adw.SwitchRow()
+    set_plain_text(widget, title=row.title, subtitle=row.subtitle)
     guard = {"busy": False}
 
     def refresh() -> None:
@@ -175,8 +233,7 @@ def _build_toggle(backend: SettingsBackend, row: Row) -> tuple[Adw.PreferencesRo
 def _build_slider(backend: SettingsBackend, row: Row) -> tuple[Adw.PreferencesRow, Callable[[], None]]:
     step = row.step or 1
     widget = Adw.SpinRow.new_with_range(row.clamp_min, row.clamp_max, step)
-    widget.set_title(row.title)
-    widget.set_subtitle(row.subtitle)
+    set_plain_text(widget, title=row.title, subtitle=row.subtitle)
     if step < 1:
         widget.set_digits(2)
     guard = {"busy": False}
@@ -230,7 +287,8 @@ def _build_choice(backend: SettingsBackend, row: Row) -> tuple[Adw.PreferencesRo
     labels = Gtk.StringList()
     for choice in row.choices:
         labels.append(choice.label)
-    widget = Adw.ComboRow(title=row.title, subtitle=row.subtitle, model=labels)
+    widget = Adw.ComboRow(model=labels)
+    set_plain_text(widget, title=row.title, subtitle=row.subtitle)
     values = [choice.value for choice in row.choices]
     # Both sides bared before they are compared. A descriptor authors ``300``;
     # a uint32 key reads back ``"uint32 300"``. Comparing those two as text
@@ -274,7 +332,8 @@ def _build_choice(backend: SettingsBackend, row: Row) -> tuple[Adw.PreferencesRo
 
 
 def _build_text(backend: SettingsBackend, row: Row) -> tuple[Adw.PreferencesRow, Callable[[], None]]:
-    widget = Adw.EntryRow(title=row.title)
+    widget = Adw.EntryRow()
+    set_plain_text(widget, title=row.title)
     guard = {"busy": False}
 
     def refresh() -> None:
@@ -303,7 +362,8 @@ def _build_color(backend: SettingsBackend, row: Row) -> tuple[Adw.PreferencesRow
     one representation here would bake the wrong one in. Renders the stored
     value read-only so the row exists, is honest, and is replaceable.
     """
-    widget = Adw.ActionRow(title=row.title, subtitle=row.subtitle)
+    widget = Adw.ActionRow()
+    set_plain_text(widget, title=row.title, subtitle=row.subtitle)
     label = Gtk.Label(css_classes=["dim-label"])
     widget.add_suffix(label)
 

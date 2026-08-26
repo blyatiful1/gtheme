@@ -48,7 +48,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
 
 from ..core.settings_backend import BackendError, SettingsBackend  # noqa: E402
-from ..ui.widgets.rows import RowBuildError, key_for, register_kind  # noqa: E402
+from ..ui.widgets.rows import RowBuildError, key_for, register_kind, set_plain_text  # noqa: E402
 from ..ui.widgets.rows import build_row as build_base_row  # noqa: E402
 from .descriptor import Row, WidgetKind  # noqa: E402
 from .schema_probe import Availability, SchemaProbe, resolve_row  # noqa: E402
@@ -310,7 +310,8 @@ def decode_accelerator(text: str) -> str:
 
 def unavailable_row(row: Row, availability: Availability) -> Adw.ActionRow:
     """The honest greyed row: present, insensitive, and it says why."""
-    widget = Adw.ActionRow(title=row.title, subtitle=availability.reason, sensitive=False)
+    widget = Adw.ActionRow(sensitive=False)
+    set_plain_text(widget, title=row.title, subtitle=availability.reason)
     widget.add_suffix(Gtk.Image(icon_name="action-unavailable-symbolic"))
     return widget
 
@@ -338,8 +339,7 @@ def _build_dict_slider(
         )
     step = row.step or 1
     widget = Adw.SpinRow.new_with_range(row.clamp_min, row.clamp_max, step)
-    widget.set_title(row.title)
-    widget.set_subtitle(row.subtitle)
+    set_plain_text(widget, title=row.title, subtitle=row.subtitle)
     guard = {"busy": False}
 
     def refresh() -> None:
@@ -404,7 +404,8 @@ def build_effect_picker(
         # everything rather than nothing.
         if not known or choice.value.removesuffix(_EFFECT_ENABLE_SUFFIX) in known
     ]
-    widget = Adw.ComboRow(title=row.title, subtitle=row.subtitle)
+    widget = Adw.ComboRow()
+    set_plain_text(widget, title=row.title, subtitle=row.subtitle)
     widget.set_model(Gtk.StringList.new([label for _key, label, _sub in options]))
     guard = {"busy": False}
 
@@ -506,8 +507,7 @@ def build_effect_speed(
     if row.clamp_min is None or row.clamp_max is None:
         raise RowBuildError(f"{row.id}: an effect speed still needs clamp_min and clamp_max")
     widget = Adw.SpinRow.new_with_range(row.clamp_min, row.clamp_max, row.step or 50)
-    widget.set_title(row.title)
-    widget.set_subtitle(row.subtitle)
+    set_plain_text(widget, title=row.title, subtitle=row.subtitle)
     guard = {"busy": False}
     state: dict[str, str | None] = {"key": None}
 
@@ -561,7 +561,8 @@ def build_link_row(
     page that wires it up has not been written yet would be a lie about the
     add-on rather than about us.
     """
-    widget = Adw.ActionRow(title=row.title, subtitle=row.subtitle)
+    widget = Adw.ActionRow()
+    set_plain_text(widget, title=row.title, subtitle=row.subtitle)
     widget.add_suffix(Gtk.Image(icon_name="go-next-symbolic"))
     widget.set_activatable(True)
     widget.connect("activated", _on_link_activated)
@@ -596,7 +597,8 @@ def set_link_handler(
 def _build_shortcut(
     backend: SettingsBackend, row: Row
 ) -> tuple[Adw.PreferencesRow, Callable[[], None]]:
-    widget = Adw.ActionRow(title=row.title, subtitle=row.subtitle)
+    widget = Adw.ActionRow()
+    set_plain_text(widget, title=row.title, subtitle=row.subtitle)
     label = Adw.ShortcutLabel(disabled_text="Not set", valign=Gtk.Align.CENTER)
     button = Gtk.Button(child=label, css_classes=["flat"], valign=Gtk.Align.CENTER)
     button.set_tooltip_text("Press this, then press the keys you want to use")

@@ -31,7 +31,7 @@ from ...panels.loader import load_domains  # noqa: E402
 from ...panels.schema_probe import SchemaProbe  # noqa: E402
 from ...panels.widgets import build_row, unavailable_row  # noqa: E402
 from ...system.themescan import default_theme_roots, scan_themes, shell_themes  # noqa: E402
-from ...ui.widgets.rows import attach_reset, key_for  # noqa: E402
+from ...ui.widgets.rows import attach_reset, key_for, set_plain_text  # noqa: E402
 
 __all__ = ["build"]
 
@@ -48,11 +48,6 @@ _ENABLED_EXTENSIONS_KEY = "gsettings:org.gnome.shell enabled-extensions"
 _BUILT_IN_LABEL = "The one your desktop comes with"
 
 
-def _group_title(domain: DomainDescriptor) -> str:
-    """``domain.title`` as markup — see the twin of this helper in ``windows.py``."""
-    return GLib.markup_escape_text(domain.title)
-
-
 def _search_text(row: Row) -> str:
     return " ".join([row.title, row.subtitle, *row.synonyms])
 
@@ -64,7 +59,8 @@ def _add_row(window, group: Adw.PreferencesGroup, row: Row, *, backend, probe) -
 
 
 def _clock_group(window, page: Adw.PreferencesPage, domain: DomainDescriptor, *, backend, probe) -> None:
-    group = Adw.PreferencesGroup(title=_group_title(domain))
+    group = Adw.PreferencesGroup()
+    set_plain_text(group, title=domain.title)
     for row in domain.rows:
         _add_row(window, group, row, backend=backend, probe=probe)
     page.add(group)
@@ -190,7 +186,8 @@ def _style_group(window, page: Adw.PreferencesPage, domain: DomainDescriptor, *,
     row = domain.rows[0]
     availability = probe.availability(row, backend)
     if not availability.ok:
-        group = Adw.PreferencesGroup(title=_group_title(domain))
+        group = Adw.PreferencesGroup()
+        set_plain_text(group, title=domain.title)
         widget = unavailable_row(row, availability)
         group.add(widget)
         window.rows.register(PAGE_ID, row.id, widget, search_text=_search_text(row))
@@ -201,7 +198,8 @@ def _style_group(window, page: Adw.PreferencesPage, domain: DomainDescriptor, *,
     # dark alike) is the group's description; the "turn it on" fix — needed
     # only while the add-on that makes this row do anything is switched off
     # — replaces it for as long as that is true.
-    group = Adw.PreferencesGroup(title=_group_title(domain), description=row.warn or "")
+    group = Adw.PreferencesGroup()
+    set_plain_text(group, title=domain.title, description=row.warn or "")
 
     def _refresh_enabled_state() -> None:
         enabled = _enabled_uuids(backend)

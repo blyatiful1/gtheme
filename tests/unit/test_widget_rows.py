@@ -423,3 +423,84 @@ def test_a_genuinely_foreign_uint_value_is_still_reported_as_foreign(backend):
     model = widget.get_model()
     shown = model.get_string(widget.get_selected())
     assert shown == "1234" + FOREIGN_CHOICE_SUFFIX
+
+
+# -- Pango markup in a title -----------------------------------------------
+#
+# Every Adw widget that takes a title parses it as markup, and an unescaped "&"
+# does not render as an ampersand and does not render as an error: the label
+# renders as NOTHING, with a warning on a console nobody reads. Three domain
+# titles this app ships have a literal "&" in them, and so do the names of
+# things people install. None of this text is markup.
+
+MARKUP_BAIT = "Mouse, Touchpad & Keyboard <b>bold</b> &amp; more"
+
+
+def _rendered_labels(widget) -> list[str]:
+    """Every Gtk.Label under a widget, as the screen would show it.
+
+    ``Gtk.Label.get_text`` is the rendered text with any markup applied, which
+    is the only thing worth asserting on: ``get_label`` would return the string
+    we just set and pass even when the label draws nothing.
+    """
+    found: list[str] = []
+    child = widget.get_first_child()
+    while child is not None:
+        if isinstance(child, Gtk.Label):
+            found.append(child.get_text())
+        found.extend(_rendered_labels(child))
+        child = child.get_next_sibling()
+    return found
+
+
+@pytest.mark.parametrize(
+    ("kind", "extra"),
+    [
+        ("toggle", {}),
+        ("slider", {"clamp_min": 0, "clamp_max": 10}),
+        ("choice", {"choices": [{"value": "'default'", "label": "Default"}]}),
+        ("color", {}),
+    ],
+)
+def test_an_ampersand_in_a_title_renders_instead_of_emptying_the_row(backend, kind, extra):
+    key = {"toggle": "a-flag", "slider": "a-count", "choice": "a-mode", "color": "a-name"}[kind]
+    row = _row(key=key, kind=kind, title=MARKUP_BAIT, subtitle=MARKUP_BAIT, **extra)
+    widget, _refresh = build_row(backend, row)
+
+    assert widget.get_title() == MARKUP_BAIT
+    shown = _rendered_labels(widget)
+    assert MARKUP_BAIT in shown, f"the title did not render: {shown}"
+
+
+def test_the_unavailable_row_renders_its_title_too(schema_source_factory):
+    """The greyed-out row is built from the same text on a worse day."""
+    from gtheme.core.settings_backend import MemoryBackend
+
+    empty = MemoryBackend(schema_source=schema_source_factory(SCHEMA_XML))
+    row = _row(schema_id="io.github.blyatiful1.NotInstalled", title=MARKUP_BAIT)
+    widget, _refresh = build_row(empty, row)
+    assert MARKUP_BAIT in _rendered_labels(widget)
+
+
+def test_a_warning_banner_renders_its_sentence(backend):
+    from gtheme.ui.widgets.rows import warn_banner
+
+    banner = warn_banner(MARKUP_BAIT)
+    assert banner.get_title() == MARKUP_BAIT
+    assert MARKUP_BAIT in _rendered_labels(banner)
+
+
+def test_a_widget_with_no_markup_switch_is_escaped_rather_than_left_to_vanish(backend):
+    """``Adw.PreferencesGroup`` has no ``use-markup``, so the text is escaped.
+
+    The two paths differ in the string stored and agree on the pixels, which is
+    the only agreement that matters.
+    """
+    from gtheme.ui.widgets.rows import set_plain_text
+
+    group = Adw.PreferencesGroup()
+    assert not hasattr(group, "set_use_markup"), "this test's premise changed"
+    set_plain_text(group, title=MARKUP_BAIT, description=MARKUP_BAIT)
+
+    assert group.get_title() != MARKUP_BAIT, "an escaped title is stored escaped"
+    assert MARKUP_BAIT in _rendered_labels(group)
