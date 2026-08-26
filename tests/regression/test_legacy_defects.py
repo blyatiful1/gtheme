@@ -22,6 +22,13 @@ make a privileged change, because a Look cannot run anything; the class of bug
 is gone rather than the check for it.
 """
 
+# A Look apply is a transaction with ``look=`` set. ``label=`` alone is only a
+# name for the saved moment it takes — every moment has one, including the
+# automatic one before a single tick on a page — so the tests below pass both,
+# the way ``preset.compile`` does. Keying the switch cleanup on ``label`` is
+# what once made putting a saved moment back strip the whole Look.
+
+
 from __future__ import annotations
 
 import os
@@ -72,7 +79,7 @@ def test_AS4_a_transaction_that_applied_nothing_does_not_claim_it_did(engine, tm
     tx = Transaction(
         [SettingWrite(key="gsettings:org.not.installed.at.all a-key", value="'x'")],
         dest_root=str(engine.dest_root),
-        label="GHOST",
+        label="GHOST", look="ghost",
     )
     with pytest.raises(TransactionError) as caught:
         tx.apply(restore_point=False)
@@ -89,7 +96,7 @@ def test_AS4_keeps_ownership_from_earlier_applies(engine, tmp_path):
     source = _look(tmp_path, "one", "first")
     dest = "~/.config/demo/one"
     Transaction(
-        [FileWrite(src=source, dest=dest)], dest_root=str(engine.dest_root), label="MIXED"
+        [FileWrite(src=source, dest=dest)], dest_root=str(engine.dest_root), label="MIXED", look="mixed"
     ).apply(restore_point=False)
     owned_before = ledger_store.read_ledger()["MIXED"]["files"]
     assert owned_before
@@ -98,7 +105,7 @@ def test_AS4_keeps_ownership_from_earlier_applies(engine, tmp_path):
         Transaction(
             [SettingWrite(key="gsettings:org.not.installed.at.all a-key", value="'x'")],
             dest_root=str(engine.dest_root),
-            label="MIXED",
+            label="MIXED", look="mixed",
         ).apply(restore_point=False)
     assert ledger_store.read_ledger()["MIXED"]["files"] == owned_before
 
@@ -125,7 +132,7 @@ def test_AS5_no_desktop_session_skips_the_whole_settings_phase_once(
             SettingWrite(key=ICONS, value="'Papirus'"),
         ],
         dest_root=str(engine.dest_root),
-        label="NOBUS",
+        label="NOBUS", look="nobus",
     )
     result = tx.apply(restore_point=False)
 
@@ -153,7 +160,7 @@ def test_AS8_a_missing_setting_is_one_skip_not_a_failed_apply(engine):
             SettingWrite(key="gsettings:org.gnome.shell.extensions.vitals position", value="1"),
         ],
         dest_root=str(engine.dest_root),
-        label="PARTIAL",
+        label="PARTIAL", look="partial",
     )
     result = tx.apply(restore_point=False)
 
@@ -170,7 +177,7 @@ def test_AS8_a_skipped_setting_leaves_no_baseline_record(engine):
             SettingWrite(key="gsettings:org.gnome.shell.extensions.vitals position", value="1"),
         ],
         dest_root=str(engine.dest_root),
-        label="PARTIAL",
+        label="PARTIAL", look="partial",
     )
     tx.apply(restore_point=False)
     recorded = Baseline(backend=engine.backend).load().settings
@@ -226,7 +233,7 @@ def test_R6_a_complete_restore_consumes_the_recording(engine, tmp_path):
             SettingWrite(key=SCHEME, value="'prefer-dark'"),
         ],
         dest_root=str(engine.dest_root),
-        label="CONSUMED",
+        label="CONSUMED", look="consumed",
     ).apply(restore_point=False)
 
     from gtheme.core.rescue import run_rescue
@@ -252,7 +259,7 @@ def test_R3_switching_forgets_only_what_actually_reverted(engine, tmp_path):
             SettingWrite(key=ICONS, value="'Papirus'"),
         ],
         dest_root=str(engine.dest_root),
-        label="ONE",
+        label="ONE", look="one",
     ).apply(restore_point=False)
 
     second = _look(tmp_path, "second", "from look two")
@@ -262,7 +269,7 @@ def test_R3_switching_forgets_only_what_actually_reverted(engine, tmp_path):
             SettingWrite(key=SCHEME, value="'prefer-dark'"),
         ],
         dest_root=str(engine.dest_root),
-        label="TWO",
+        label="TWO", look="two",
     ).apply(restore_point=False)
 
     ledger = ledger_store.read_ledger()
@@ -297,7 +304,7 @@ def test_R4_ownership_is_claimed_before_the_change_it_describes(engine, tmp_path
         Transaction(
             [FileWrite(src=source, dest="~/.config/demo/boom")],
             dest_root=str(engine.dest_root),
-            label="EARLY",
+            label="EARLY", look="early",
         ).apply(restore_point=False)
     finally:
         Baseline.record_file = original  # noqa: B010
@@ -368,7 +375,7 @@ def test_F1_a_pipe_at_the_destination_is_never_written_over(engine, tmp_path):
         Transaction(
             [FileWrite(src=source, dest="~/.config/demo/pipe")],
             dest_root=str(engine.dest_root),
-            label="FIFO",
+            label="FIFO", look="fifo",
         ).apply(restore_point=False)
 
     import stat
@@ -402,7 +409,7 @@ def test_L1_the_transaction_reports_a_busy_lock_in_plain_words(engine, tmp_path)
             Transaction(
                 [FileWrite(src=source, dest="~/.config/demo/locked")],
                 dest_root=str(engine.dest_root),
-                label="BUSY",
+                label="BUSY", look="busy",
             ).apply(restore_point=False)
     assert caught.value.rolled_back is True
     assert "already changing your desktop" in str(caught.value)
@@ -424,7 +431,7 @@ def test_X1_a_look_unions_into_enabled_addons_instead_of_replacing_them(engine):
     Transaction(
         [ExtensionEnable(uuid="blur-my-shell@aunetx")],
         dest_root=str(engine.dest_root),
-        label="UNION",
+        label="UNION", look="union",
     ).apply(restore_point=False)
 
     after = engine.backend.get(ENABLED)
@@ -441,7 +448,7 @@ def test_X1_undo_restores_the_exact_value_from_before_the_union(engine):
     Transaction(
         [ExtensionEnable(uuid="blur-my-shell@aunetx")],
         dest_root=str(engine.dest_root),
-        label="UNION",
+        label="UNION", look="union",
     ).apply(restore_point=False)
 
     from gtheme.core.rescue import run_rescue
@@ -509,7 +516,7 @@ def test_a_restore_point_is_taken_before_anything_changes(engine, tmp_path):
     result = Transaction(
         [SettingWrite(key=SCHEME, value="'prefer-dark'")],
         dest_root=str(engine.dest_root),
-        label="SNAPPED",
+        label="SNAPPED", look="snapped",
     ).apply()
 
     assert result.restore_point is not None
@@ -533,7 +540,7 @@ def test_undoing_a_switch_returns_to_the_previous_look_not_to_pristine(engine, t
             SettingWrite(key=ICONS, value="'Papirus'"),
         ],
         dest_root=str(engine.dest_root),
-        label="ONE",
+        label="ONE", look="one",
     ).apply(restore_point=False)
 
     second = _look(tmp_path, "second", "look two's file")
@@ -543,7 +550,7 @@ def test_undoing_a_switch_returns_to_the_previous_look_not_to_pristine(engine, t
             SettingWrite(key=SCHEME, value="'prefer-dark'"),
         ],
         dest_root=str(engine.dest_root),
-        label="TWO",
+        label="TWO", look="two",
     ).apply()
 
     point = restorepoints.load(result.restore_point)

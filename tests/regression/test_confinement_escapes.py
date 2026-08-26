@@ -15,6 +15,13 @@ The v1 tests are ported roughly one for one, with one deliberate difference
 noted at :func:`test_a_name_may_contain_a_dot`.
 """
 
+# A Look apply is a transaction with ``look=`` set. ``label=`` alone is only a
+# name for the saved moment it takes — every moment has one, including the
+# automatic one before a single tick on a page — so the tests below pass both,
+# the way ``preset.compile`` does. Keying the switch cleanup on ``label`` is
+# what once made putting a saved moment back strip the whole Look.
+
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -109,7 +116,7 @@ def test_a_transaction_with_one_escaping_file_writes_none_of_them(root, tmp_path
             FileWrite(src=str(look / "c"), dest="~/../../etc/gtheme-escaped"),
         ],
         dest_root=str(root),
-        label="ESCAPE",
+        label="ESCAPE", look="escape",
     )
     with pytest.raises(TransactionError):
         tx.plan()

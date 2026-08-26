@@ -28,6 +28,7 @@ v1 to import.
 
 from __future__ import annotations
 
+import os
 import shutil
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -36,7 +37,7 @@ from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from .atomic import atomic_write_json, load_json
-from .backends import get_backend
+from .backends import get_backend, is_missing
 from .confine import safe_name
 from .paths import restore_points_dir, v1_backup_dir
 from .settings_backend import BackendError, SettingsBackend
@@ -84,8 +85,11 @@ class RestorePoint:
         settings: key to the exact value at the time, or None where the key had
             no value at all — which restores as "unset it again", not as some
             invented default.
-        files: destination to the name of its saved copy, or None where the
-            file did not exist and restoring means deleting it again.
+        files: destination to the name of its saved copy; ``None`` where the
+            file did not exist and restoring means deleting it again; or
+            ``{"link": "<target>"}`` where the destination was a shortcut and
+            restoring means putting that shortcut back rather than deleting
+            somebody's own link into their dotfiles.
         warnings: what could not be recorded, in plain words. Never silent.
         path: where this lives on disk.
     """
@@ -95,7 +99,7 @@ class RestorePoint:
     created: datetime
     kind: str = "auto"
     settings: dict[str, str | None] = field(default_factory=dict)
-    files: dict[str, str | None] = field(default_factory=dict)
+    files: dict[str, str | dict | None] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     path: Path | None = None
 
@@ -149,12 +153,23 @@ class RestorePoint:
         covered by the confinement preflight, the pristine recording and the
         all-or-nothing rollback exactly like everything else.
         """
-        from .transaction import FileRemove, FileWrite, SettingReset, SettingWrite, Transaction
+        from .transaction import (
+            FileLink,
+            FileRemove,
+            FileWrite,
+            SettingReset,
+            SettingWrite,
+            Transaction,
+        )
 
-        ops: list[FileWrite | FileRemove | SettingWrite | SettingReset] = []
+        ops: list[FileWrite | FileRemove | FileLink | SettingWrite | SettingReset] = []
         base = (self.path or Path()) / _FILES_DIRNAME
         for dest, blob in sorted(self.files.items()):
-            if blob is None:
+            if isinstance(blob, dict):
+                # A shortcut was here. Put the shortcut back, do not write
+                # through it and do not delete it.
+                ops.append(FileLink(dest=dest, target=str(blob.get("link") or "")))
+            elif blob is None:
                 ops.append(FileRemove(dest=dest))
             else:
                 ops.append(FileWrite(src=str(base / blob), dest=dest))
@@ -163,7 +178,13 @@ class RestorePoint:
                 ops.append(SettingReset(key=key))
             else:
                 ops.append(SettingWrite(key=key, value=value))
-        return Transaction(ops, label=self.label)
+        # No ``look``: putting a saved moment back is not applying a Look. It
+        # must not run the Look-switch cleanup, must not claim the ledger under
+        # this moment's label, and must not record a current Look. The label is
+        # deliberately dropped too, so the automatic moment taken before the
+        # restore reads "Before your last change" instead of being a second
+        # entry with the same name as the one being restored.
+        return Transaction(ops)
 
 
 def _now() -> datetime:
@@ -321,17 +342,45 @@ def capture(
     for key in dict.fromkeys(keys):
         try:
             point.settings[key] = reader.get(key)
-        except BackendError:
-            point.settings[key] = None
+        except BackendError as exc:
+            if is_missing(exc):
+                # There is genuinely nothing here: no such schema, no such key.
+                # "There was nothing here" is a state, and restoring it means
+                # unsetting the key again.
+                point.settings[key] = None
+                continue
+            # Anything else — the settings service was momentarily unreachable,
+            # a value would not parse — means the value is UNKNOWN, not absent.
+            # Recording it as absent would make restoring this moment *clear* a
+            # setting that was never read, so it is left out of the moment
+            # altogether and said out loud instead.
+            point.warnings.append(
+                f"could not save the current value of {key}: {exc}. "
+                "It is not covered by this saved moment and will be left alone."
+            )
 
     if dests:
         files_dir = point.path / _FILES_DIRNAME if point.path else None
         for index, dest in enumerate(dict.fromkeys(dests), start=1):
             source = Path(dest)
-            if source.is_symlink() or not source.is_file():
-                # A link, a missing file, or something exotic. Recording it as
-                # absent means restoring removes whatever was put there, which
-                # is the right answer for a file that was not there before.
+            if source.is_symlink():
+                # A shortcut. It WAS here, so recording it as absent would make
+                # restoring this moment delete the user's own link — somebody's
+                # ~/.config/ghostty pointing into their dotfiles repository —
+                # and leave a hole. The link is recorded as a link, exactly as
+                # the pristine baseline records one, and restoring recreates it.
+                try:
+                    target = os.readlink(source)
+                except OSError as exc:
+                    point.files[dest] = None
+                    point.warnings.append(f"could not read the shortcut at {dest}: {exc}")
+                    continue
+                point.files[dest] = {"link": target}
+                continue
+            if not source.is_file():
+                # A missing file, or something exotic. Recording it as absent
+                # means restoring removes whatever was put there, which is the
+                # right answer for a file that was not there before.
                 point.files[dest] = None
                 continue
             assert files_dir is not None
@@ -355,6 +404,7 @@ def capture_from_diff(
     backend: SettingsBackend | None = None,
     root: str | Path | None = None,
     resolved_dests: dict[str, str] | None = None,
+    resolved_keys: dict[str, str] | None = None,
     extra_keys: list[str] | None = None,
     extra_dests: list[str] | None = None,
 ) -> RestorePoint | None:
@@ -374,6 +424,11 @@ def capture_from_diff(
             taken from the real location that expands to. The transaction has
             already worked those out, so it passes them in rather than having
             them worked out a second time and possibly differently.
+        resolved_keys: the same, for setting keys. A Look writes
+            ``dconf:/org/gnome/Ptyxis/Profiles/{{ ptyxis_default_profile }}/palette``
+            and the transaction resolves the token before writing; saving the
+            *literal* token path saves nothing, and restoring it then reset the
+            real key — wiping the value the moment was supposed to protect.
         extra_keys: settings to save that the transaction will not write
             itself. Switching Looks *reverts* what the outgoing one owned and
             the incoming one does not manage — a real change to the desktop
@@ -385,6 +440,7 @@ def capture_from_diff(
     from .transaction import (
         ENABLED_EXTENSIONS_KEY,
         ExtensionEnable,
+        FileLink,
         FileRemove,
         FileWrite,
         SettingReset,
@@ -392,6 +448,7 @@ def capture_from_diff(
     )
 
     mapping = resolved_dests or {}
+    key_mapping = resolved_keys or {}
     keys: list[str] = []
     dests: list[str] = []
     for entry in diff.changes:
@@ -402,10 +459,10 @@ def capture_from_diff(
         # impossible — and the commonest undo of all, restoring "Before
         # gtheme", is mostly resets and removals.
         if isinstance(op, SettingWrite | SettingReset):
-            keys.append(op.key)
+            keys.append(key_mapping.get(op.key, op.key))
         elif isinstance(op, ExtensionEnable):
             keys.append(ENABLED_EXTENSIONS_KEY)
-        elif isinstance(op, FileWrite | FileRemove):
+        elif isinstance(op, FileWrite | FileRemove | FileLink):
             dests.append(mapping.get(op.dest, op.dest))
     keys.extend(extra_keys or ())
     dests.extend(extra_dests or ())
@@ -519,7 +576,10 @@ def apply_point(
     # may or may not have been a Look and which nothing here can honestly name.
     # A saved moment carries a label ("My desktop, 25 August") and applying it
     # runs a real transaction, so the one thing to be careful of is letting
-    # that label be mistaken for a Look's. It is not passed as one.
+    # that label be mistaken for a Look's. ``to_transaction`` passes neither a
+    # label nor a look, which is what keeps the Look-switch cleanup switched
+    # off here: a restore puts back exactly what the moment recorded and strips
+    # nothing else off the desktop.
     from . import ledger as ledger_store
 
     ledger_store.clear_current_look()

@@ -20,9 +20,12 @@ Three properties the cleanup keeps, each of them a v1 lesson:
 * **Reverting goes through the pristine baseline**, never through a
   "remembered previous value". The baseline originals are never modified.
 * **Only what actually reverted is forgotten.** An item that failed to revert
-  keeps its record and its stored copy, so the Undo page can still recover it.
-  A cleanup that cannot finish must degrade to "you can still undo this", never
-  to "that is gone now".
+  keeps its record, its stored copy *and the ledger entry that claims it*, so
+  the Undo page can still recover it and the next switch tries again. A cleanup
+  that cannot finish must degrade to "you can still undo this", never to "that
+  is gone now".
+* **The user's own edits are not a previous Look.** The ``__manual__`` entry
+  records what somebody changed from a page. Switching Looks walks past it.
 """
 
 from __future__ import annotations
@@ -35,6 +38,7 @@ from .baseline import Baseline
 from .paths import current_file, ledger_file
 
 __all__ = [
+    "MANUAL_OWNER",
     "CleanupReport",
     "clear_current_look",
     "current_look",
@@ -46,6 +50,18 @@ __all__ = [
     "write_entry",
     "write_ledger",
 ]
+
+
+#: Ledger owner name for changes that came from a page rather than a Look, and
+#: for putting a saved moment back. Switching Looks tidies up after other
+#: Looks; it never tidies up after the user's own deliberate edits, which is
+#: why this entry is skipped by :func:`switch_cleanup` — a Look that does not
+#: manage the accent colour has no business putting back the one the user chose
+#: on the Colours page an hour ago.
+#:
+#: Lives here rather than in ``core.transaction`` because the cleanup that has
+#: to exclude it lives here; ``core.transaction`` re-exports it.
+MANUAL_OWNER = "__manual__"
 
 
 def read_ledger(path: str | Path | None = None) -> dict[str, dict]:
@@ -93,9 +109,16 @@ class CleanupReport:
 
     notes: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
-    #: Items that could not be reverted and are therefore still recoverable
-    #: from the Undo page. Never silently dropped.
+    #: Items that could not be reverted *this time* and are therefore still
+    #: recorded, still owned, and still recoverable from the Undo page. Never
+    #: silently dropped: the entry that claims them is kept so a later switch
+    #: tries again.
     kept: int = 0
+    #: Items that can never be reverted through the baseline — the saved copy
+    #: is gone, or the setting no longer exists on this machine. Counted
+    #: separately from :attr:`kept` because telling somebody "the Undo page can
+    #: still recover them" about these would be untrue.
+    dead: int = 0
 
 
 def switch_cleanup(
@@ -124,7 +147,10 @@ def switch_cleanup(
     outgoing = [
         name
         for name, owned in ledger.items()
-        if name != incoming and isinstance(owned, dict)
+        # MANUAL_OWNER is not a previous Look. It is the user's own deliberate
+        # edits, and tidying those away on a Look switch is how a theme manager
+        # silently undoes the accent colour somebody picked this morning.
+        if name != incoming and name != MANUAL_OWNER and isinstance(owned, dict)
     ]
     if not outgoing:
         return report
@@ -133,28 +159,55 @@ def switch_cleanup(
         owned = ledger[name]
         orphan_files = [f for f in owned.get("files", []) if f not in incoming_files]
         orphan_settings = [s for s in owned.get("settings", []) if s not in incoming_settings]
+        kept_files: list[str] = []
+        kept_settings: list[str] = []
 
         if orphan_files:
             outcome = baseline.restore_only_files(orphan_files)
             report.notes.extend(f"tidied up: {line}" for line in outcome.log)
             report.warnings.extend(outcome.warnings)
-            baseline.forget_files(outcome.done)
-            report.kept += sum(1 for key in orphan_files if key in baseline.files)
+            # A dead record can never be put back by trying again, so it is
+            # forgotten alongside the ones that worked — keeping it would block
+            # a fresh recording of that destination for good.
+            baseline.forget_files([*outcome.done, *outcome.dead])
+            done = set(outcome.done)
+            dead = set(outcome.dead)
+            kept_files = [key for key in orphan_files if key not in done and key not in dead]
+            report.dead += sum(1 for key in orphan_files if key in dead)
 
         if orphan_settings:
             outcome = baseline.restore_only_settings(orphan_settings)
             report.notes.extend(f"tidied up: {line}" for line in outcome.log)
             report.warnings.extend(outcome.warnings)
-            baseline.forget_settings(outcome.done)
-            report.kept += sum(1 for key in orphan_settings if key in baseline.settings)
+            baseline.forget_settings([*outcome.done, *outcome.dead])
+            done = set(outcome.done)
+            dead = set(outcome.dead)
+            kept_settings = [key for key in orphan_settings if key not in done and key not in dead]
+            report.dead += sum(1 for key in orphan_settings if key in dead)
 
-        ledger.pop(name, None)
+        report.kept += len(kept_files) + len(kept_settings)
+        if kept_files or kept_settings:
+            # Only what actually reverted is forgotten. An item that failed to
+            # revert keeps its record *and* the entry that claims it, so the
+            # next switch tries again — dropping the entry here is how a
+            # leftover change becomes one nothing will ever undo.
+            ledger[name] = {
+                "files": sorted(set(kept_files)),
+                "settings": sorted(set(kept_settings)),
+            }
+        else:
+            ledger.pop(name, None)
 
     write_ledger(ledger, path)
     if report.kept:
         report.warnings.append(
             f"{report.kept} thing(s) from the previous look could not be changed back "
             "automatically — the Undo page can still recover them"
+        )
+    if report.dead:
+        report.warnings.append(
+            f"{report.dead} thing(s) from the previous look could not be changed back: "
+            "the saved copy of them is gone"
         )
     return report
 

@@ -16,6 +16,13 @@ These tests interrupt an apply for real — an exception raised from inside the
 write loop — and then check what a fresh process would find.
 """
 
+# A Look apply is a transaction with ``look=`` set. ``label=`` alone is only a
+# name for the saved moment it takes — every moment has one, including the
+# automatic one before a single tick on a page — so the tests below pass both,
+# the way ``preset.compile`` does. Keying the switch cleanup on ``label`` is
+# what once made putting a saved moment back strip the whole Look.
+
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -73,7 +80,7 @@ def test_an_interrupted_apply_leaves_a_recording_that_covers_what_it_did(
             FileWrite(src=second, dest="~/.config/demo/second"),
         ],
         dest_root=str(engine.dest_root),
-        label="CRASH",
+        label="CRASH", look="crash",
     )
     with pytest.raises(Interrupted):
         tx.apply(restore_point=False)
@@ -121,7 +128,7 @@ def test_rescue_after_an_interrupted_apply_puts_everything_back(
                 FileWrite(src=second, dest="~/.config/demo/second"),
             ],
             dest_root=str(engine.dest_root),
-            label="CRASH",
+            label="CRASH", look="crash",
         ).apply(restore_point=False)
 
     assert existing.read_text(encoding="utf-8") == "look content one"
@@ -164,7 +171,7 @@ def test_the_ownership_claim_is_never_smaller_than_what_happened(
                 FileWrite(src=second, dest="~/.config/demo/second"),
             ],
             dest_root=str(engine.dest_root),
-            label="CLAIMS",
+            label="CLAIMS", look="claims",
         ).apply(restore_point=False)
 
     claimed = set(ledger_store.read_ledger()["CLAIMS"]["files"])
@@ -210,7 +217,7 @@ def test_a_failure_rolls_the_whole_transaction_back(engine, tmp_path):
             SettingWrite(key=SCHEME, value="'prefer-dark'"),
         ],
         dest_root=str(engine.dest_root),
-        label="ALLORNOTHING",
+        label="ALLORNOTHING", look="allornothing",
     )
     with backends.use_backend(Refusing(engine.backend)):
         from gtheme.core.transaction import TransactionError
@@ -253,7 +260,7 @@ def test_a_rolled_back_transaction_leaves_no_recording_behind(engine, tmp_path):
                     SettingWrite(key=ICONS, value="'Papirus'"),
                 ],
                 dest_root=str(engine.dest_root),
-                label="UNDONE",
+                label="UNDONE", look="undone",
             ).apply(restore_point=False)
 
     fresh = Baseline(backend=engine.backend).load()
