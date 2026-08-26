@@ -34,7 +34,7 @@ from pathlib import Path
 
 from .fsio import atomic_write_text, config_root, confine, state_root
 from .kv import KeyValueFile
-from .model import Palette, ReloadSemantics, TerminalState
+from .model import Palette, ReloadSemantics, TerminalState, one_line, read_palette
 
 __all__ = ["GhosttyAdapter", "slugify"]
 
@@ -163,7 +163,7 @@ class GhosttyAdapter:
         background = config.value("background")
         foreground = config.value("foreground")
         if background and foreground:
-            return Palette(
+            return read_palette(
                 name=theme or "Ghostty",
                 background=_hash(background),
                 foreground=_hash(foreground),
@@ -291,7 +291,7 @@ class GhosttyAdapter:
         foreground = parsed.value("foreground")
         if not background or not foreground:
             return None
-        return Palette(
+        return read_palette(
             name=theme,
             background=_hash(background),
             foreground=_hash(foreground),
@@ -301,14 +301,25 @@ class GhosttyAdapter:
         )
 
     def _render_theme(self, palette: Palette) -> str:
-        lines = [f"# {palette.name} — written by gtheme"]
+        """The theme file, with every value refused if it could start a line.
+
+        Ghostty's config is one setting per line and has no escaping at all, so
+        a value carrying a newline would not be a broken colour — it would be a
+        second setting, and ghostty's settings include ones that name a
+        program. :class:`~gtheme.terminal.model.Palette` has already refused
+        anything of the sort; this is the second lock on the same door.
+        """
+        name = one_line(palette.name, what="the look name")
+        background = one_line(palette.background, what="the background")
+        foreground = one_line(palette.foreground, what="the text colour")
+        cursor = one_line(palette.cursor or palette.foreground, what="the cursor colour")
+        lines = [f"# {name} — written by gtheme"]
         for index, colour in enumerate(palette.ansi):
-            lines.append(f"palette = {index}={colour}")
-        lines.append(f"background = {palette.background}")
-        lines.append(f"foreground = {palette.foreground}")
-        cursor = palette.cursor or palette.foreground
+            lines.append(f"palette = {index}={one_line(colour, what=f'colour {index}')}")
+        lines.append(f"background = {background}")
+        lines.append(f"foreground = {foreground}")
         lines.append(f"cursor-color = {cursor}")
-        lines.append(f"cursor-text = {palette.background}")
+        lines.append(f"cursor-text = {background}")
         return "\n".join(lines) + "\n"
 
 

@@ -24,7 +24,7 @@ from pathlib import Path
 from gtheme.core.settings_backend import BackendError, SettingsBackend
 
 from .fsio import atomic_write_text, confine, data_root
-from .model import Palette, ReloadSemantics, TerminalState
+from .model import Palette, ReloadSemantics, TerminalState, one_line, read_palette
 
 __all__ = [
     "PROFILE_PLACEHOLDER",
@@ -86,20 +86,30 @@ def render_palette_file(palette: Palette) -> str:
     inventing a light variant nobody asked for; a look that wants two of them
     ships two palettes.
     """
-    cursor = palette.cursor or palette.foreground
-    ansi = palette.ansi or ()
+    # A .palette file is INI: one setting per line, no escaping anywhere. A
+    # value carrying a newline would become a second setting, so every value is
+    # refused rather than escaped if it could end its own line. Palette has
+    # already refused it; this is the second lock on the same door.
+    name = one_line(palette.name, what="the look name")
+    background = one_line(palette.background, what="the background")
+    foreground = one_line(palette.foreground, what="the text colour")
+    cursor = one_line(palette.cursor or palette.foreground, what="the cursor colour")
+    ansi = [
+        one_line(colour, what=f"colour {index}")
+        for index, colour in enumerate(palette.ansi or ())
+    ]
     lines = [
         "# Written by gtheme.",
         "[Palette]",
-        f"Name={palette.name}",
+        f"Name={name}",
         "",
     ]
     for section in ("Dark", "Light"):
         lines.append(f"[{section}]")
-        lines.append(f"Background={palette.background}")
-        lines.append(f"Foreground={palette.foreground}")
+        lines.append(f"Background={background}")
+        lines.append(f"Foreground={foreground}")
         lines.append(f"Cursor={cursor}")
-        lines.append(f"CursorForeground={palette.background}")
+        lines.append(f"CursorForeground={background}")
         for index, colour in enumerate(ansi):
             lines.append(f"Color{index}={colour}")
         lines.append("")
@@ -219,7 +229,7 @@ class PtyxisAdapter:
         if not background or not foreground:
             return None
         ansi = tuple(values[f"Color{i}"] for i in range(16) if f"Color{i}" in values)
-        return Palette(
+        return read_palette(
             name=name,
             background=background,
             foreground=foreground,
