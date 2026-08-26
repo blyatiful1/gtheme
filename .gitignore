@@ -9,3 +9,7 @@ dist/
 themes/*.zip
 .pytest_cache/
 .backups/
+
+# The page walk stamps this so the screenshot gate can tell a fresh picture
+# from a stale one. It is a fact about one run, not about the project.
+docs/media/screenshots/.run-start
