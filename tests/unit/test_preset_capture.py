@@ -7,14 +7,14 @@ touches nothing on the machine running it.
 
 from __future__ import annotations
 
-import tomllib
 from datetime import datetime
 from pathlib import Path
 
 import pytest
 
+from gtheme.core import paths, restorepoints
 from gtheme.preset import capture as cap
-from gtheme.preset.model import Component, Preset
+from gtheme.preset.model import Component
 
 #: Applied to every test that writes settings or files. The guard in
 #: ``tests/conftest.py`` skips a ``mutating`` test unless a seam is active;
@@ -88,37 +88,85 @@ def test_components_are_carried_through(backend):
     assert entries[0].component == Component.ICONS
 
 
-# ── restore points ───────────────────────────────────────────────────────
+# ── saved moments ────────────────────────────────────────────────────────
+#
+# CONTRACT CHANGED BY RULING (Wave-2 gate, R5): one store, one format, one
+# reader. This module used to write saved moments in its own format (a
+# theme.toml in a YYYYmmdd-HHMMSS folder) into the same directory
+# core.restorepoints writes its own (a restore-point.json in a
+# YYYY-mm-ddTHH-MM-SS one), with its own lister and its own pruner. The pruner
+# was the dangerous half: it deleted the oldest folders by name whatever they
+# were, where the engine's refuses to touch a moment somebody asked for by hand
+# or the "Before gtheme" one that cannot be recreated. So these tests moved
+# from "capture keeps its own store correctly" to "capture writes into the one
+# store".
 
 
 @mutating
-def test_a_restore_point_is_an_ordinary_look(backend, state_dir: Path):
+def test_a_moment_captured_here_is_one_the_engine_can_find(backend, state_dir: Path):
+    """The unification, stated as the one thing that has to be true."""
     backend.set(key("color-scheme"), "'prefer-dark'")
     result = cap.capture_restore_point([key("color-scheme")], backend, label="My desktop")
-    assert result.path is not None
-    reloaded = Preset.model_validate(
-        tomllib.loads((result.path / "theme.toml").read_text(encoding="utf-8"))
-    )
-    assert reloaded.format == 2
-    assert reloaded.settings[0].value == "'prefer-dark'"
+
+    found = restorepoints.list_restore_points()
+    assert len(found) == 1
+    assert found[0].label == "My desktop"
+    assert found[0].path == result.path
+    assert found[0].settings[key("color-scheme")] == "'prefer-dark'"
 
 
 @mutating
-def test_a_restore_point_lands_under_the_v2_state_folder(backend, state_dir: Path):
+def test_a_moment_captured_by_the_engine_appears_in_the_same_list(backend, state_dir: Path):
+    """The other direction. One list means both paths are on it.
+
+    The two moments are given different times on purpose. A moment's id is its
+    timestamp to the second, so two taken inside the same second land in the
+    same folder and the second overwrites the first — true of the engine before
+    this change and still true after it, and the reason the junk moments this
+    gate cleaned up had ``.bak`` files beside them. Noted for Wave 3; not
+    something to hide inside a test about something else.
+    """
+    backend.set(key("color-scheme"), "'default'")
+    cap.capture_restore_point(
+        [key("color-scheme")], backend, label="from the page",
+        now=datetime(2026, 8, 25, 12, 0, 0),
+    )
+    restorepoints.capture(
+        [key("color-scheme")], label="from the engine", backend=backend,
+        when=datetime(2026, 8, 25, 12, 0, 1),
+    )
+
+    labels = {point.label for point in restorepoints.list_restore_points()}
+    assert labels == {"from the page", "from the engine"}
+
+
+@mutating
+def test_a_captured_moment_is_still_described_as_a_look(backend, state_dir: Path):
+    """The Look view is what the pages show; it is no longer a second store."""
+    backend.set(key("color-scheme"), "'prefer-dark'")
+    result = cap.capture_restore_point([key("color-scheme")], backend, label="My desktop")
+    assert result.preset.format == 2
+    assert result.preset.settings[0].value == "'prefer-dark'"
+    assert result.path is not None
+    assert not (result.path / "theme.toml").exists(), "the second format is gone"
+
+
+@mutating
+def test_a_moment_lands_under_the_v2_state_folder(backend, state_dir: Path):
     cap.capture_restore_point([key("color-scheme")], backend, label="x")
-    assert cap.state_dir() == state_dir
-    assert cap.restore_points_dir() == state_dir / "restore-points"
-    assert len(cap.list_restore_points()) == 1
+    assert paths.state_dir() == state_dir
+    assert paths.restore_points_dir() == state_dir / "restore-points"
+    assert len(restorepoints.list_restore_points()) == 1
 
 
 def test_the_state_folder_never_touches_v1s(monkeypatch, tmp_path):
     monkeypatch.delenv("GTHEME_STATE_DIR", raising=False)
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    assert cap.state_dir() == tmp_path / "gtheme" / "v2"
+    assert paths.state_dir() == tmp_path / "gtheme" / "v2"
 
 
-def test_the_current_wallpaper_becomes_the_restore_points_picture(tmp_path):
-    """A restore point shows the desktop it would bring back."""
+def test_the_current_wallpaper_becomes_the_moments_picture(tmp_path):
+    """A saved moment shows the desktop it would bring back."""
     from gtheme.preset.model import SettingEntry
 
     image = tmp_path / "wall.png"
@@ -145,24 +193,24 @@ def test_a_wallpaper_that_is_not_a_findable_image_is_not_used(value):
 
 
 @mutating
-def test_a_restore_point_with_no_findable_wallpaper_says_so(backend, state_dir: Path):
+def test_a_moment_with_no_findable_wallpaper_says_so(backend, state_dir: Path):
     result = cap.capture_restore_point([key("color-scheme")], backend, label="x")
     assert any("no picture" in w for w in result.warnings)
 
 
 @mutating
-def test_owned_files_are_snapshotted_into_the_restore_point(backend, state_dir, tmp_path):
+def test_owned_files_are_snapshotted_by_the_engine(backend, state_dir, tmp_path):
+    """The copy is the engine's, in the engine's numbered-blob layout."""
     owned = tmp_path / "gnome-shell.css"
     owned.write_text("/* mine */", encoding="utf-8")
+    dest = str(tmp_path / "gnome-shell.css")
     result = cap.capture_restore_point(
-        [key("color-scheme")],
-        backend,
-        label="x",
-        owned_files=[(owned, "~/.local/share/themes/X/gnome-shell/gnome-shell.css")],
+        [key("color-scheme")], backend, label="x", owned_files=[(owned, dest)]
     )
-    assert result.path is not None
-    assert (result.path / "files" / "gnome-shell.css").read_text() == "/* mine */"
-    assert result.preset.files[0].dest.endswith("gnome-shell.css")
+    point = restorepoints.list_restore_points()[0]
+    assert point.files[dest] is not None
+    assert (point.path / "files" / point.files[dest]).read_text() == "/* mine */"
+    assert result.preset.files[0].dest == dest
 
 
 @mutating
@@ -174,39 +222,44 @@ def test_enabled_add_ons_are_recorded_so_they_can_be_put_back(backend, state_dir
 
 
 @mutating
-def test_restore_points_are_capped_oldest_first(backend, state_dir: Path):
+def test_pruning_is_the_engines_and_spares_what_somebody_asked_for(backend, state_dir: Path):
+    """The reason there must be one pruner.
+
+    This module's pruner deleted the oldest folders by name whatever they were.
+    The engine's refuses to touch a moment a person asked for by hand, so a
+    capture from this path defaults to "manual" and survives.
+    """
     for minute in range(13):
         cap.capture_restore_point(
-            [key("color-scheme")],
-            backend,
-            label="x",
-            cap=10,
+            [key("color-scheme")], backend, label="auto", kind="auto", cap=10,
             now=datetime(2026, 8, 25, 12, minute, 0),
         )
-    kept = cap.list_restore_points()
+    kept = restorepoints.list_restore_points()
     assert len(kept) == 10
-    assert kept[0].name.endswith("-121200")  # newest first
-    assert kept[-1].name.endswith("-120300")
+    assert kept[0].id.endswith("12-12-00"), kept[0].id  # newest first
+    assert kept[-1].id.endswith("12-03-00"), kept[-1].id
+
+    mine = cap.capture_restore_point([key("color-scheme")], backend, label="mine")
+    restorepoints.prune(cap=0)
+    survivors = [point.label for point in restorepoints.list_restore_points()]
+    assert survivors == ["mine"], survivors
+    assert mine.path.is_dir()
 
 
 @mutating
-def test_pruning_reports_what_it_removed(backend, state_dir: Path):
+def test_leaving_the_cap_alone_is_the_default(backend, state_dir: Path):
+    """A capture taken on the user's behalf does not quietly shorten the list."""
     for minute in range(3):
         cap.capture_restore_point(
-            [key("color-scheme")],
-            backend,
-            label="x",
-            cap=0,
+            [key("color-scheme")], backend, label="x", kind="auto",
             now=datetime(2026, 8, 25, 12, minute, 0),
         )
-    removed = cap.prune_restore_points(cap=1)
-    assert len(removed) == 2
-    assert len(cap.list_restore_points()) == 1
+    assert len(restorepoints.list_restore_points()) == 3
 
 
 @mutating
 def test_listing_an_empty_state_folder_is_not_an_error(state_dir: Path):
-    assert cap.list_restore_points() == []
+    assert restorepoints.list_restore_points() == []
 
 
 # ── sharing ──────────────────────────────────────────────────────────────

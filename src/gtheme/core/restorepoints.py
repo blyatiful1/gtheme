@@ -259,6 +259,7 @@ def capture(
     backend: SettingsBackend | None = None,
     root: str | Path | None = None,
     point_id: str | None = None,
+    when: datetime | None = None,
 ) -> RestorePoint:
     """Record the current value of every named setting and file.
 
@@ -272,12 +273,15 @@ def capture(
         root: where to store it; defaults to the v2 restore-points directory.
         point_id: override the generated id. Used only by the v1 import, which
             has a fixed one.
+        when: pretend it is this moment. The id is derived from it, so a test
+            that needs several moments in a known order can say so instead of
+            sleeping through real seconds.
 
     A key that cannot be read is recorded as having no value, with a warning
     naming it. That is honest and restorable: "there was nothing here" is a
     state, and restoring it means unsetting the key again.
     """
-    when = _now()
+    when = when or _now()
     reader = backend if backend is not None else get_backend()
     identifier = safe_name(point_id or _new_id(when))
     point = RestorePoint(

@@ -2,12 +2,23 @@
 
 One mechanism, two uses, and that is the point (DESIGN.md A8):
 
-* **Restore points.** Before every transaction, gtheme writes down the exact
+* **Saved moments.** Before every transaction, gtheme writes down the exact
   current value of every setting it knows how to touch. Undo is then just
   *applying a Look* — the same code path, the same preflight, the same
   confinement, the same tests. A second, separate restore engine would be the
   least-exercised code in the app and the one that has to work on the worst day
   someone has.
+
+  Which is exactly what this module had grown. It wrote saved moments in its
+  own format (a ``theme.toml`` in a ``YYYYmmdd-HHMMSS`` folder) into the same
+  directory :mod:`gtheme.core.restorepoints` writes its own (a
+  ``restore-point.json`` in a ``YYYY-mm-ddTHH-MM-SS`` one) — two formats, two
+  readers, and two pruners in one folder, each invisible to the other. The
+  pruner was the dangerous half: this one deleted the oldest folders by name
+  whatever they were, where the engine's own refuses to touch a moment somebody
+  asked for by hand or the "Before gtheme" one that cannot be recreated.
+
+  So the capture below is now the engine's capture, and there is one store.
 * **"Save my current desktop as a Look."** The same capture, curated, with a
   scan for anything the user would not want to publish.
 
@@ -37,15 +48,7 @@ __all__ = [
     "capture_restore_point",
     "capture_settings",
     "capture_share",
-    "list_restore_points",
-    "prune_restore_points",
-    "restore_points_dir",
-    "state_dir",
 ]
-
-#: How many restore points are kept. Older ones are removed oldest-first; the
-#: pristine "before gtheme" baseline is NOT one of these and is never pruned.
-RESTORE_POINT_CAP = 10
 
 #: Substrings that make a setting too risky to publish. Deliberately broad:
 #: a false positive costs one line in a Look, a false negative costs a secret.
@@ -69,27 +72,6 @@ SECRET_HINTS = (
 _HOME_RE = re.compile(r"/home/[^/'\"\s]+")
 _WALLPAPER_KEY = "gsettings:org.gnome.desktop.background picture-uri"
 _WALLPAPER_DARK_KEY = "gsettings:org.gnome.desktop.background picture-uri-dark"
-
-
-def state_dir() -> Path:
-    """Where v2 keeps its runtime state.
-
-    v1's files sit in the parent directory and are never written or removed
-    (DESIGN.md F1); v2 lives in its own ``v2/`` below it.
-    """
-    import os
-
-    override = os.environ.get("GTHEME_STATE_DIR")
-    if override:
-        return Path(override).expanduser()
-    base = os.environ.get("XDG_STATE_HOME")
-    root = Path(base).expanduser() if base else Path.home() / ".local" / "state"
-    return root / "gtheme" / "v2"
-
-
-def restore_points_dir() -> Path:
-    """The folder restore points are written into."""
-    return state_dir() / "restore-points"
 
 
 @dataclass
@@ -219,31 +201,57 @@ def capture_restore_point(
     owned_files: Sequence[tuple[Path, str]] = (),
     enabled_extensions: Sequence[str] = (),
     directory: Path | None = None,
-    cap: int = RESTORE_POINT_CAP,
+    cap: int | None = None,
+    kind: str = "manual",
     now: datetime | None = None,
 ) -> CaptureResult:
     """Write down exactly how the desktop is right now.
+
+    Delegates to :mod:`gtheme.core.restorepoints`, which owns the store, the
+    format and the pruning. This function is the *Look view* of a saved moment:
+    it answers "what would this put back, described as a Look" for the pages
+    that want to show a picture and a component list, while the moment itself
+    is written once, in the engine's format, where the engine's own reader can
+    find it.
 
     Args:
         keys: every setting gtheme knows how to change. What is not captured
             cannot be restored, which is why the descriptor corpus and this
             list are the same list.
-        label: what the restore point is called in the list — the Home page
-            shows it as "My desktop, 25 August", so this is prose.
+        label: what the moment is called in the list — the Home page shows it
+            as "My desktop, 25 August", so this is prose.
         owned_files: ``(source, destination)`` pairs for files gtheme wrote and
-            would need to put back.
-        directory: where to write. Defaults to a timestamped folder under the
-            state directory.
-        cap: how many restore points to keep afterwards.
+            would need to put back. The destinations go to the engine, which
+            copies them itself; the sources are used only for the picture.
+        directory: the restore-points folder to write into. Defaults to the v2
+            state directory's.
+        cap: how many moments to keep afterwards. None leaves the list alone,
+            which is what a caller taking a moment on the user's behalf wants —
+            pruning is the engine's, and it refuses to delete a moment somebody
+            asked for by hand.
+        kind: ``"auto"``, ``"manual"`` or ``"pristine"``, as the engine means
+            them. A capture asked for by a person defaults to ``"manual"``, so
+            pruning will not quietly delete it.
 
     Returns:
-        The captured Look and where it was written.
+        The captured Look and where the moment was written.
     """
+    from ..core import restorepoints
+
     moment = now or datetime.now()
     stamp = moment.strftime("%Y%m%d-%H%M%S")
-    out_dir = Path(directory) if directory is not None else restore_points_dir() / stamp
 
     entries, skipped = capture_settings(keys, backend, components=components)
+    point = restorepoints.capture(
+        [entry.key for entry in entries],
+        [dest for _source, dest in owned_files],
+        label=label,
+        kind=kind,
+        backend=backend,
+        root=directory,
+        when=now,
+    )
+
     preset = Preset(
         format=2,
         meta=Meta(
@@ -252,38 +260,36 @@ def capture_restore_point(
             description=f"How this desktop looked on {moment:%d %B %Y at %H:%M}.",
             author="you",
             version=stamp,
-            # Filled in by _write_look if there is a wallpaper to copy. Naming
-            # a file that was never written is how a restore point ends up
-            # warning about its own missing picture on every load.
             screenshots=[],
         ),
         settings=entries,
+        files=[FileEntry(src=f"files/{source.name}", dest=dest) for source, dest in owned_files],
         extensions=ExtensionsBlock(enable=list(enabled_extensions)),
     )
+
+    result = CaptureResult(preset=preset, path=point.path, skipped=skipped)
+    result.warnings.extend(point.warnings)
     wallpaper = _wallpaper_source(entries)
-    final = _write_look(
-        preset,
-        out_dir,
-        wallpaper=wallpaper,
-        owned_files=owned_files,
-        header=(
-            "A restore point. gtheme wrote this by reading your desktop; applying it "
-            "puts every setting listed here back exactly as it was.\n"
-            "It is an ordinary Look, which is why undo uses the same code as everything "
-            "else."
-        ),
-    )
-    result = CaptureResult(preset=final, path=out_dir, skipped=skipped)
     if wallpaper is None:
         result.warnings.append(
-            "your current wallpaper could not be found, so this restore point has no "
+            "your current wallpaper could not be found, so this saved moment has no "
             "picture to show in the list"
         )
-    if cap:
-        removed = prune_restore_points(cap=cap)
+    elif point.path is not None:
+        shot = f"picture{wallpaper.suffix.lower()}"
+        try:
+            shutil.copy2(wallpaper, point.path / shot)
+        except OSError:  # pragma: no cover - an unreadable wallpaper is not fatal
+            pass
+        else:
+            result.preset = preset.model_copy(
+                update={"meta": preset.meta.model_copy(update={"screenshots": [shot]})}
+            )
+    if cap is not None:
+        removed = restorepoints.prune(cap=cap, root=directory)
         if removed:
             result.warnings.append(
-                f"the {len(removed)} oldest restore point(s) were removed to keep the list short"
+                f"the {len(removed)} oldest saved moment(s) were removed to keep the list short"
             )
     return result
 
@@ -360,22 +366,3 @@ def capture_share(
             "no wallpaper picture could be found, so add a screenshot before sharing this Look"
         )
     return result
-
-
-def list_restore_points(directory: Path | None = None) -> list[Path]:
-    """Restore-point folders, newest first."""
-    base = Path(directory) if directory is not None else restore_points_dir()
-    if not base.is_dir():
-        return []
-    found = [p for p in base.iterdir() if (p / "theme.toml").is_file()]
-    return sorted(found, key=lambda p: p.name, reverse=True)
-
-
-def prune_restore_points(*, cap: int = RESTORE_POINT_CAP, directory: Path | None = None) -> list[str]:
-    """Keep the newest ``cap`` restore points. Returns the names removed."""
-    points = list_restore_points(directory)
-    removed: list[str] = []
-    for stale in points[cap:]:
-        shutil.rmtree(stale, ignore_errors=True)
-        removed.append(stale.name)
-    return removed
