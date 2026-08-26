@@ -276,12 +276,21 @@ def test_an_add_on_that_was_on_disk_at_the_last_login_can_be_switched_on_live():
 
 
 def test_a_look_switches_on_what_is_present_as_one_change():
+    """The label assertion here used to require the bug in finding install.py:217.
+
+    It asserted ``transaction.label == "NIGHTBLOOM"``, i.e. that an
+    add-ons-only transaction wears the Look's name — which is precisely what
+    makes the transaction layer treat it as a Look switch and tidy the real
+    Look's files and settings off the desktop. The expectation was wrong, so it
+    is inverted here; the ops it plans are unchanged.
+    """
     installer, _proxy, _ = build({"a@b": info("a@b"), "c@d": info("c@d", state=2.0)})
     transaction, missing = installer.plan_for_look(
         [("a@b", "ego", ()), ("c@d", "ego", ())], label="NIGHTBLOOM"
     )
     assert [op.uuid for op in transaction.ops] == ["a@b", "c@d"]
-    assert transaction.label == "NIGHTBLOOM"
+    assert transaction.label is None
+    assert transaction.look is None
     assert missing == []
 
 

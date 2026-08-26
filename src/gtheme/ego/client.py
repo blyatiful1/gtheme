@@ -132,6 +132,17 @@ class SoupTransport:
     ``gi`` is imported inside the methods so that importing this module — and
     therefore anything under ``gtheme.ego`` — works on a machine with no
     PyGObject, which is what lets the unit tier run anywhere.
+
+    The version is pinned before the import. ``gi`` picks whichever typelib it
+    finds when nobody says, and libsoup ships 2.4 and 3.0 side by side on most
+    distributions; getting 2.4 here means ``Soup.Session(user_agent=...)`` and
+    ``send_and_read_async`` are simply not there, and the failure surfaces as an
+    attribute error deep inside a callback instead of "libsoup 3 is missing".
+
+    A machine without libsoup 3 is a machine that cannot reach the library at
+    all. That is reported the same way being offline is — a NETWORK
+    :class:`EgoError` through the callback — rather than as an exception raised
+    out of a main-loop handler where nobody is waiting to catch it.
     """
 
     def __init__(self, user_agent: str = "gtheme") -> None:
@@ -139,8 +150,20 @@ class SoupTransport:
         self._session: Any | None = None
 
     def _soup(self) -> tuple[Any, Any]:
-        from gi.repository import GLib, Soup
+        """``(GLib, Soup)``, or raise :class:`EgoError` when they are absent."""
+        try:
+            import gi
 
+            gi.require_version("Soup", "3.0")
+            gi.require_version("GLib", "2.0")
+            from gi.repository import GLib, Soup
+        except (ImportError, ValueError) as exc:
+            # ValueError is what gi.require_version raises for "no such
+            # typelib version", which is the libsoup-2.4-only case.
+            raise EgoError(
+                EgoErrorKind.NETWORK,
+                f"libsoup 3 is not available on this computer: {exc}",
+            ) from exc
         return GLib, Soup
 
     def _get_session(self) -> Any:
@@ -173,11 +196,19 @@ class SoupTransport:
         session.send_and_read_async(message, GLib.PRIORITY_DEFAULT, None, _done, None)
 
     def get(self, url: str, callback: BytesCallback) -> None:
-        _GLib, Soup = self._soup()
+        try:
+            _GLib, Soup = self._soup()
+        except EgoError as exc:
+            callback(None, EgoError(exc.kind, str(exc), url=url))
+            return
         self._send(Soup.Message.new("GET", url), url, callback)
 
     def post_json(self, url: str, payload: dict[str, Any], callback: BytesCallback) -> None:
-        GLib, Soup = self._soup()
+        try:
+            GLib, Soup = self._soup()
+        except EgoError as exc:
+            callback(None, EgoError(exc.kind, str(exc), url=url))
+            return
         message = Soup.Message.new("POST", url)
         body = json.dumps(payload).encode("utf-8")
         message.set_request_body_from_bytes("application/json", GLib.Bytes.new(body))

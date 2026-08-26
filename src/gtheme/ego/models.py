@@ -69,6 +69,22 @@ def _as_int(value: Any, default: int = 0) -> int:
         return default
 
 
+def _as_float(value: Any) -> float | None:
+    """A number the site says is a rating, or None when it is not a number.
+
+    The site has been seen to send ``null``, ``""`` and ``"n/a"`` in this slot.
+    A bare ``float()`` turns any of those into an exception three frames inside
+    a main-loop callback, where nobody catches it and the whole request goes
+    silent. A missing rating is not an error; it is simply no rating.
+    """
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 @dataclass(frozen=True)
 class ExtensionRecord:
     """One add-on as the legacy endpoints describe it.
@@ -232,11 +248,10 @@ class Rating:
 
     @classmethod
     def from_json(cls, raw: dict[str, Any]) -> Rating:
-        rating = raw.get("rating")
         return cls(
             uuid=str(raw.get("uuid") or ""),
             pk=_as_int(raw.get("id")),
-            rating=float(rating) if rating is not None else None,
+            rating=_as_float(raw.get("rating")),
             rated=_as_int(raw.get("rated")),
             created=raw.get("created") or None,
             updated=raw.get("updated") or None,

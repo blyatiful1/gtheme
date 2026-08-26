@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .client import EgoClient, EgoError
-from .install import CommandRunner, SubprocessRunner
+from .install import CommandRunner, SubprocessRunner, safe_uuid
 from .shelldbus import ShellExtensions
 
 __all__ = [
@@ -147,8 +147,16 @@ def stage_update(
         ValueError: the package is not a package, is not this add-on, or
             contains an entry that would unpack outside its folder.
     """
+    # The uuid becomes a folder name here and a temporary folder's prefix below,
+    # so it goes through the same kind of gate every other name-turned-path
+    # component in gtheme goes through. A uuid of ".." would otherwise make
+    # `destination` the parent folder, and the rmtree/os.replace at the end of
+    # this function would then delete things that have nothing to do with
+    # add-on updates.
+    component = safe_uuid(uuid)
+
     root = Path(directory) if directory is not None else extension_updates_dir()
-    destination = root / uuid
+    destination = root / component
     root.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -166,7 +174,7 @@ def stage_update(
             raise ValueError(
                 f"the download says it is {described['uuid']!r}, not {uuid!r}"
             )
-        staging = Path(tempfile.mkdtemp(prefix=f".{uuid}.", dir=root))
+        staging = Path(tempfile.mkdtemp(prefix=f".{component}.", dir=root))
         try:
             archive.extractall(staging, members=members)
         except Exception:
