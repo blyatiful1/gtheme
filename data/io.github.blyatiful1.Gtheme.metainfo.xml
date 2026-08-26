@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- AppStream metadata. Validate with `appstreamcli validate` before release.
-     The <screenshots> block is a stub until the real page screenshots exist
-     under docs/media/screenshots/ — do NOT ship a release with fake URLs. -->
+<!-- AppStream metadata: this is what an app store shows about gtheme.
+     Validate with `appstreamcli validate` before every release.
+     The screenshot URLs point at real PNGs committed under
+     docs/media/screenshots/ — they are produced by the page-walk test, so a
+     release can never ship a picture of a window that does not exist. -->
 <component type="desktop-application">
   <id>io.github.blyatiful1.Gtheme</id>
   <metadata_license>CC0-1.0</metadata_license>
@@ -22,9 +24,22 @@
     <p>
       Looks only change settings. They can't run programs on your computer.
     </p>
+    <p>What you can change:</p>
+    <ul>
+      <li>Pick a whole look at once, or change one piece at a time</li>
+      <li>The picture behind everything, from your photos or the ones included</li>
+      <li>Light or dark, and the highlight colour</li>
+      <li>App icons, the mouse pointer, and how big text is</li>
+      <li>The bar across the top, window buttons, and desktops</li>
+      <li>Extra features you can switch on, found and installed for you</li>
+      <li>Go back to how it was, at any point, from a list with dates</li>
+    </ul>
   </description>
 
   <launchable type="desktop-id">io.github.blyatiful1.Gtheme.desktop</launchable>
+  <provides>
+    <binary>gtheme</binary>
+  </provides>
 
   <categories>
     <category>Settings</category>
@@ -38,14 +53,60 @@
     <keyword>add-ons</keyword>
   </keywords>
 
+  <screenshots>
+    <screenshot type="default">
+      <caption>How your desktop looks right now, on one page</caption>
+      <image type="source" width="1200" height="800">https://raw.githubusercontent.com/blyatiful1/gtheme/main/docs/media/screenshots/home-light.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Whole looks: one click changes everything, and one click puts it back</caption>
+      <image type="source" width="1200" height="800">https://raw.githubusercontent.com/blyatiful1/gtheme/main/docs/media/screenshots/looks-light.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The picture behind everything, with a preview before you keep it</caption>
+      <image type="source" width="1200" height="800">https://raw.githubusercontent.com/blyatiful1/gtheme/main/docs/media/screenshots/wallpaper-light.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Light or dark, and the highlight colour</caption>
+      <image type="source" width="1200" height="800">https://raw.githubusercontent.com/blyatiful1/gtheme/main/docs/media/screenshots/colors-dark.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Extra features you can switch on, each with a plain-language description</caption>
+      <image type="source" width="1200" height="800">https://raw.githubusercontent.com/blyatiful1/gtheme/main/docs/media/screenshots/addons-light.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Every change is saved first, so you can go back to any earlier day</caption>
+      <image type="source" width="1200" height="800">https://raw.githubusercontent.com/blyatiful1/gtheme/main/docs/media/screenshots/restore-light.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The same window in dark</caption>
+      <image type="source" width="1200" height="800">https://raw.githubusercontent.com/blyatiful1/gtheme/main/docs/media/screenshots/home-dark.png</image>
+    </screenshot>
+  </screenshots>
+
   <url type="homepage">https://github.com/blyatiful1/gtheme</url>
   <url type="bugtracker">https://github.com/blyatiful1/gtheme/issues</url>
+  <url type="help">https://github.com/blyatiful1/gtheme/blob/main/docs/start-here.md</url>
+  <url type="vcs-browser">https://github.com/blyatiful1/gtheme</url>
 
   <developer id="io.github.blyatiful1">
     <name>blyatiful1</name>
   </developer>
 
+  <branding>
+    <color type="primary" scheme_preference="light">#c8b6f4</color>
+    <color type="primary" scheme_preference="dark">#3b2a6b</color>
+  </branding>
+
   <content_rating type="oars-1.1"/>
+
+  <recommends>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </recommends>
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
 
   <releases>
     <release version="2.0.0" type="development" date="2026-08-25">

@@ -5,9 +5,28 @@ on:
     branches: [main]
   pull_request:
 
-# What CI proves is strictly LESS than what ./verify.sh --full proves locally.
-# The sandbox tier boots a real headless GNOME Shell and touches a private
-# dbus session; it is deliberately never run here. See docs/testing.md.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# READ THIS BEFORE TRUSTING A GREEN TICK.
+#
+# What CI proves is strictly LESS than what `./verify.sh --full` proves on a
+# real machine. Green here means: the code lints, the pure-Python tier passes,
+# the packaging is well-formed, and the widgets build under GTK 4 / libadwaita.
+#
+# It does NOT prove any of the following, all of which only the local canonical
+# check covers:
+#   * the sandbox tier — it boots a real headless GNOME Shell on a private
+#     dbus session. It is deliberately never run here, at any cost in coverage.
+#   * the page-walk screenshots, and the honesty gate over them.
+#   * that applying and undoing a look really moves a real desktop.
+#   * that the machine this was built on came out unchanged (F16).
+# A change that is green here and has not been through ./verify.sh --full is
+# unverified. See docs/testing.md.
 jobs:
   lint-and-unit:
     name: ruff + unit tests
@@ -20,11 +39,14 @@ jobs:
       # F10: core/ may import Gio/GLib (a guard test forbids Gtk/Adw there), so
       # the unit tier needs PyGObject with the GLib typelib. libglib2.0-bin
       # provides glib-compile-schemas, which the settings-backend tests use to
-      # build a throwaway schema.
-      - name: Install GLib bindings
+      # build a throwaway schema. The last three are what the packaging tests
+      # check the launcher entry, the store listing and the icons with — without
+      # them those tests skip themselves and prove nothing.
+      - name: Install GLib bindings and the packaging checkers
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-gi gir1.2-glib-2.0 libglib2.0-bin
+          sudo apt-get install -y python3-gi gir1.2-glib-2.0 libglib2.0-bin \
+                                  desktop-file-utils appstream librsvg2-bin
       - name: Install gtheme
         run: |
           python -m venv --system-site-packages .venv
@@ -34,7 +56,9 @@ jobs:
         run: .venv/bin/ruff check .
       - name: pytest
         # Ubuntu runners ship libadwaita 1.5; gtheme targets 1.9. No Adw code
-        # may run here — that is the archlinux job's task.
+        # may run here — that is the archlinux job's task. The unit tier
+        # includes tests/unit/test_packaging_*.py, which builds a real wheel
+        # and looks inside it.
         run: .venv/bin/python -m pytest -q -m "not gtk and not sandbox"
 
   gtk:
