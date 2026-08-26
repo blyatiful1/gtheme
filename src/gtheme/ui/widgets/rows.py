@@ -34,6 +34,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, GLib, Gtk  # noqa: E402
 
+from ...core.gvariant import bare_number  # noqa: E402
 from ...core.settings_backend import BackendError, BackendErrorKind, SettingsBackend  # noqa: E402
 from ...panels.descriptor import Row, WidgetKind  # noqa: E402
 
@@ -183,7 +184,10 @@ def _build_slider(backend: SettingsBackend, row: Row) -> tuple[Adw.PreferencesRo
     def refresh() -> None:
         guard["busy"] = True
         try:
-            raw = backend.get(key_for(row))
+            # Bared first: a uint32 prints as "uint32 300", and reading that
+            # literally sent the slider to its own minimum and made the next
+            # nudge write a value the person never chose.
+            raw = bare_number(backend.get(key_for(row)))
             try:
                 current = float(raw)
             except ValueError:
@@ -228,6 +232,10 @@ def _build_choice(backend: SettingsBackend, row: Row) -> tuple[Adw.PreferencesRo
         labels.append(choice.label)
     widget = Adw.ComboRow(title=row.title, subtitle=row.subtitle, model=labels)
     values = [choice.value for choice in row.choices]
+    # Both sides bared before they are compared. A descriptor authors ``300``;
+    # a uint32 key reads back ``"uint32 300"``. Comparing those two as text
+    # made a row call the desktop's own value foreign.
+    comparable = [bare_number(value) for value in values]
     guard = {"busy": False}
     foreign: dict[str, str | None] = {"value": None}
 
@@ -239,10 +247,10 @@ def _build_choice(backend: SettingsBackend, row: Row) -> tuple[Adw.PreferencesRo
     def refresh() -> None:
         guard["busy"] = True
         try:
-            current = backend.get(key_for(row))
-            if current in values:
+            current = bare_number(backend.get(key_for(row)))
+            if current in comparable:
                 drop_foreign()
-                widget.set_selected(values.index(current))
+                widget.set_selected(comparable.index(current))
                 return
             if foreign["value"] != current:
                 drop_foreign()

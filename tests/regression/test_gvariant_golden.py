@@ -25,6 +25,7 @@ import pytest
 
 from gtheme.core.gvariant import (
     EMPTY_STRING_LIST,
+    bare_number,
     canonical,
     format_string_list,
     merge_string_lists,
@@ -145,3 +146,46 @@ def test_a_merge_result_is_always_writable_text():
         merged = merge_string_lists(current, wanted)
         assert merged is not None
         GLib.Variant.parse(None, merged, None, None)
+
+
+# ---------------------------------------------------------------------------
+# the type word GVariant prints in front of a number
+# ---------------------------------------------------------------------------
+
+
+def test_glib_really_does_print_the_type_in_front_of_a_uint32():
+    """The premise. If GLib ever stops doing this, this fails here first."""
+    assert GLib.Variant("u", 300).print_(True) == "uint32 300"
+    assert GLib.Variant("i", 300).print_(True) == "300"
+
+
+def test_every_annotated_numeric_type_is_bared():
+    for text, expected in [
+        ("uint32 300", "300"),
+        ("int64 -5", "-5"),
+        ("uint64 18446744073709551615", "18446744073709551615"),
+        ("byte 0x0c", "12"),
+        ("int16 7", "7"),
+        ("uint16 7", "7"),
+        ("int32 7", "7"),
+        ("handle 3", "3"),
+        ("double 1.5", "1.5"),
+    ]:
+        assert bare_number(text) == expected, text
+
+
+def test_a_bare_number_and_a_non_number_are_returned_untouched():
+    """Baring must be a no-op on everything that is not one of these."""
+    for text in ["300", "-5", "1.5", "true", "'Papirus-Dark'", "@as []", "", "uint32"]:
+        assert bare_number(text) == text, text
+
+
+def test_a_string_that_merely_starts_with_a_type_word_is_not_a_number():
+    """``'uint32 300'`` quoted is a *string*, and its quotes must survive."""
+    assert bare_number("'uint32 300'") == "'uint32 300'"
+
+
+def test_a_bared_number_is_still_accepted_for_the_key_it_came_from():
+    """Why nothing needs baring on the way out: GLib parses against the type."""
+    printed = GLib.Variant("u", 300).print_(True)
+    assert GLib.Variant.parse(GLib.VariantType("u"), bare_number(printed), None, None).unpack() == 300

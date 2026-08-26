@@ -28,9 +28,11 @@ is why this function is not named after extensions.
 from __future__ import annotations
 
 import ast
+import re
 
 __all__ = [
     "EMPTY_STRING_LIST",
+    "bare_number",
     "canonical",
     "format_string_list",
     "merge_string_lists",
@@ -69,6 +71,51 @@ def values_equal(current: str | None, wanted: str) -> bool:
     if current == wanted:
         return True
     return canonical(current) == canonical(wanted)
+
+
+#: GVariant prints a number whose type is not the default ``int32`` with the
+#: type in front of it: a ``uint32`` holding 300 comes back as ``"uint32 300"``
+#: while an ``int32`` comes back as ``"300"``. That is correct wire format and
+#: it is what the backend contract promises — but it is not a number, and every
+#: numeric control in the app parses what it reads with ``float()``.
+_ANNOTATED_NUMBER = re.compile(
+    r"^(?:byte|int16|uint16|int32|uint32|int64|uint64|handle|double)\s+(\S+)$"
+)
+
+
+def bare_number(text: str) -> str:
+    """``"uint32 300"`` becomes ``"300"``. Everything else is returned as is.
+
+    Twenty settings on a GNOME 50 desktop are ``uint32``, and every one of them
+    is behind a control a person actually moves: the colour temperature of the
+    evening warmth, how long before the screen locks, how long before it goes
+    dark, the break reminders' intervals. Read literally, ``float("uint32
+    300")`` throws, the slider quietly shows its own minimum instead of the real
+    value, and nudging it writes a value the person never chose. The pick-one
+    row has the same cause and a different symptom: it decides the desktop is
+    holding a value it was never offered and labels it "set somewhere else".
+
+    So numbers are bared on the way *in*, here, at the boundary where a widget
+    reads. On the way out nothing changes: a bare number is accepted for a
+    ``uint32`` by both the native and the command-line backends, because both
+    parse against the key's real type.
+
+    This is deliberately *not* a change to what a backend returns. The exact
+    printed form is the wire format saved moments are captured in, and baring it
+    at the source would change what a saved moment records — and therefore what
+    undo puts back.
+    """
+    stripped = text.strip()
+    match = _ANNOTATED_NUMBER.match(stripped)
+    if match is None:
+        return text
+    value = match.group(1)
+    if value.lower().startswith("0x"):
+        try:
+            return str(int(value, 16))
+        except ValueError:  # pragma: no cover - GVariant would not print this
+            return text
+    return value
 
 
 def parse_string_list(text: str | None) -> list[str] | None:

@@ -38,6 +38,7 @@ SCHEMA_XML = """<?xml version="1.0" encoding="UTF-8"?>
     <key name="a-mode" type="s"><default>'default'</default></key>
     <key name="needs-manual" type="s"><default>'automatic'</default></key>
     <key name="a-dict" type="a{sv}"><default>{'radius': &lt;8&gt;}</default></key>
+    <key name="a-delay" type="u"><default>300</default></key>
   </schema>
 </schemalist>
 """
@@ -363,3 +364,62 @@ def test_a_registered_kind_becomes_a_first_class_row(backend):
     register_kind(WidgetKind.DICT_SLIDER, _build_dict_slider)
     with pytest.raises(ValueError, match="already has a builder"):
         register_kind(WidgetKind.DICT_SLIDER, lambda _b, _r: (None, lambda: None))
+
+
+# -- the type word GVariant prints in front of a number --------------------
+#
+# Twenty settings on a GNOME 50 desktop are uint32, and GLib prints one as
+# "uint32 300". Both of these were live bugs on the System pages, and both had
+# the same cause: a widget read that text as if it were a number. The fix is in
+# the library rather than in a view wrapped around the backend, so a page that
+# calls build_row directly gets it too -- which is what these two prove.
+
+
+def _delay_key() -> str:
+    return f"gsettings:{ID} a-delay"
+
+
+def test_a_slider_shows_the_uint_value_it_actually_holds(backend):
+    """It used to fall back to its own minimum, then write that on a nudge."""
+    backend.set(_delay_key(), "900")
+    assert backend.get(_delay_key()) == "uint32 900", "the premise of this test changed"
+
+    row = _row(key="a-delay", kind="slider", clamp_min=60, clamp_max=3600, step=60)
+    widget, _refresh = build_row(backend, row)
+    assert widget.get_value() == 900
+
+
+def test_a_pick_one_row_does_not_call_its_own_uint_value_foreign(backend):
+    """The authored option is ``300``; the desktop reads back ``uint32 300``."""
+    backend.set(_delay_key(), "300")
+    row = _row(
+        key="a-delay",
+        kind="choice",
+        choices=[
+            {"value": "300", "label": "After 5 minutes"},
+            {"value": "900", "label": "After 15 minutes"},
+        ],
+    )
+    widget, _refresh = build_row(backend, row)
+
+    model = widget.get_model()
+    labels = [model.get_string(i) for i in range(model.get_n_items())]
+    assert not any(FOREIGN_CHOICE_SUFFIX in label for label in labels), labels
+    assert labels[widget.get_selected()] == "After 5 minutes"
+
+
+def test_a_genuinely_foreign_uint_value_is_still_reported_as_foreign(backend):
+    """Baring must not turn the honest "set somewhere else" row into a lie."""
+    backend.set(_delay_key(), "1234")
+    row = _row(
+        key="a-delay",
+        kind="choice",
+        choices=[
+            {"value": "300", "label": "After 5 minutes"},
+            {"value": "900", "label": "After 15 minutes"},
+        ],
+    )
+    widget, _refresh = build_row(backend, row)
+    model = widget.get_model()
+    shown = model.get_string(widget.get_selected())
+    assert shown == "1234" + FOREIGN_CHOICE_SUFFIX

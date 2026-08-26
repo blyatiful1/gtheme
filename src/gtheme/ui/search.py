@@ -29,14 +29,12 @@ are ordinary data and are tested without a display.
 
 from __future__ import annotations
 
-import re
 import tomllib
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from ..core.settings_backend import SettingsBackend
 from ..panels import loader as corpus_loader
 from ..panels.descriptor import Row, WidgetKind
 from . import registry
@@ -50,8 +48,6 @@ __all__ = [
     "GroupSpec",
     "Hit",
     "SearchIndex",
-    "NumericView",
-    "bare_number",
     "build_indexed_rows",
     "build_search_dialog",
     "coverage_dispositions",
@@ -391,71 +387,6 @@ def _addon_name(panel_id: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-#: GVariant prints some numbers with their type in front of them: a ``uint32``
-#: comes back as ``"uint32 300"`` while an ``int32`` comes back as ``"300"``.
-#: That is correct wire format and it is what the backend contract promises,
-#: but it is not a number, and every numeric row in the app parses what it
-#: reads with ``float()``.
-_ANNOTATED_NUMBER = re.compile(
-    r"^(?:byte|int16|uint16|int32|uint32|int64|uint64|handle|double)\s+(\S+)$"
-)
-
-
-def bare_number(text: str) -> str:
-    """``"uint32 300"`` becomes ``"300"``. Everything else is returned as is.
-
-    Twenty settings on a GNOME 50 desktop are ``uint32``, and every one of them
-    is on a page of the System section: the colour temperature of the evening
-    warmth, how long before the screen locks, how long before it goes dark, the
-    break reminders' intervals. Read literally, ``float("uint32 300")`` throws,
-    the slider quietly shows its minimum instead of the real value, and the
-    pick-one row decides the desktop is holding a value it was never offered
-    and labels it "set somewhere else".
-
-    So numbers are bared on the way *in*. On the way out nothing changes: a
-    bare number is accepted for a ``uint32`` by both the native and the
-    command-line backends, because both parse against the key's real type.
-    """
-    stripped = text.strip()
-    match = _ANNOTATED_NUMBER.match(stripped)
-    if match is None:
-        return text
-    value = match.group(1)
-    if value.lower().startswith("0x"):
-        try:
-            return str(int(value, 16))
-        except ValueError:  # pragma: no cover - GVariant would not print this
-            return text
-    return value
-
-
-class NumericView(SettingsBackend):
-    """A backend that hands numbers to widgets in a form they can read.
-
-    Everything is delegated. The only difference is :meth:`get`, which strips
-    the type word GVariant prints in front of some numbers — see
-    :func:`bare_number` for why that matters and why writing is unaffected.
-
-    Deliberately a view rather than a change to the backends themselves: the
-    exact printed form is the wire format restore points are captured in, and
-    changing what a backend returns would change what a restore point records.
-    This is a presentation concern and it lives with the presentation.
-    """
-
-    def __init__(self, inner: Any) -> None:
-        super().__init__(getattr(inner, "schema_source", None))
-        self.inner = inner
-
-    def get(self, key: str) -> str:
-        return bare_number(self.inner.get(key))
-
-    def set(self, key: str, value: str) -> None:
-        self.inner.set(key, value)
-
-    def reset(self, key: str) -> None:
-        self.inner.reset(key)
-
-
 def build_indexed_rows(
     window: Any,
     page_id: str,
@@ -492,24 +423,13 @@ def build_indexed_rows(
         ``[(row, widget)]`` for everything that was built, in order.
     """
     from ..panels.widgets import build_row
-    from ..ui.widgets.rows import UnsupportedRowKind, attach_reset
+    from ..ui.widgets.rows import UnsupportedRowKind
 
     index = getattr(window, "rows", None)
-    # Rows read through the numeric view so a uint32 reaches them as a number.
-    # The "put this back" button is attached separately, against the backend
-    # itself: it compares what is stored with the setting's own default, and
-    # both of those are printed the same way. Comparing a bared value with an
-    # unbared default would light the button up on every one of those rows.
-    view = backend if isinstance(backend, NumericView) else NumericView(backend)
     built: list[tuple[Row, Any]] = []
     for row in rows:
-        wants_reset = row.reset and row.key is not None
         try:
-            widget, refresh = build_row(
-                view, row.model_copy(update={"reset": False}) if wants_reset else row, probe=probe
-            )
-            if wants_reset:
-                refresh = attach_reset(backend, row, widget, refresh)
+            widget, refresh = build_row(backend, row, probe=probe)
         except UnsupportedRowKind as exc:
             replacement = on_unsupported(row, exc) if on_unsupported is not None else None
             if replacement is None:

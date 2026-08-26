@@ -18,9 +18,10 @@ from __future__ import annotations
 from typing import Any
 
 from ...core.backends import get_backend
+from ...core.gvariant import bare_number
 from ...core.settings_backend import BackendError
 from ...panels.schema_probe import SchemaProbe
-from ..search import GroupSpec, bare_number, page_rows, settings_page
+from ..search import GroupSpec, page_rows, settings_page
 
 __all__ = ["COPY", "build", "lock_warning"]
 
@@ -71,7 +72,7 @@ _NAGGING_SECONDS = 120
 def _number(backend: Any, key: str) -> float | None:
     """A setting's value as a number. Both delays here are ``uint32`` keys,
     which the settings store prints as ``"uint32 300"`` — see
-    :func:`gtheme.ui.search.bare_number`."""
+    :func:`gtheme.core.gvariant.bare_number`."""
     try:
         return float(bare_number(backend.get(key)).strip())
     except (BackendError, ValueError):
