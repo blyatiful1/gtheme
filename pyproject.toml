@@ -45,7 +45,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff"]
+# `build` + `hatchling` are here so the packaging test can build a real wheel
+# offline (`python -m build --wheel --no-isolation`) and look inside it.
+dev = ["pytest", "ruff", "build", "hatchling"]
 
 [project.scripts]
 gtheme = "gtheme.cli:main"
@@ -61,15 +63,31 @@ path = "src/gtheme/__init__.py"
 [tool.hatch.build.targets.wheel]
 packages = ["src/gtheme"]
 
-# packaging.md §1B: data files land in the wheel via force-include, so
-# `python -m installer --destdir=$pkgdir dist/*.whl` places them correctly with
-# no custom PKGBUILD code (the waypaper precedent). Two groups:
-#   1. runtime data the app reads (bundled INSIDE the package)
-#   2. desktop-integration files (installed to share/)
+# Two different kinds of data, and they must NOT use the same mechanism.
+#
+# 1. Runtime data the app itself reads (bundled Looks, the settings
+#    descriptions) belongs INSIDE the installed package, next to the code that
+#    reads it. force-include puts it there.
 [tool.hatch.build.targets.wheel.force-include]
 "themes" = "gtheme/_bundled_themes"
-"data/domains" = "gtheme/_bundled_data/domains"
-"data/panels" = "gtheme/_bundled_data/panels"
+
+# 2. Desktop-integration files (the app's launcher entry, its store listing,
+#    its icons) belong under the install PREFIX, not inside the package.
+#    shared-data is the mechanism for that: hatchling writes these into the
+#    wheel's `.data/data/` tree, which is the only part of a wheel that
+#    `python -m installer --destdir="$pkgdir"` unpacks to `/usr/share/...`.
+#    force-include would put a literal `share/` directory into site-packages
+#    instead, where nothing would ever find it (packaging.md §1B; verified by
+#    tests/unit/test_packaging_wheel.py, which builds a real wheel).
+#
+#    The settings descriptions (data/domains, data/panels) go here too rather
+#    than inside the package, because that is where the loader already looks:
+#    gtheme.panels.loader.data_dir() searches "<XDG data dir>/gtheme" after the
+#    checkout, so an installed package finds /usr/share/gtheme/{domains,panels}
+#    with no code change. (Running from a checkout it finds ./data first.)
+[tool.hatch.build.targets.wheel.shared-data]
+"data/domains" = "share/gtheme/domains"
+"data/panels" = "share/gtheme/panels"
 "data/io.github.blyatiful1.Gtheme.desktop" = "share/applications/io.github.blyatiful1.Gtheme.desktop"
 "data/io.github.blyatiful1.Gtheme.metainfo.xml" = "share/metainfo/io.github.blyatiful1.Gtheme.metainfo.xml"
 "data/icons/hicolor" = "share/icons/hicolor"

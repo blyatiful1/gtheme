@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- PLACEHOLDER symbolic icon. Symbolic icons are single-colour: every shape
-     must inherit the recolouring fill, so do not add explicit colours here. -->
+<!-- Symbolic variant of the app icon: one window, one brush, one colour.
+     Symbolic icons are recoloured by the toolkit, so every shape must inherit
+     the same fill and no explicit colours may appear beyond it. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
   <g fill="#222222">
-    <rect x="2" y="3" width="12" height="2" rx="1"/>
-    <rect x="2" y="7" width="8" height="2" rx="1"/>
-    <rect x="2" y="11" width="5" height="2" rx="1"/>
-    <circle cx="12.5" cy="8" r="1.5"/>
-    <circle cx="12.5" cy="12" r="1.5"/>
+    <!-- window: frame ring + solid title bar, corner cut away for the brush -->
+    <path fill-rule="evenodd" d="M3 1.5h8A1.5 1.5 0 0 1 12.5 3v3.5L6.5 12.5H3A1.5 1.5 0 0 1 1.5 11V3A1.5 1.5 0 0 1 3 1.5zm-.5 3v7h3.58l5.42-5.42V4.5z"/>
+    <!-- brush: handle, ferrule, bristles -->
+    <path d="M15 6.5a1.4 1.4 0 0 0-2 0l-2.7 2.7 2 2L15 8.5a1.4 1.4 0 0 0 0-2z"/>
+    <path d="M9.75 9.75l2 2-.7.7-2-2z"/>
+    <path d="M8.6 10.9l2 2-1.6 1.6a1 1 0 0 1-.5.3l-2.3.5.6-2.3a1 1 0 0 1 .3-.5z"/>
   </g>
 </svg>

@@ -1,13 +1,21 @@
 name: release
 
-# Tag a version (git tag v0.1.0 && git push --tags) and this builds the
-# package and creates the GitHub release with the sdist/wheel attached.
-# PyPI publishing is deliberately NOT automatic — run the separate
-# `publish-pypi` workflow manually when you want a PyPI release.
+# Tag a version (git tag v2.0.0 && git push --tags) and this builds the
+# installable package and creates the GitHub release with it attached.
+#
+# gtheme v2 is NOT published to PyPI. It is a graphical app whose graphical
+# half comes from the distribution (PyGObject, GTK 4, libadwaita), so a
+# `pip install gtheme` would look like it worked and then fail to start. The
+# supported routes are the Arch package (PKGBUILD) and install.sh from a
+# checkout; the wheel attached here is what the PKGBUILD's build step produces
+# and what packagers for other distributions should start from.
 
 on:
   push:
     tags: ["v*"]
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -17,10 +25,34 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+
+      # Same reason as ci.yml: core/ imports Gio, so the unit tier needs the
+      # GLib bindings even though no window is ever opened here.
+      - name: Install GLib bindings
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-gi gir1.2-glib-2.0 libglib2.0-bin \
+                                  desktop-file-utils appstream
+
       - name: Test before shipping
-        run: python -m pip install .[dev] && python -m pytest -q
-      - name: Build
-        run: python -m pip install build twine && python -m build && python -m twine check --strict dist/*
+        run: |
+          python -m venv --system-site-packages .venv
+          .venv/bin/python -m pip install -e '.[dev]'
+          .venv/bin/python -m pytest -q -m "not gtk and not sandbox"
+
+      - name: Check the launcher entry and the store listing
+        run: |
+          desktop-file-validate data/io.github.blyatiful1.Gtheme.desktop
+          appstreamcli validate --no-net data/io.github.blyatiful1.Gtheme.metainfo.xml
+
+      - name: Build the wheel
+        run: |
+          .venv/bin/python -m pip install build
+          .venv/bin/python -m build --wheel
+
+      - name: Check the wheel carries its data files
+        run: .venv/bin/python -m pytest -q tests/unit/test_packaging_wheel.py
+
       - uses: actions/upload-artifact@v4
         with:
           name: dist
@@ -36,7 +68,7 @@ jobs:
         with:
           name: dist
           path: dist/
-      - name: Create GitHub release with artifacts
+      - name: Create the GitHub release with the wheel attached
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --generate-notes
