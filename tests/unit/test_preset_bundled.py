@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from gtheme.core.backends import use_backend
 from gtheme.core.settings_backend import parse_key
 from gtheme.core.transaction import (
     ExtensionEnable,
@@ -291,3 +292,76 @@ def test_a_bundled_look_is_a_valid_document_on_its_own(look):
     _name, directory = look
     raw = tomllib.loads((directory / "theme.toml").read_text(encoding="utf-8"))
     assert Preset.model_validate(raw)
+
+
+# ── the preview counts add-ons, not their settings ──────────────────────────
+#
+# Both of these plan against a MemoryBackend rather than the desktop the suite
+# is running on. plan() reports only what would *change*, so on a machine that
+# already has these Looks' add-ons switched on the add-ons line is empty and
+# the assertions below would pass by describing nothing.
+
+
+def _plan_against_nothing(directory: Path, dest_root: Path, backend):
+    """The plan for a Look on a machine that has none of it yet."""
+    transaction = compile_preset(preset_of(directory), directory, dest_root=str(dest_root)).transaction
+    with use_backend(backend):
+        return transaction.plan()
+
+
+def preset_of(directory: Path):
+    return load(directory).preset
+
+
+def test_the_add_ons_line_counts_add_ons_and_nothing_else(
+    look, tmp_dest_root: Path, memory_settings
+):
+    """HYPERCLASS previewed as "31 add-ons" on a Look that turns on six.
+
+    The other twenty-five were settings belonging to those six -- the dock's
+    icon size, the blur radius, where the panel sits -- each one tagged
+    ``component = "addons"`` by the v1 conversion and counted as if it were
+    another add-on being switched on. A person reading "31 add-ons" reasonably
+    expects thirty-one new things on their desktop.
+
+    Driven against the real converted Looks rather than a hand-built Diff,
+    because a hand-built one is exactly what missed this: every existing test
+    of the add-ons line built its entries out of ExtensionEnable ops, which
+    were never the problem.
+    """
+    _name, directory = look
+    preset = preset_of(directory)
+    diff = _plan_against_nothing(directory, tmp_dest_root, memory_settings)
+
+    counted = sum(1 for entry in diff.changes if entry.component == "addons")
+    enabling = sum(
+        1
+        for entry in diff.changes
+        if isinstance(entry.op, ExtensionEnable | ExtensionInstall)
+    )
+    assert counted == enabling, "the add-ons line counted something that is not an add-on"
+    assert counted == len(preset.extensions.enable), (
+        f"{directory.name} declares {len(preset.extensions.enable)} add-ons "
+        f"and plans {counted}"
+    )
+
+    settings_line = [entry for entry in diff.changes if entry.component == "addon-settings"]
+    assert all(isinstance(entry.op, SettingWrite) for entry in settings_line)
+
+
+def test_hyperclass_says_six_add_ons_because_it_turns_on_six(
+    repo_root, tmp_dest_root: Path, memory_settings
+):
+    """The named case, pinned by number so a regression is unmissable."""
+    directory = repo_root / "themes" / "hyperclass"
+    assert len(preset_of(directory).extensions.enable) == 6, "the premise changed"
+
+    diff = _plan_against_nothing(directory, tmp_dest_root, memory_settings)
+    lines = diff.to_novice_lines()
+
+    assert "6 add-ons" in lines, lines
+
+    # The twenty-five that used to be on that line, now on their own.
+    theirs = [entry for entry in diff.changes if entry.component == "addon-settings"]
+    assert len(theirs) >= 20, "this Look is meant to configure its add-ons heavily"
+    assert f"{len(theirs)} add-on settings" in lines, lines

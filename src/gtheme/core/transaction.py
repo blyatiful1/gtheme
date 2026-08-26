@@ -239,6 +239,7 @@ _COMPONENT_PHRASES: dict[str, tuple[str, str]] = {
     "power": ("Power and screen", "Power and screen"),
     "terminal": ("Terminal", "Terminal"),
     "addons": ("1 add-on", "{count} add-ons"),
+    "addon-settings": ("1 add-on setting", "{count} add-on settings"),
     "privacy": ("Privacy", "Privacy"),
     "accessibility": ("Ease of use", "Ease of use"),
     "files": ("1 file", "{count} files"),
@@ -259,6 +260,33 @@ _COMPONENT_PHRASES: dict[str, tuple[str, str]] = {
 _NAMED_WHEN_SINGLE: frozenset[str] = frozenset({"removed-files"})
 
 _COMPONENT_ORDER: tuple[str, ...] = tuple(_COMPONENT_PHRASES)
+
+
+def _settings_component(declared: str | None, *, default: str = "other") -> str:
+    """The component a *setting* is counted under.
+
+    One line, and it stops the preview telling a lie people noticed
+    immediately: HYPERCLASS previewed as "31 add-ons" on a Look that turns on
+    six. The other twenty-five entries were settings *belonging* to those six —
+    the dock's icon size, the blur radius, where the panel sits — each one a
+    ``SettingWrite`` the Look tagged ``component = "addons"``, and each one
+    counted as if it were another add-on being switched on.
+
+    An add-on is a thing you install and turn on. Changing how one is
+    configured is not installing another one, and a person reading "31 add-ons"
+    reasonably expects thirty-one new things on their desktop. So a setting
+    that says it belongs to the add-ons part of the desktop is counted, and
+    named, as a setting: only ``ExtensionEnable`` and ``ExtensionInstall`` are
+    add-ons on that line.
+
+    Done here rather than in ``preset.compile`` because both routes to the same
+    mistake pass through here. A Look can arrive tagged this way from an
+    ``[[extensions.settings]]`` table, which compile writes, or from an
+    ordinary ``[[settings]]`` entry that simply declares the component itself —
+    which is what the v1 conversion produced, and what HYPERCLASS is.
+    """
+    component = declared or default
+    return "addon-settings" if component == "addons" else component
 
 
 def _novice_phrase(component: str, count: int) -> str:
@@ -647,7 +675,7 @@ class Transaction:
 
         for op in self._setting_ops():
             key, value, skip = self._planned_setting(op, context)
-            component = op.component or "other"
+            component = _settings_component(op.component)
             current, failure = self._current_setting(key)
             wanted = value
             if op.merge == "list-union":
@@ -668,7 +696,7 @@ class Transaction:
 
         for op in self._reset_ops():
             key = placeholders.resolve(op.key, context)
-            component = op.component or "reset"
+            component = _settings_component(op.component, default="reset")
             current, failure = self._current_setting(key)
             unavailable = failure is not None and is_missing(failure)
             default = self._schema_default(backend, key)
