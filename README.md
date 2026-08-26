@@ -21,19 +21,19 @@ in **one window**, explained in **plain words**, with an **Undo button that alwa
 > [!TIP]
 > **Changed something and want it back?** Press **Ctrl+Z** in the app, or type
 > `gtheme rescue` in a terminal window. Nothing gtheme does is permanent —
-> [all three ways back are here](#-i-changed-something-and-i-want-it-back).
+> [all three ways back are here](#i-changed-something-and-i-want-it-back).
 
 **Contents** ·
 [What is it?](#what-is-it) ·
-[What it changes](#-what-it-can-change) ·
-[Why it's safe](#-why-its-safe-to-try) ·
-[Install](#-install) ·
-[First five minutes](#-your-first-five-minutes) ·
-[Tour](#-a-tour-of-the-app) ·
-[Undo](#-i-changed-something-and-i-want-it-back) ·
-[Questions](#-questions-people-ask) ·
-[Uninstall](#-removing-gtheme) ·
-[Help](#-getting-help)
+[What it changes](#what-it-can-change) ·
+[Why it's safe](#why-its-safe-to-try) ·
+[Install](#install) ·
+[First five minutes](#your-first-five-minutes) ·
+[Tour](#a-tour-of-the-app) ·
+[Undo](#i-changed-something-and-i-want-it-back) ·
+[Questions](#questions-people-ask) ·
+[Uninstall](#removing-gtheme) ·
+[Help](#getting-help)
 
 ---
 
@@ -50,35 +50,35 @@ your desktop looked *before* it changes anything.
 
 **This was written for you if:**
 
-- 🐧 This is your first Linux computer, and you came from Windows or a Mac.
-- 😰 You would like a nicer-looking desktop but you are afraid of breaking it.
-- ⌨️ You do not want to open a terminal, edit a config file, or learn what
+- This is your first Linux computer, and you came from Windows or a Mac.
+- You would like a nicer-looking desktop but you are afraid of breaking it.
+- You do not want to open a terminal, edit a config file, or learn what
   "gsettings" means. You never have to.
-- 🔎 You cannot find where a setting lives. **Ctrl+F** searches every setting in
+- You cannot find where a setting lives. **Ctrl+F** searches every setting in
   the app, in the words you would actually use — try "taskbar" or "dark mode".
 
 **You do not need:** an account, an internet connection (except to browse for new
 add-ons), an administrator password, or any knowledge of Linux or GitHub.
 
-## ✨ What it can change
+## What it can change
 
 | | |
 |---|---|
-| 🖼️ **Wallpaper** | A different picture for your light look and your dark look — GNOME's own picker ties those together, gtheme does not. |
-| 🎨 **Colours & style** | Light or dark as two tiles you *look at*, and the highlight colour as nine coloured dots. |
-| 🗂️ **Icons & pointer** | Icon sets shown as rows of their own real icons, not names in a dropdown. |
-| 🔤 **Fonts & text** | Every choice shown in the lettering it is about, plus text size and sharpness. |
-| 📊 **Top bar & overview** | What the clock shows, the battery percentage, the top-left corner shortcut. |
-| 🪟 **Windows & desktops** | Where the close and minimise buttons go, how many desktops you have, and every keyboard shortcut. |
-| 🧩 **Add-ons** | Browse, install and switch on GNOME extensions — each with a sentence saying what it actually does. |
-| 💻 **Terminal colours** | Give your terminal and its prompt the same colours as the rest of your desktop. |
-| 🌙 **Night light, sound, power** | Warmer colours in the evening, the sounds your desktop plays, when the screen sleeps. |
-| 🎭 **Whole "Looks"** | Change all of the above at once. Four are built in — HYPERCLASS, MAGMA, NETRUNNER and NIGHTBLOOM — and you can save your own desktop as a Look and share it. |
+| **Wallpaper** | A different picture for your light look and your dark look — GNOME's own picker ties those together, gtheme does not. |
+| **Colours & style** | Light or dark as two tiles you *look at*, and the highlight colour as nine coloured dots. |
+| **Icons & pointer** | Icon sets shown as rows of their own real icons, not names in a dropdown. |
+| **Fonts & text** | Every choice shown in the lettering it is about, plus text size and sharpness. |
+| **Top bar & overview** | What the clock shows, the battery percentage, the top-left corner shortcut. |
+| **Windows & desktops** | Where the close and minimise buttons go, how many desktops you have, and every keyboard shortcut. |
+| **Add-ons** | Browse, install and switch on GNOME extensions — each with a sentence saying what it actually does. |
+| **Terminal colours** | Give your terminal and its prompt the same colours as the rest of your desktop. |
+| **Night light, sound, power** | Warmer colours in the evening, the sounds your desktop plays, when the screen sleeps. |
+| **Whole "Looks"** | Change all of the above at once. Four are built in — HYPERCLASS, MAGMA, NETRUNNER and NIGHTBLOOM — and you can save your own desktop as a Look and share it. |
 
 Anything the other pages did not cover lands on a **More Settings** page
 automatically, so nothing on your desktop is hidden from you.
 
-## 🛟 Why it's safe to try
+## Why it's safe to try
 
 This is the part that makes gtheme different from every other GNOME
 customisation tool, so it is worth thirty seconds of your time:
@@ -104,7 +104,7 @@ someone else — can still misbehave, whether you install it through gtheme,
 through GNOME's own app, or from a website. gtheme's answer is that it always
 knows which add-ons it switched on, so one command switches them all off again.
 
-## 📦 Install
+## Install
 
 Takes about five minutes. You do not need an administrator password.
 
@@ -125,7 +125,7 @@ says so plainly if something is missing — it never half-works.
 
 </details>
 
-### 🙂 The easy way (recommended)
+### The easy way (recommended)
 
 **1. Download it.**
 Open <https://github.com/blyatiful1/gtheme> in your web browser. Click the green
@@ -164,7 +164,7 @@ Press the **Super** key (the one with the Windows logo on most keyboards), type
 > is not in your app list yet, log out and back in.
 
 <details>
-<summary><b>🏹 The Arch way</b> — Arch, CachyOS, EndeavourOS</summary>
+<summary><b>The Arch way</b> — Arch, CachyOS, EndeavourOS</summary>
 
 <br>
 
@@ -183,7 +183,7 @@ That builds a normal package and installs it with `pacman`, which means
 </details>
 
 <details>
-<summary><b>🛠️ I want to work on gtheme itself</b></summary>
+<summary><b>I want to work on gtheme itself</b></summary>
 
 <br>
 
@@ -208,7 +208,7 @@ enough to read in a couple of minutes.
 
 </details>
 
-## 🚀 Your first five minutes
+## Your first five minutes
 
 The first time you open it — and only the first time — gtheme shows four short
 cards. The last one has a button that does a real thing: it saves your desktop
@@ -234,7 +234,7 @@ Two shortcuts worth learning on day one:
 You can bring the introduction back any time from the **☰** menu → **Show the
 introduction again**.
 
-## 📸 A tour of the app
+## A tour of the app
 
 Fifteen pages in four groups down the left-hand side. Every screenshot below is
 the real app, photographed by the test suite on the run that shipped this
@@ -447,19 +447,19 @@ this app ever ran. That one is never deleted and never pruned.
 
 </details>
 
-## 🆘 I changed something and I want it back
+## I changed something and I want it back
 
 Three ways, from easiest to most stubborn. **Any one of them is enough**, you do
 not have to reinstall anything, and none of them deletes a thing.
 
-### 1️⃣ The app opens
+### 1. The app opens
 
 Press **Ctrl+Z**, or click **Undo last change** at the top of the window. Or open
 **Undo & Restore Points** in the list on the left and pick the moment you want
 back — including *Before gtheme*, how your desktop looked before this app ever
 ran.
 
-### 2️⃣ The app won't open, but the desktop works
+### 2. The app won't open, but the desktop works
 
 Open a terminal window (hold **Ctrl**, **Alt** and press **T**; if that does
 nothing, [docs/start-here.md](docs/start-here.md) shows another way) and type:
@@ -472,7 +472,7 @@ That puts every setting and file gtheme touched back the way it was, and switche
 off every add-on gtheme switched on. It needs no window, no mouse, and no
 graphics at all.
 
-### 3️⃣ The screen is unusable — no bar, no windows, nothing responds
+### 3. The screen is unusable — no bar, no windows, nothing responds
 
 Hold **Ctrl** and **Alt** and press **F3**. You get a black screen with a text
 prompt.
@@ -486,7 +486,7 @@ prompt.
    harmless.
 5. Log out and back in.
 
-## ❓ Questions people ask
+## Questions people ask
 
 <details>
 <summary><b>Will this break my desktop?</b></summary>
@@ -496,7 +496,7 @@ prompt.
 Not permanently, and it is designed so that it cannot. Every change is recorded
 before it happens, every Look shows you what it will change before it changes it,
 and a failed step rolls the whole thing back. The full list of guarantees is in
-[Why it's safe to try](#-why-its-safe-to-try) above, and the one honest limit —
+[Why it's safe to try](#why-its-safe-to-try) above, and the one honest limit —
 badly-behaved third-party add-ons — is at the end of it.
 
 </details>
@@ -507,7 +507,7 @@ badly-behaved third-party add-ons — is at the end of it.
 <br>
 
 No. You need a terminal exactly once, to run the installer, and step 3 of
-[the easy way](#-the-easy-way-recommended) shows you how to open
+[the easy way](#the-easy-way-recommended) shows you how to open
 one by right-clicking a folder. After that the app is a window like any other.
 
 If a word in this README is unfamiliar, [GLOSSARY.md](GLOSSARY.md) explains it,
@@ -592,7 +592,7 @@ See [CHANGELOG.md](CHANGELOG.md) for what changed and why.
 
 </details>
 
-## 🧹 Removing gtheme
+## Removing gtheme
 
 It leaves nothing behind.
 
@@ -612,7 +612,7 @@ Then:
 gtheme's own saved moments live in `~/.local/state/gtheme/v2` and are yours to
 delete once you no longer want them.
 
-## 💬 Getting help
+## Getting help
 
 - **A question, or you want to show off your desktop?**
   [Discussions](https://github.com/blyatiful1/gtheme/discussions) — no question is
@@ -625,7 +625,7 @@ delete once you no longer want them.
 - **Found a security problem?** [SECURITY.md](SECURITY.md) — please do not open a
   public issue for it.
 
-## 🤝 Helping out
+## Helping out
 
 You do not have to be a programmer. **Most contributions are data files, not
 code**: a Look, a plain-English description for an add-on, a setting that needs a

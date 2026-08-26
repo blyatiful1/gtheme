@@ -139,5 +139,5 @@ before pressing Enter.
 
 ## Now go install gtheme
 
-[Back to the README](../README.md#-install). If anything on the way uses a word
+[Back to the README](../README.md#install). If anything on the way uses a word
 you do not recognise, it is in [GLOSSARY.md](../GLOSSARY.md).
