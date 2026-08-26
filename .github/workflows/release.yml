@@ -18,7 +18,36 @@ permissions:
   contents: read
 
 jobs:
+  # Nothing ships that the suite has not passed on, and the suite needs a
+  # GNOME 50 userspace and a session bus to mean anything — see the long note
+  # at the top of ci.yml. This is that job, and the wheel waits for it.
+  tests:
+    name: the suite (Arch container, GNOME 50)
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install system packages
+        run: |
+          pacman -Syu --noconfirm \
+            python python-gobject gtk4 libadwaita glib2 dconf libsoup3 \
+            gsettings-desktop-schemas gnome-desktop-4 gnome-settings-daemon \
+            mutter gnome-shell gnome-backgrounds \
+            desktop-file-utils appstream \
+            python-pip python-hatchling dbus git
+      - uses: actions/checkout@v4
+      - name: Install gtheme
+        run: |
+          python -m venv --system-site-packages .venv
+          .venv/bin/python -m pip install -e '.[dev]'
+      - name: Test before shipping
+        run: |
+          gtk4-broadwayd :5 &
+          sleep 2
+          GDK_BACKEND=broadway BROADWAY_DISPLAY=:5 \
+            dbus-run-session -- .venv/bin/python -m pytest -q -m "not sandbox"
+
   build:
+    needs: tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,19 +55,12 @@ jobs:
         with:
           python-version: "3.13"
 
-      # Same reason as ci.yml: core/ imports Gio, so the unit tier needs the
-      # GLib bindings even though no window is ever opened here.
-      - name: Install GLib bindings
+      # The wheel is pure Python; only the launcher entry and the store listing
+      # need checking here, and neither needs a desktop.
+      - name: Install the packaging checkers
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-gi gir1.2-glib-2.0 libglib2.0-bin \
-                                  desktop-file-utils appstream
-
-      - name: Test before shipping
-        run: |
-          python -m venv --system-site-packages .venv
-          .venv/bin/python -m pip install -e '.[dev]'
-          .venv/bin/python -m pytest -q -m "not gtk and not sandbox"
+          sudo apt-get install -y desktop-file-utils appstream
 
       - name: Check the launcher entry and the store listing
         run: |
@@ -47,6 +69,8 @@ jobs:
 
       - name: Build the wheel
         run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -e '.[dev]'
           .venv/bin/python -m pip install build
           .venv/bin/python -m build --wheel
 
