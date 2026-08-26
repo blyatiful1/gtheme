@@ -430,6 +430,39 @@ class MemoryBackend(SettingsBackend):
         settings.reset(parsed.key)
 
 
+def _confined_keyfile(parsed: SettingsKey) -> str:
+    """The file a ``keyfile:`` key addresses, proved to be inside the boundary.
+
+    A ``keyfile:`` key names an absolute path and then reads and *writes* it.
+    Nothing else about the settings grammar touches the filesystem, so nothing
+    else was confined — and a downloaded Look's ``[[settings]]`` table may
+    carry any key string it likes. The transaction's confinement preflight runs
+    over file operations only, so such a key sailed straight past the one
+    invariant the whole security model rests on: "nothing gtheme writes escapes
+    the destination root" (``core.confine``).
+
+    So the same boundary is enforced here, at the only place a settings write
+    can become a file write. The real case — burn-my-windows' per-profile
+    ``~/.config/burn-my-windows/profiles/<id>.conf`` — is inside the user's
+    home and unaffected.
+
+    Raises:
+        BackendError: OTHER, when the path escapes the destination root.
+    """
+    from .confine import ConfinementError, confine_dest
+
+    target = parsed.file or ""
+    try:
+        confine_dest(target)
+    except ConfinementError as exc:
+        raise BackendError(
+            BackendErrorKind.OTHER,
+            f"refusing to use a settings file outside your home folder: {target}",
+            key=parsed.as_text(),
+        ) from exc
+    return target
+
+
 def _gio_settings_for(
     parsed: SettingsKey,
     schema_source: Any | None,
@@ -486,7 +519,9 @@ def _gio_settings_for(
                 "addressed inside a settings file",
                 key=parsed.as_text(),
             )
-        keyfile = Gio.keyfile_settings_backend_new(parsed.file, parsed.path, None)
+        keyfile = Gio.keyfile_settings_backend_new(
+            _confined_keyfile(parsed), parsed.path, None
+        )
         return Gio.Settings.new_full(schema, keyfile, None), schema
     if parsed.kind is KeyKind.GSETTINGS_PATH:
         return Gio.Settings.new_full(schema, store, parsed.path), schema

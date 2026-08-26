@@ -98,7 +98,17 @@ def bench(
 
 
 def _tx(bench: Bench, ops, label: str = "DEMO") -> Transaction:
-    return Transaction(ops, dest_root=str(bench.root), label=label)
+    """A Look being applied.
+
+    ``look=`` is passed as well as ``label=``, and that is the point rather than
+    boilerplate: ``look`` is what says "a whole Look is being applied" and is
+    what turns the switch cleanup and the current-Look record on. ``label`` is
+    only a name for a saved moment, and every saved moment has one — which is
+    why keying the cleanup on it made putting one back strip the Look off the
+    desktop. Tests that mean "one change made from a page" build a
+    ``Transaction`` with neither.
+    """
+    return Transaction(ops, dest_root=str(bench.root), label=label, look=label.lower())
 
 
 #: Everything here is declared ``mutating`` and every test is seamed. The

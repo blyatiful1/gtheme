@@ -590,7 +590,7 @@ def test_the_speed_row_greys_when_no_effect_is_chosen(bmw_backend, bmw_panel):
 
 @pytest.mark.gtk
 @pytest.mark.mutating
-def test_the_picker_writes_into_the_add_ons_own_file(bmw_panel, tmp_path, tmp_dest_root):
+def test_the_picker_writes_into_the_add_ons_own_file(bmw_panel, tmp_dest_root):
     """End to end: the picker, through the keyfile form, into a real file.
 
     The builder is called directly rather than through ``panels.build_row``.
@@ -610,7 +610,11 @@ def test_the_picker_writes_into_the_add_ons_own_file(bmw_panel, tmp_path, tmp_de
         str(CORPUS / BMW_UUID / "schemas"), Gio.SettingsSchemaSource.get_default(), False
     )
     backend = GioBackend(schema_source=source)
-    profile = tmp_path / "1787167433969725.conf"
+    # Inside ``tmp_dest_root``: a ``keyfile:`` key is the one settings write
+    # that is also a file write, and it is held to the same confinement
+    # boundary as every other file gtheme writes (core/settings_backend.py,
+    # ``_confined_keyfile``). The real profile lives under ~/.config.
+    profile = tmp_dest_root / "1787167433969725.conf"
     row = next(r for r in bmw_panel.rows if r.kind is WidgetKind.EFFECT_PICKER)
     resolved = row.model_copy(
         update={"keyfile": str(profile), "path": "/org/gnome/shell/extensions/"}

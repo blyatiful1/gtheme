@@ -367,8 +367,16 @@ def test_a_malformed_keyfile_key_is_refused_loudly(text):
 def test_the_native_backend_reads_and_writes_the_add_ons_own_file(
     bmw_source, tmp_path, tmp_dest_root
 ):
-    """The decisive one: the value lands in the file, in the right group."""
-    profile = tmp_path / "1787167433969725.conf"
+    """The decisive one: the value lands in the file, in the right group.
+
+    The profile lives under ``tmp_dest_root`` rather than beside it because a
+    ``keyfile:`` key is the one settings write that is also a file write, and
+    it is now held to the same confinement boundary as every other file gtheme
+    writes. The real one is ``~/.config/burn-my-windows/profiles/<id>.conf``,
+    which is inside the boundary; a test writing outside it was testing a
+    write the engine must refuse.
+    """
+    profile = tmp_dest_root / "1787167433969725.conf"
     backend = GioBackend(schema_source=bmw_source)
     key = _keyfile_key(profile, "fire-enable-effect")
 
@@ -391,8 +399,9 @@ def test_the_native_backend_reads_and_writes_the_add_ons_own_file(
 def test_two_profiles_are_two_different_files(bmw_source, tmp_path, tmp_dest_root):
     """The settings cache is keyed by file, or every profile shares one value."""
     backend = GioBackend(schema_source=bmw_source)
-    first = _keyfile_key(tmp_path / "one.conf", "fire-enable-effect")
-    second = _keyfile_key(tmp_path / "two.conf", "fire-enable-effect")
+    # Inside the destination root: see the note on the test above.
+    first = _keyfile_key(tmp_dest_root / "one.conf", "fire-enable-effect")
+    second = _keyfile_key(tmp_dest_root / "two.conf", "fire-enable-effect")
     backend.set(first, "false")
     assert backend.get(second) == "true"
 

@@ -74,7 +74,7 @@ def _rescue_locked(baseline) -> int:
     it, so putting settings back turns off exactly what gtheme turned on and
     leaves the user's own add-ons alone.
     """
-    from .ledger import write_ledger
+    from .ledger import clear_current_look, write_ledger
 
     if baseline.is_empty:
         print("There is nothing to put back — this app has not changed anything yet.")
@@ -119,5 +119,10 @@ def _rescue_locked(baseline) -> int:
     baseline.forget_files(list(baseline.files))
     baseline.forget_settings(list(baseline.settings))
     write_ledger({})
+    # And nobody is using a Look any more, because there is nothing of one left
+    # on the desktop. Leaving the record behind is how the Home page ends up
+    # announcing NIGHTBLOOM on a desktop that has just been put back to
+    # pristine — the app saying something the user can see is not true.
+    clear_current_look()
     print("Your desktop has been put back the way it was before this app changed anything.")
     return 0

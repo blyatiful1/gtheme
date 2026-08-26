@@ -56,6 +56,7 @@ __all__ = [
     "DiffEntry",
     "ExtensionEnable",
     "ExtensionInstall",
+    "FileLink",
     "FileRemove",
     "FileWrite",
     "MergeMode",
@@ -175,6 +176,39 @@ class FileRemove:
 
 
 @dataclass(frozen=True)
+class FileLink:
+    """Put a symlink back where one was.
+
+    The third face of the same story as :class:`FileRemove` and
+    :class:`SettingReset`: what was at a destination before a Look wrote over
+    it is sometimes neither a file nor nothing, but a link. This machine's own
+    ``~/.config/ghostty`` is a symlink into a separate rice repository, and
+    plenty of people keep their dotfiles that way.
+
+    Without this op a saved moment could only record such a destination as
+    "there was nothing here", and putting the moment back *deleted the user's
+    own link* and left a hole. The pristine baseline always recorded links
+    properly (``baseline.record_file``); this is what lets a restore point say
+    the same thing, through the same transaction, with the same preflight and
+    rollback.
+
+    The link is recreated, never followed: writing through it would edit
+    whatever it points at, which is exactly the dotfiles repository the user
+    did not ask to have changed.
+
+    Args:
+        dest: where the link goes. Confined like any other destination.
+        target: what it pointed at, exactly as ``readlink`` reported it —
+            relative links stay relative.
+        component: as :class:`SettingWrite`. Presentation only.
+    """
+
+    dest: str
+    target: str
+    component: str | None = None
+
+
+@dataclass(frozen=True)
 class ExtensionEnable:
     """Turn on an add-on that is already installed.
 
@@ -206,7 +240,15 @@ class ExtensionInstall:
 
 
 #: Everything a transaction can be asked to do. The set is closed, deliberately.
-Op = FileWrite | FileRemove | SettingWrite | SettingReset | ExtensionEnable | ExtensionInstall
+Op = (
+    FileWrite
+    | FileRemove
+    | FileLink
+    | SettingWrite
+    | SettingReset
+    | ExtensionEnable
+    | ExtensionInstall
+)
 
 
 #: The one key that is shared global state. Every add-on the user turned on
@@ -215,10 +257,12 @@ Op = FileWrite | FileRemove | SettingWrite | SettingReset | ExtensionEnable | Ex
 #: defect).
 ENABLED_EXTENSIONS_KEY = "gsettings:org.gnome.shell enabled-extensions"
 
-#: Ledger owner name for changes that came from a page rather than a Look.
-#: Switching Looks tidies up after other Looks; it never tidies up after the
-#: user's own deliberate edits.
-MANUAL_OWNER = "__manual__"
+#: Ledger owner name for changes that came from a page rather than a Look, and
+#: for a saved moment being put back. Switching Looks tidies up after other
+#: Looks; it never tidies up after the user's own deliberate edits. Defined in
+#: ``core.ledger`` — where the cleanup that skips it lives — and re-exported
+#: here because this is where callers look for it.
+MANUAL_OWNER = ledger_store.MANUAL_OWNER
 
 #: Component to the phrase shown to a first-time user, in reading order.
 #: Mirrors ``preset.model.Component``; a test asserts every member is covered,
@@ -447,16 +491,19 @@ class Transaction:
         dest_root: the root every file write must stay inside. Defaults to the
             user's home; ``GTHEME_DEST_ROOT`` overrides it, and that override
             is the seam the test suite uses to keep off the real desktop.
-        label: what to call this in the saved-moment list ("NIGHTBLOOM"). Also
-            the ledger owner name, and the flag that says this is a whole Look
-            rather than one change made from a page — which is what turns the
-            switch cleanup on.
+        label: what to call this in the saved-moment list ("NIGHTBLOOM"). A
+            name for a moment, and nothing more: every saved moment has one,
+            including the automatic one taken before a single tick on a page.
         look: the Look's own folder name, when this transaction is a Look being
-            applied. Separate from ``label`` on purpose: a Look's label is its
-            title, which is what a person was shown, and its name is what a
-            lookup matches on. Recording only the title is how the guess this
-            replaced went wrong — and a saved moment being put back carries a
-            label too ("My desktop, 25 August") and is emphatically not a Look.
+            applied. This — not ``label`` — is the flag that says "a whole Look
+            is being applied", and it is what turns the switch cleanup and the
+            current-Look record on. The two were confused once and it cost the
+            app its headline promise: because *every* saved moment carries a
+            label, putting one back ran the Look-switch cleanup and stripped
+            the Look that was on the desktop off it, so undoing one small tweak
+            reverted the whole Look. A saved moment being put back carries a
+            label ("My desktop, 25 August") and is emphatically not a Look, so
+            it passes ``look=None`` and tidies up after nobody.
     """
 
     def __init__(
@@ -490,6 +537,9 @@ class Transaction:
     def _remove_ops(self) -> list[FileRemove]:
         return [op for op in self.ops if isinstance(op, FileRemove)]
 
+    def _link_ops(self) -> list[FileLink]:
+        return [op for op in self.ops if isinstance(op, FileLink)]
+
     def _setting_ops(self) -> list[SettingWrite]:
         return [op for op in self.ops if isinstance(op, SettingWrite)]
 
@@ -515,7 +565,7 @@ class Transaction:
                 itself is unusable.
         """
         resolved: dict[str, Path] = {}
-        for op in (*self._file_ops(), *self._remove_ops()):
+        for op in (*self._file_ops(), *self._remove_ops(), *self._link_ops()):
             try:
                 resolved[op.dest] = confine_dest(op.dest, root=self._root)
             except ConfinementError as exc:
@@ -684,6 +734,28 @@ class Transaction:
                 )
             )
 
+        for op in self._link_ops():
+            dest = dests[op.dest]
+            before: str | None = None
+            if dest.is_symlink():
+                before = f"link:{dest.readlink()}"
+            elif dest.is_file():
+                try:
+                    before = _digest(dest.read_bytes())
+                except OSError:
+                    before = "file:unreadable"
+            after = f"link:{op.target}"
+            diff.entries.append(
+                DiffEntry(
+                    op=op,
+                    component=op.component or "files",
+                    summary=f"Put back the shortcut {Path(op.dest).name}",
+                    before=before,
+                    after=after,
+                    no_op=before == after,
+                )
+            )
+
         for op in self._setting_ops():
             key, value, skip = self._planned_setting(op, context)
             component = _settings_component(op.component)
@@ -815,7 +887,11 @@ class Transaction:
         result = TransactionResult(diff=diff)
 
         baseline = Baseline(backend=backend).load()
-        owner = self.label or MANUAL_OWNER
+        # Only a Look owns things under its own name. A page edit and a saved
+        # moment being put back are the user's own doing, and both belong to
+        # MANUAL_OWNER — which the switch cleanup walks past, so a later Look
+        # cannot quietly revert them.
+        owner = (self.label or self.look) if self.look else MANUAL_OWNER
 
         # The rollback journal. It is a Baseline pointed at a throwaway
         # directory, which is not a trick: "what was here immediately before
@@ -843,12 +919,22 @@ class Transaction:
             )
 
         planned_files = [
-            str(dests[op.dest]) for op in (*self._file_ops(), *remove_ops)
+            str(dests[op.dest])
+            for op in (*self._file_ops(), *remove_ops, *self._link_ops())
         ]
+        # A Look addresses the terminal profile as
+        # ``dconf:/org/gnome/Ptyxis/Profiles/{{ ptyxis_default_profile }}/palette``
+        # and the transaction writes the *resolved* path. The restore point has
+        # to save the value of the key that is really about to change, so the
+        # resolution is done once, here, and handed to the capture — exactly
+        # the way ``resolved_dests`` already works for files. Reading the
+        # literal token path instead saved nothing and made undo *reset* the
+        # user's real value.
+        resolved_keys = {
+            op.key: placeholders.resolve(op.key, context) for op in (*setting_ops, *reset_ops)
+        }
         planned_settings = [
-            placeholders.resolve(op.key, context)
-            for op in (*setting_ops, *reset_ops)
-            if placeholders.key_ok(placeholders.resolve(op.key, context))
+            key for key in resolved_keys.values() if placeholders.key_ok(key)
         ]
         if enables:
             planned_settings.append(ENABLED_EXTENSIONS_KEY)
@@ -874,16 +960,24 @@ class Transaction:
                 diff,
                 backend,
                 dests,
-                extra_keys=orphan_settings if self.label else [],
-                extra_dests=orphan_files if self.label else [],
+                extra_keys=orphan_settings if self.look else [],
+                extra_dests=orphan_files if self.look else [],
+                resolved_keys=resolved_keys,
             )
 
-        # A single change made from a page is not a switch and must never strip
-        # the rest of the desktop, so this runs only for a Look.
-        if self.label:
+        # A single change made from a page, and a saved moment being put back,
+        # are not switches and must never strip the rest of the desktop — so
+        # this runs only for a Look, which is what ``look`` means and ``label``
+        # never did.
+        cleanup_changed = False
+        if self.look:
             cleanup = ledger_store.switch_cleanup(
                 owner, set(planned_files), set(planned_settings), baseline
             )
+            # Whether the tidy-up really moved anything. AS4 below has to know:
+            # a cleanup that reverted the outgoing Look is a real change to the
+            # desktop, and "Nothing was changed" would be a lie about it.
+            cleanup_changed = bool(cleanup.notes)
             for note in cleanup.notes:
                 report(Progress.SNAPSHOTTING, note)
 
@@ -905,6 +999,9 @@ class Transaction:
             # Removals ride with the files, for the same reason writes do: a
             # setting that points at a file must never outlive the file.
             self._remove_files(remove_ops, dests, baseline, journal, fresh_files, result, report)
+            self._write_links(
+                self._link_ops(), dests, baseline, journal, fresh_files, result, report
+            )
             if not no_session:
                 self._write_settings(
                     setting_ops, context, backend, baseline, journal, fresh_settings, result, report
@@ -918,7 +1015,14 @@ class Transaction:
         except TransactionError as exc:
             baseline.save()
             rolled_back = self._roll_back(journal, baseline, fresh_files, fresh_settings, report)
-            self._restore_ledger(owner, prior_files, prior_settings, previous_current)
+            # R4 again, from the failure side. Withdrawing the claim is right
+            # only when the change it describes really did come back off the
+            # desktop. After a rollback that could not finish, the leftover
+            # change is still there — and a ledger that no longer claims it is
+            # a change nothing will ever tidy up. Over-claiming costs one
+            # redundant restore; this costs the item forever.
+            if rolled_back:
+                self._restore_ledger(owner, prior_files, prior_settings, previous_current)
             shutil.rmtree(journal_dir, ignore_errors=True)
             raise TransactionError(str(exc), op=exc.op, rolled_back=rolled_back) from exc
         except BaseException:
@@ -937,6 +1041,24 @@ class Transaction:
         # would be a lie the Undo page then has to live with.
         if not result.applied and result.skipped:
             self._restore_ledger(owner, prior_files, prior_settings, previous_current)
+            if cleanup_changed:
+                # The switch cleanup ran before the ops and really did revert
+                # the outgoing Look. Saying "nothing was changed" about a
+                # desktop that just lost its previous Look is the one kind of
+                # lie this whole file exists to prevent — so say what happened,
+                # and do not claim a rollback that did not occur. The restore
+                # point taken above covers the tidy-up, so the Undo page can
+                # still put it back.
+                report(
+                    Progress.ROLLED_BACK,
+                    "Nothing from this look could be applied, and the previous look was "
+                    "tidied up first — use Undo to put it back",
+                )
+                raise TransactionError(
+                    "nothing could be changed — " + result.skipped[0][1],
+                    op=result.skipped[0][0],
+                    rolled_back=False,
+                )
             report(Progress.ROLLED_BACK, "Nothing was changed")
             raise TransactionError(
                 "nothing could be changed — " + result.skipped[0][1],
@@ -950,7 +1072,7 @@ class Transaction:
         applied_files = [
             str(dests[op.dest])
             for op in result.applied
-            if isinstance(op, FileWrite | FileRemove)
+            if isinstance(op, FileWrite | FileRemove | FileLink)
         ]
         ledger_store.write_entry(
             owner,
@@ -991,7 +1113,10 @@ class Transaction:
         files: list[str] = []
         settings: list[str] = []
         for name, owned in ledger.items():
-            if name == owner or not isinstance(owned, dict):
+            # Same exclusion as the cleanup itself: the user's own edits are
+            # not a previous Look, are not reverted, and so are not part of
+            # what the restore point has to cover.
+            if name in (owner, MANUAL_OWNER) or not isinstance(owned, dict):
                 continue
             files.extend(f for f in owned.get("files", []) if f not in incoming_files)
             settings.extend(s for s in owned.get("settings", []) if s not in incoming_settings)
@@ -1005,6 +1130,7 @@ class Transaction:
         *,
         extra_keys: list[str] | None = None,
         extra_dests: list[str] | None = None,
+        resolved_keys: dict[str, str] | None = None,
     ) -> str | None:
         """Take a restore point before touching anything. Never fatal.
 
@@ -1021,6 +1147,7 @@ class Transaction:
                 label=self.label or "Before your last change",
                 backend=backend,
                 resolved_dests={raw: str(path) for raw, path in dests.items()},
+                resolved_keys=resolved_keys,
                 extra_keys=extra_keys,
                 extra_dests=extra_dests,
             )
@@ -1113,6 +1240,52 @@ class Transaction:
                 dest.unlink()
             except OSError as exc:
                 raise TransactionError(f"could not remove {dest}: {exc}", op=op) from exc
+            result.applied.append(op)
+
+    def _write_links(
+        self,
+        ops: list[FileLink],
+        dests: dict[str, Path],
+        baseline: Baseline,
+        journal: Baseline,
+        fresh_files: list[str],
+        result: TransactionResult,
+        report: Callable[[Progress, str], None],
+    ) -> None:
+        """Put back a shortcut that was at a destination before a Look wrote there.
+
+        Recorded first like every other change, so it rolls back, and the link
+        is *replaced* rather than written through: following it would edit
+        whatever it points at, which is somebody's dotfiles repository.
+        """
+        if not ops:
+            return
+        report(Progress.WRITING_FILES, f"Putting back {len(ops)} shortcut(s)")
+        for op in ops:
+            dest = dests[op.dest]
+            if dest.is_symlink() and str(dest.readlink()) == op.target:
+                # Already the link it should be. The desired state is the state.
+                result.applied.append(op)
+                continue
+            key = str(dest)
+            newly = key not in baseline.files
+            if not baseline.record_file(dest, op.component or "files", self.label or ""):
+                result.skipped.append(
+                    (op, f"something that is not an ordinary file is at {dest}, so it was left alone")
+                )
+                continue
+            if newly:
+                fresh_files.append(key)
+            journal.record_file(dest, op.component or "files", self.label or "")
+            try:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                if dest.is_symlink() or dest.exists():
+                    dest.unlink()
+                dest.symlink_to(op.target)
+            except OSError as exc:
+                raise TransactionError(
+                    f"could not put back the shortcut at {dest}: {exc}", op=op
+                ) from exc
             result.applied.append(op)
 
     def _reset_settings(
@@ -1250,12 +1423,20 @@ class Transaction:
             return
         present = installed_extension_uuids()
         wanted: list[str] = []
+        # An op is applied or it is skipped, never both. The unresolvable ones
+        # are already in ``result.skipped``, so everything below counts only
+        # the ops that really are being turned on — otherwise an add-on that is
+        # not installed is reported as enabled, the AS4 gate below sees a
+        # transaction that "applied" something it did not, and every caller
+        # that counts applied ops over-reports what happened.
+        resolved_ops: list[ExtensionEnable] = []
         for op in ops:
             resolved = _resolve_extension(op, present)
             if resolved is None:
                 result.skipped.append((op, "that add-on isn't installed on this computer"))
                 continue
             wanted.append(resolved)
+            resolved_ops.append(op)
         if not wanted:
             return
 
@@ -1263,12 +1444,12 @@ class Transaction:
         key = ENABLED_EXTENSIONS_KEY
         current, failure = self._current_setting(key)
         if failure is not None and is_missing(failure):
-            for op in ops:
+            for op in resolved_ops:
                 result.skipped.append((op, "add-ons cannot be turned on on this computer"))
             return
         merged = merge_string_lists(current, format_string_list(wanted))
         if merged is None or values_equal(current, merged):
-            result.applied.extend(ops)
+            result.applied.extend(resolved_ops)
             return
         newly = key not in baseline.settings
         baseline.record_setting(key, "addons", self.label or "")
@@ -1279,10 +1460,12 @@ class Transaction:
         except BackendError as exc:
             if newly:
                 baseline.forget_settings([key])
-            raise TransactionError(f"could not turn the add-ons on: {exc}", op=ops[0]) from exc
+            raise TransactionError(
+                f"could not turn the add-ons on: {exc}", op=resolved_ops[0]
+            ) from exc
         if newly:
             fresh_settings.append(key)
-        result.applied.extend(ops)
+        result.applied.extend(resolved_ops)
 
     def _roll_back(
         self,
