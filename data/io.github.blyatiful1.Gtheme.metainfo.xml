@@ -56,31 +56,31 @@
   <screenshots>
     <screenshot type="default">
       <caption>How your desktop looks right now, on one page</caption>
-      <image type="source" width="1200" height="800">https://raw.githubusercontent.com/blyatiful1/gtheme/main/docs/media/screenshots/home-light.png</image>
+      <image type="source" width="1200" height="900">https://raw.githubusercontent.com/blyatiful1/gtheme/main/docs/media/screenshots/home-light.png</image>
     </screenshot>
     <screenshot>
       <caption>Whole looks: one click changes everything, and one click puts it back</caption>
-      <image type="source" width="1200" height="800">https://raw.githubusercontent.com/blyatiful1/gtheme/main/docs/media/screenshots/looks-light.png</image>
+      <image type="source" width="1200" height="900">https://raw.githubusercontent.com/blyatiful1/gtheme/main/docs/media/screenshots/looks-light.png</image>
     </screenshot>
     <screenshot>
       <caption>The picture behind everything, with a preview before you keep it</caption>
-      <image type="source" width="1200" height="800">https://raw.githubusercontent.com/blyatiful1/gtheme/main/docs/media/screenshots/wallpaper-light.png</image>
+      <image type="source" width="1200" height="900">https://raw.githubusercontent.com/blyatiful1/gtheme/main/docs/media/screenshots/wallpaper-light.png</image>
     </screenshot>
     <screenshot>
       <caption>Light or dark, and the highlight colour</caption>
-      <image type="source" width="1200" height="800">https://raw.githubusercontent.com/blyatiful1/gtheme/main/docs/media/screenshots/colors-dark.png</image>
+      <image type="source" width="1200" height="900">https://raw.githubusercontent.com/blyatiful1/gtheme/main/docs/media/screenshots/colors-dark.png</image>
     </screenshot>
     <screenshot>
       <caption>Extra features you can switch on, each with a plain-language description</caption>
-      <image type="source" width="1200" height="800">https://raw.githubusercontent.com/blyatiful1/gtheme/main/docs/media/screenshots/addons-light.png</image>
+      <image type="source" width="1200" height="900">https://raw.githubusercontent.com/blyatiful1/gtheme/main/docs/media/screenshots/addons-light.png</image>
     </screenshot>
     <screenshot>
       <caption>Every change is saved first, so you can go back to any earlier day</caption>
-      <image type="source" width="1200" height="800">https://raw.githubusercontent.com/blyatiful1/gtheme/main/docs/media/screenshots/restore-light.png</image>
+      <image type="source" width="1200" height="900">https://raw.githubusercontent.com/blyatiful1/gtheme/main/docs/media/screenshots/restore-light.png</image>
     </screenshot>
     <screenshot>
       <caption>The same window in dark</caption>
-      <image type="source" width="1200" height="800">https://raw.githubusercontent.com/blyatiful1/gtheme/main/docs/media/screenshots/home-dark.png</image>
+      <image type="source" width="1200" height="900">https://raw.githubusercontent.com/blyatiful1/gtheme/main/docs/media/screenshots/home-dark.png</image>
     </screenshot>
   </screenshots>
 
