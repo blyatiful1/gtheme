@@ -15,8 +15,8 @@ concurrency:
 # READ THIS BEFORE TRUSTING A GREEN TICK.
 #
 # What CI proves is strictly LESS than what `./verify.sh --full` proves on a
-# real machine. Green here means: the code lints, the pure-Python tier passes,
-# the packaging is well-formed, and the widgets build under GTK 4 / libadwaita.
+# real machine. Green here means: the code lints, the packaging is well-formed,
+# and the suite passes against a GNOME 50 userspace with a private session bus.
 #
 # It does NOT prove any of the following, all of which only the local canonical
 # check covers:
@@ -26,82 +26,105 @@ concurrency:
 #   * that applying and undoing a look really moves a real desktop.
 #   * that the machine this was built on came out unchanged (F16).
 #
-# The `dconf` tier DOES run here, in both jobs, and used not to: a private bus
-# plus the dconf-service it activates is all it needs, and that is exactly what
-# `dbus-run-session` provides. So a GioBackend that spells a written value
+# The `dconf` tier DOES run here — in the container job below, under
+# `dbus-run-session`, and it used not to run in CI at all: a private bus plus
+# the dconf-service it activates is all that tier needs, and that is exactly
+# what `dbus-run-session` provides. So a GioBackend that spells a written value
 # differently from the subprocess backend now fails here rather than waiting
 # for someone to run the local-only tier (review-report M20).
 # A change that is green here and has not been through ./verify.sh --full is
 # unverified. See docs/testing.md.
+#
+# WHY THE WHOLE SUITE RUNS IN THE ARCH CONTAINER AND NOT ON THE UBUNTU RUNNER.
+# It was split the other way until the v2 rebuild, and the unit half could not
+# pass there for three separate reasons, none of them about the code:
+#   * with no PyGObject the page modules will not import, and the tests that
+#     read a setting through GioBackend have nothing to read it with;
+#   * with PyGObject but no session bus, every settings write is skipped with
+#     "your desktop session wasn't running" — 19 failures that say nothing;
+#   * with both, ubuntu-24.04's gsettings-desktop-schemas is GNOME 46, which
+#     has no `accent-color` key and no org.gnome.shell, so a further 14 fail
+#     for being a 2024 desktop rather than a 2026 one.
+# The container is the machine gtheme targets. The ubuntu job keeps the two
+# things that genuinely do not need a desktop: the linter and the packaging.
 jobs:
-  lint-and-unit:
-    name: ruff + unit tests
+  lint-and-packaging:
+    name: ruff + packaging
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      # F10: core/ may import Gio/GLib (a guard test forbids Gtk/Adw there), so
-      # the unit tier needs PyGObject with the GLib typelib. libglib2.0-bin
-      # provides glib-compile-schemas, which the settings-backend tests use to
-      # build a throwaway schema. The last three are what the packaging tests
-      # check the launcher entry, the store listing and the icons with — without
-      # them those tests skip themselves and prove nothing.
-      # dbus + dconf-cli + dconf-gsettings-backend are what the `dconf` tier
-      # needs: dbus-run-session to get a private bus, and a dconf-service on it
-      # to write to. Without them that tier would skip itself with an honest
-      # reason and prove nothing, which is the state M20 was about.
-      - name: Install GLib bindings and the packaging checkers
+      # These three are what the packaging tests check the launcher entry, the
+      # store listing and the icons with — without them those tests skip
+      # themselves and prove nothing. No PyGObject here on purpose: nothing in
+      # this job may need a desktop, and nothing here needs a session bus
+      # either — the tiers that do are all in the container job below, which
+      # wraps them in `dbus-run-session` (review-report M16).
+      - name: Install the packaging checkers
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-gi gir1.2-glib-2.0 libglib2.0-bin \
-                                  dbus dconf-cli dconf-gsettings-backend \
-                                  desktop-file-utils appstream librsvg2-bin
+          sudo apt-get install -y desktop-file-utils appstream librsvg2-bin
       - name: Install gtheme
         run: |
-          python -m venv --system-site-packages .venv
+          python -m venv .venv
           .venv/bin/python -m pip install --upgrade pip
           .venv/bin/python -m pip install -e '.[dev]'
       - name: ruff
         run: .venv/bin/ruff check .
-      - name: pytest
-        # Ubuntu runners ship libadwaita 1.5; gtheme targets 1.9. No Adw code
-        # may run here — that is the archlinux job's task. The unit tier
-        # includes tests/unit/test_packaging_*.py, which builds a real wheel
-        # and looks inside it.
-        #
-        # dbus-run-session, exactly as verify.sh does it (M16): the settings
-        # phase decides whether to run from DBUS_SESSION_BUS_ADDRESS, and a
-        # runner has no session bus at all, so without this every settings and
-        # extension test would error rather than run.
-        run: dbus-run-session -- .venv/bin/python -m pytest -q -m "not gtk and not sandbox"
+      - name: pytest — packaging only
+        # Builds a real wheel and looks inside it, validates the .desktop file
+        # and the metainfo, and checks what install.sh would put where. These
+        # three files are named rather than selected by a marker on purpose:
+        # they are the only tests that mean anything without a desktop, and
+        # they run again in the container job as part of the whole suite.
+        run: |
+          .venv/bin/python -m pytest -q \
+            tests/unit/test_packaging_wheel.py \
+            tests/unit/test_packaging_desktop.py \
+            tests/unit/test_packaging_install.py
 
-  gtk:
-    name: GTK/libadwaita tests (Arch container)
+  tests:
+    name: the suite (Arch container, GNOME 50)
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
+      # The GNOME lines are not decoration. Without them ten tests fail for the
+      # container rather than for the code: the schemas the pages read
+      # (org.gnome.shell, org.gnome.mutter, the settings-daemon plugins), the
+      # GnomeDesktop-4.0 typelib the thumbnailer needs, and the wallpaper
+      # catalogue under /usr/share/gnome-background-properties.
       - name: Install system packages
         run: |
           pacman -Syu --noconfirm \
             python python-gobject gtk4 libadwaita glib2 dconf libsoup3 \
+            gsettings-desktop-schemas gnome-desktop-4 gnome-settings-daemon \
+            mutter gnome-shell gnome-backgrounds \
+            desktop-file-utils appstream \
             python-pip python-hatchling dbus git
       - uses: actions/checkout@v4
       - name: Install gtheme
         run: |
           python -m venv --system-site-packages .venv
           .venv/bin/python -m pip install -e '.[dev]'
-      - name: pytest -m "gtk or dconf"
+      - name: pytest
         # gtk4-broadwayd is an offscreen GDK backend: no X server, no
         # compositor, no Xvfb needed. dbus-run-session gives the tests a
-        # private session bus so nothing reaches a real one.
+        # private session bus so nothing reaches a real one — and so that the
+        # transaction tests have a session to write into at all. It is the
+        # same wrapping verify.sh uses, for the same reason (M16): the settings
+        # phase decides whether to run from DBUS_SESSION_BUS_ADDRESS, so a run
+        # without a bus proves nothing and a run on a borrowed one is one
+        # mistake away from a real desktop.
         #
-        # The `dconf` tier rides along here as well as in the unit job: this
-        # container has the glib2/dconf the app actually targets, and the tier
-        # asks for nothing else (no shell, no seat). Seven seconds.
+        # -m "not sandbox" is every tier at once — unit, regression, `dconf`
+        # and `gtk`. The sandbox tier is the only one this file refuses to run,
+        # and pyproject already deselects it. The `dconf` tier in particular
+        # needs exactly what is here and nothing more (a bus, a dconf-service,
+        # no shell and no seat), which is why it runs in CI at all (M20).
         run: |
           gtk4-broadwayd :5 &
           sleep 2
           GDK_BACKEND=broadway BROADWAY_DISPLAY=:5 \
-            dbus-run-session -- .venv/bin/python -m pytest -q -m "gtk or dconf"
+            dbus-run-session -- .venv/bin/python -m pytest -q -m "not sandbox"

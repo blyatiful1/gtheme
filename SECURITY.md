@@ -149,7 +149,7 @@ ownership ledger, so `gtheme rescue` puts your background setting back but
 leaves the copy and its entry where they are. That is deliberate — a rescue is
 for undoing what gtheme changed, not for deleting a picture you added — and it
 means those two are the one thing on this page you have to remove by hand. The
-README says where, under [Can I remove it?](README.md#can-i-remove-it).
+README says where, under [Removing gtheme](README.md#removing-gtheme).
 
 Two more places belong to somebody else:
 `~/.local/share/gnome-shell/extensions/` and `/usr/share/gnome-shell/extensions/`,
@@ -174,7 +174,7 @@ If you have moved your home folders with the `XDG_*` variables, the paths above
 follow them.
 
 The launcher and app-list entry the installer adds are listed in the README,
-under [Can I remove it?](README.md#can-i-remove-it).
+under [Removing gtheme](README.md#removing-gtheme).
 
 gtheme runs entirely as you. It never asks for administrator rights, and
 nothing it does needs them.

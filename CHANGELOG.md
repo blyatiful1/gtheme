@@ -3,7 +3,7 @@
 All notable changes to gtheme are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
-## v2.0.0 (unreleased) — the rebuild
+## v2.0.0 (28 August 2026) — the rebuild
 
 gtheme was a command-line tool. It is now an app: a GTK4/libadwaita window for
 GNOME, written for someone whose first Linux computer is the one in front of
@@ -231,6 +231,21 @@ is invisible if nothing goes wrong, which is the point. What changed:
 - **The documentation was swept against the code**, sentence by sentence, and
   the claims that had drifted were corrected rather than softened — including
   several that this pass itself had made false.
+
+### Documentation
+
+- README rewritten as a landing page for someone who has never used Linux or
+  GitHub: a one-line description and a screenshot first, scannable lists of what
+  the app changes and why it is safe to try, numbered install steps, and a "your
+  first five minutes" walkthrough. The fifteen-page tour and the questions
+  people ask are folded into collapsible sections so the page can be read in a
+  minute or explored in ten. Every sentence in it was checked against the code
+  by the audit pass above, and the checkable half — every command the page tells
+  you to type — is checked by a test on every run.
+- Uninstalling now documents `./install.sh --uninstall` rather than asking you
+  to delete files by hand, and names the five things it takes back from outside
+  the folder it was unpacked into; the page ends with where to get help
+  (Discussions, issues, the glossary, the start-here guide).
 
 ## [Unreleased] (v1)
 

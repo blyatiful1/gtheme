@@ -30,6 +30,11 @@ import pytest
 
 pytestmark = pytest.mark.gtk
 
+# A marker deselects after collection, so ``-m "not gtk"`` cannot save a
+# machine with no PyGObject from the module-scope import below: without this
+# line the whole run aborts on a collection error instead of skipping.
+pytest.importorskip("gi", reason="PyGObject is needed for these widgets")
+
 from gi.repository import Adw, Gtk  # noqa: E402
 
 from gtheme import window as window_module  # noqa: E402

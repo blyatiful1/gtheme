@@ -134,9 +134,11 @@
 
   <releases>
     <!-- This version must equal `__version__` in src/gtheme/__init__.py and
-         `pkgver` in PKGBUILD. It stays type="development" until the matching
-         v2.0.0 git tag is cut. -->
-    <release version="2.0.0" type="development" date="2026-08-25">
+         `pkgver` in PKGBUILD, or `pacman -Qi` and the About dialog name
+         different builds. `type="stable"` and this date belong to the v2.0.0
+         release tag cut from this commit; until that tag exists there is
+         nothing for a software centre to fetch. -->
+    <release version="2.0.0" type="stable" date="2026-08-28">
       <description>
         <p>The v2 rebuild: gtheme becomes a graphical app.</p>
       </description>

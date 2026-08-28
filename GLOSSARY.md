@@ -122,13 +122,13 @@ Arch is a distro (above) for people who like assembling their own system;
 CachyOS, EndeavourOS and Manjaro are built on it. The **AUR** is its
 community-run collection of build recipes for software that is not in the
 official catalogue. A **PKGBUILD** is one such recipe: a short text file saying
-how to build and install one program. gtheme ships two — `PKGBUILD-git`, which
-builds the copy you cloned, and `PKGBUILD`, which builds a released archive
-once one exists — so on Arch you can install gtheme as a proper package that
-`pacman -R` removes cleanly.
+how to build and install one program. gtheme ships two — `PKGBUILD`, which builds the
+released source archive, and `PKGBUILD-git`, which builds the copy you cloned —
+so on Arch you can install gtheme as a proper package that `pacman -R` removes
+cleanly.
 
 If none of those words apply to you, use
-[the easy way](README.md#the-easy-way) instead.
+[the easy way](README.md#the-easy-way-recommended) instead.
 
 ### dconf
 
