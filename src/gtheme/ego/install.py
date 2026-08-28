@@ -38,6 +38,14 @@ Which sentence a person sees is decided by asking the desktop whether it knows
 the add-on at all, never by assuming. An add-on that was already on disk at the
 last log-in *can* be switched on live, and saying "log out" to that person
 would be a lie in the other direction.
+
+**Before either path runs**, the batch can be named: :class:`AddonBrief` and
+:meth:`ExtensionInstaller.describe_batch` say what each add-on is called, who
+wrote it and where it would come from, without downloading anything. A person
+being asked to accept third-party code is being asked about particular
+add-ons, and "3 add-ons" is not something anyone can accept or refuse. Naming
+them costs one lookup each and never fails: an add-on the library will not
+describe still comes back with a readable form of its own file name.
 """
 
 from __future__ import annotations
@@ -56,6 +64,7 @@ from .models import ExtensionRecord
 from .shelldbus import (
     EnableResult,
     ExtensionState,
+    InstalledExtension,
     ShellError,
     ShellErrorKind,
     ShellExtensions,
@@ -64,13 +73,17 @@ from .shelldbus import (
 
 __all__ = [
     "COPY",
+    "COMMAND_NOT_FOUND",
+    "AddonBrief",
     "CommandResult",
     "CommandRunner",
     "ExtensionInstaller",
     "InstallOutcome",
     "InstallReport",
     "SubprocessRunner",
+    "describe_addons",
     "enable_transaction",
+    "readable_name",
     "safe_uuid",
 ]
 
@@ -173,7 +186,90 @@ COPY: dict[InstallOutcome | str, str] = {
     "already-on": "That add-on is already on.",
     "turned-on": "Turned on.",
     "turn-on-after-login": "Turned on. It takes effect after you log out and back in.",
+    # -- where an add-on would come from, said before anything is downloaded.
+    # Every download gtheme makes goes to the one address named here, so the
+    # sentence can name it rather than hedging.
+    "source-ego": "from the GNOME add-on website, extensions.gnome.org",
+    "source-local-only": (
+        "a private add-on — gtheme never downloads this one"
+    ),
 }
+
+
+def readable_name(uuid: str) -> str:
+    """A name a person can read, worked out from an add-on's own file name.
+
+    The library knows every add-on's real title, but asking for it takes a
+    round trip that can fail, and a list of add-ons about to be added must be
+    showable either way. ``blur-my-shell@aunetx`` becomes ``Blur my shell``:
+    the author part goes, the dashes and underscores become spaces. Never a
+    substitute for the real title when there is one — only for the case where
+    the alternative is showing a person something they cannot read.
+    """
+    head = uuid.split("@", 1)[0]
+    words = head.replace("_", " ").replace("-", " ").replace(".", " ").split()
+    if not words:
+        return uuid
+    text = " ".join(words)
+    return text[0].upper() + text[1:]
+
+
+@dataclass(frozen=True)
+class AddonBrief:
+    """One add-on, named, *before* anything about it is downloaded.
+
+    A Look's add-ons used to reach the person as a count — "this Look uses 3
+    add-ons you don't have" — and the download started from a button next to
+    that count. A count is not something anybody can agree to: the add-ons are
+    third-party code, and which three they are is the whole question. So the
+    install pipeline hands out one of these per add-on it is about to fetch,
+    carrying what a person needs in order to say yes or no: what it is called,
+    who wrote it, and where it would come from.
+
+    ``uuid`` is in here because the code that acts on the answer needs it. It
+    is deliberately *not* part of any sentence this module builds: gtheme does
+    not show internal names to people.
+
+    Args:
+        uuid: the add-on's identifier. For the code, never for the screen.
+        source: ``"ego"`` (may be downloaded from extensions.gnome.org) or
+            ``"local-only"`` (a private add-on that is never downloaded).
+        title: the real title, once something has been asked. Empty until then.
+        creator: who wrote it, when known.
+    """
+
+    uuid: str
+    source: str = "ego"
+    title: str = ""
+    creator: str = ""
+
+    @property
+    def display_title(self) -> str:
+        """What to call it on screen — the real title, or a readable fallback."""
+        return self.title or readable_name(self.uuid)
+
+    @property
+    def source_line(self) -> str:
+        """Where it would come from, in one plain clause."""
+        if self.source == "local-only":
+            return COPY["source-local-only"]
+        return COPY["source-ego"]
+
+    @property
+    def line(self) -> str:
+        """The whole add-on as one line for a list: name, author, source."""
+        who = f", by {self.creator}" if self.creator else ""
+        return f"{self.display_title}{who} — {self.source_line}"
+
+
+def describe_addons(briefs: Iterable[AddonBrief]) -> list[str]:
+    """One plain line per add-on, in the order given.
+
+    The phrasing helper the preview dialog uses, so that naming the add-ons is
+    a matter of showing this list rather than of every caller inventing its own
+    sentence.
+    """
+    return [brief.line for brief in briefs]
 
 
 @dataclass(frozen=True)
@@ -195,6 +291,12 @@ class CommandRunner(Protocol):
     def run(self, argv: Sequence[str]) -> CommandResult: ...
 
 
+#: What a command that could not be started at all comes back as. The shell's
+#: own number for "there is no such command", used here for the same meaning so
+#: nothing has to invent a second one.
+COMMAND_NOT_FOUND = 127
+
+
 class SubprocessRunner:
     """The real runner. Pins ``LC_ALL=C`` so nothing ever reads translated text."""
 
@@ -202,9 +304,19 @@ class SubprocessRunner:
         import os
 
         env = dict(os.environ, LC_ALL="C")
-        completed = subprocess.run(
-            list(argv), capture_output=True, text=True, check=False, env=env
-        )
+        try:
+            completed = subprocess.run(
+                list(argv), capture_output=True, text=True, check=False, env=env
+            )
+        except OSError as exc:
+            # A missing `gnome-extensions` raises FileNotFoundError from deep
+            # inside a download callback, where the loop that called it prints
+            # the traceback and carries on — so the batch's "this one landed"
+            # callback never fires and the progress dialog sits there for the
+            # full three-minute timeout before saying something that names
+            # nothing. A command that cannot be started is a failed command,
+            # and the caller already knows how to report one of those.
+            return CommandResult(COMMAND_NOT_FOUND, stderr=str(exc))
         return CommandResult(completed.returncode, completed.stdout, completed.stderr)
 
 
@@ -223,6 +335,8 @@ class InstallReport:
             three add-ons applies them as one all-or-nothing change rather than
             as three separate ones.
         error: the underlying failure, for the log.
+        brief: what this add-on is called and where it comes from, so a caller
+            listing several reports can name them instead of counting them.
     """
 
     uuid: str
@@ -231,10 +345,16 @@ class InstallReport:
     via: str = "none"
     transaction: Transaction | None = None
     error: Exception | None = None
+    brief: AddonBrief | None = None
 
     @property
     def ok(self) -> bool:
         return self.outcome in (InstallOutcome.ACTIVE, InstallOutcome.NEEDS_RELOGIN)
+
+    @property
+    def display_title(self) -> str:
+        """What to call this add-on on screen. Never its identifier."""
+        return (self.brief or AddonBrief(self.uuid)).display_title
 
 
 ReportCallback = Callable[[InstallReport], None]
@@ -295,6 +415,43 @@ class ExtensionInstaller:
         self.client = client
         self.runner = runner or SubprocessRunner()
 
+    # -- asking the desktop --------------------------------------------
+    #
+    # Every question this module puts to the desktop goes through the two
+    # methods below, and the reason is where the questions are asked from.
+    # Most of them are asked inside a callback — the download callback of the
+    # package path, the reply callback of the live path — and a callback is
+    # dispatched by the main loop, which catches nothing: an exception escaping
+    # one prints a traceback and the loop carries on. The batch's "this one
+    # landed" callback then never fires, and the progress dialog waits out its
+    # whole three-minute timeout before saying something that names nothing.
+    # That is the same hang a missing `gnome-extensions` used to cause, and it
+    # is closed the same way: a desktop that will not answer produces a report,
+    # never an exception.
+
+    def _known(self, uuid: str) -> InstalledExtension | None:
+        """What the desktop knows about one add-on, or None when it cannot say.
+
+        A desktop that is not there is deliberately indistinguishable here from
+        a desktop that has never heard of the add-on, because the two call for
+        the same sentence: nothing in this session can make it start, and the
+        honest words are "after you log out and back in". Guessing higher would
+        be promising something no longer askable.
+        """
+        if self.shell is None:
+            return None
+        try:
+            return self.shell.get(uuid)
+        except ShellError:
+            return None
+
+    def _enable(self, uuid: str) -> EnableResult:
+        """Switch an add-on on, treating an unreachable desktop as "not now"."""
+        try:
+            return self.shell.enable(uuid)
+        except ShellError:
+            return EnableResult.NEEDS_RELOGIN
+
     # -- the live path -------------------------------------------------
 
     def install_live(
@@ -332,7 +489,7 @@ class ExtensionInstaller:
             )
             return None
 
-        existing = self.shell.get(uuid)
+        existing = self._known(uuid)
         if existing is not None and existing.state is ExtensionState.ACTIVE:
             callback(
                 InstallReport(uuid, InstallOutcome.ACTIVE, COPY["already-on"], via="desktop")
@@ -405,7 +562,7 @@ class ExtensionInstaller:
         )
 
     def _is_active(self, uuid: str) -> bool:
-        found = self.shell.get(uuid)
+        found = self._known(uuid)
         return found is not None and found.state is ExtensionState.ACTIVE
 
     def _gate_on_desktop(self, uuid: str, *, via: str) -> InstallReport:
@@ -417,15 +574,19 @@ class ExtensionInstaller:
         * known but not running — switching it on works, so do that and say so;
         * unknown — the desktop never scanned it, and nothing in this session
           will change that. The next log-in will.
+
+        A desktop that cannot be asked at all answers as "unknown"; see
+        :meth:`_known`. This method runs inside the download callback, where an
+        exception is a hang rather than an error message.
         """
-        found = self.shell.get(uuid)
+        found = self._known(uuid)
         if found is None:
             return InstallReport(
                 uuid, InstallOutcome.NEEDS_RELOGIN, COPY[InstallOutcome.NEEDS_RELOGIN], via=via
             )
         if found.state is ExtensionState.ACTIVE:
             return InstallReport(uuid, InstallOutcome.ACTIVE, COPY[InstallOutcome.ACTIVE], via=via)
-        enabled = self.shell.enable(uuid)
+        enabled = self._enable(uuid)
         if enabled is EnableResult.ENABLED_NOW:
             return InstallReport(uuid, InstallOutcome.ACTIVE, COPY[InstallOutcome.ACTIVE], via=via)
         if enabled is EnableResult.NEEDS_RELOGIN:
@@ -462,6 +623,7 @@ class ExtensionInstaller:
         *,
         alternates: tuple[str, ...] = (),
         label: str | None = None,
+        brief: AddonBrief | None = None,
     ) -> None:
         """Download the add-on and unpack it, for when the live path is out.
 
@@ -477,10 +639,26 @@ class ExtensionInstaller:
         Nothing this path does can make an add-on start running, so it never
         says otherwise. The returned report carries the enable step as a
         planned transaction for the caller to apply.
+
+        Args:
+            brief: what this add-on is called, worked out before the download
+                started. Carried through onto every report so a caller can name
+                what failed rather than counting failures. A caller that has
+                not worked one out gets the add-on's own file name, read off
+                the uuid: this method runs from inside a download callback, on
+                the thread that draws the window, and asking the desktop for
+                the title of an add-on it is about to be *given* is a blocking
+                round trip for an answer that is empty by construction.
         """
+        described = brief if brief is not None else AddonBrief(uuid=uuid)
         if self.client is None:
             callback(
-                InstallReport(uuid, InstallOutcome.FAILED, COPY[InstallOutcome.FAILED])
+                InstallReport(
+                    uuid,
+                    InstallOutcome.FAILED,
+                    COPY[InstallOutcome.FAILED],
+                    brief=described,
+                )
             )
             return
 
@@ -493,10 +671,15 @@ class ExtensionInstaller:
                         COPY["download-failed"],
                         via="package",
                         error=error,
+                        brief=described,
                     )
                 )
                 return
-            callback(self._unpack_and_plan(uuid, body, alternates=alternates, label=label))
+            callback(
+                self._unpack_and_plan(
+                    uuid, body, alternates=alternates, label=label, brief=described
+                )
+            )
 
         self.client.download(uuid, version_tag, _downloaded)
 
@@ -507,6 +690,7 @@ class ExtensionInstaller:
         *,
         alternates: tuple[str, ...] = (),
         label: str | None = None,
+        brief: AddonBrief | None = None,
     ) -> InstallReport:
         try:
             component = safe_uuid(uuid)
@@ -519,13 +703,23 @@ class ExtensionInstaller:
                 COPY[InstallOutcome.FAILED],
                 via="package",
                 error=exc,
+                brief=brief,
             )
         with tempfile.TemporaryDirectory(prefix="gtheme-addon-") as tmp:
             package = Path(tmp) / f"{component}.shell-extension.zip"
             package.write_bytes(zip_bytes)
-            result = self.runner.run(
-                ["gnome-extensions", "install", "--force", str(package)]
-            )
+            try:
+                result = self.runner.run(
+                    ["gnome-extensions", "install", "--force", str(package)]
+                )
+            except OSError as exc:
+                # Belt and braces with SubprocessRunner's own guard: this
+                # method runs inside a download callback, and an exception
+                # escaping here is swallowed by the loop that dispatched it —
+                # the batch then waits out its whole timeout for a callback
+                # that will never come. Every other failure in this module is
+                # an InstallReport, so this one is too.
+                result = CommandResult(COMMAND_NOT_FOUND, stderr=str(exc))
         if not result.ok:
             return InstallReport(
                 uuid,
@@ -533,6 +727,7 @@ class ExtensionInstaller:
                 COPY[InstallOutcome.FAILED],
                 via="package",
                 error=RuntimeError(result.stderr.strip() or "unpacking failed"),
+                brief=brief,
             )
 
         transaction = enable_transaction(
@@ -545,7 +740,81 @@ class ExtensionInstaller:
             report.message,
             via="package",
             transaction=transaction,
+            brief=brief,
         )
+
+    # -- naming a batch before it is fetched ---------------------------
+
+    def brief_for(self, uuid: str, source: str = "ego") -> AddonBrief:
+        """Name one add-on without asking anything over the network.
+
+        Uses the desktop's own title when the add-on is already here, and a
+        readable form of its file name when it is not. Always returns
+        something showable, because a list of add-ons a person is being asked
+        to approve may not depend on a request that can fail — and because
+        :meth:`install_package` calls this from inside a download callback,
+        where a raised error is not an error message but a batch that never
+        finishes. A desktop that will not answer costs a title, never a name.
+        """
+        known = self._known(uuid)
+        title = known.name if known is not None else ""
+        return AddonBrief(uuid=uuid, source=source, title=title)
+
+    def describe_batch(
+        self,
+        wanted: Sequence[tuple[str, str, tuple[str, ...]]],
+        callback: Callable[[list[AddonBrief]], None],
+    ) -> None:
+        """Name every add-on in a batch *before* a single byte is downloaded.
+
+        This is what turns "this Look uses 3 add-ons you don't have" into three
+        add-ons with names, authors and one address they come from. It asks the
+        library for the real titles, one after another, and never lets a failed
+        lookup cost a name: an add-on the library will not describe still comes
+        back with the readable form of its own file name and the same source
+        clause. Downloading is a separate step and happens only if somebody
+        says yes to this list.
+
+        Args:
+            wanted: ``(uuid, source, alternates)`` per add-on, the same shape
+                :meth:`plan_for_look` takes.
+            callback: called once, with one brief per entry, in the order
+                given.
+        """
+        briefs: list[AddonBrief] = []
+        queue = [(entry[0], entry[1]) for entry in wanted]
+
+        def step() -> None:
+            while queue:
+                uuid, source = queue.pop(0)
+                if source != "ego" or self.client is None:
+                    briefs.append(self.brief_for(uuid, source))
+                    continue
+
+                def described(
+                    record: ExtensionRecord | None,
+                    error: EgoError | None,
+                    uuid: str = uuid,
+                    source: str = source,
+                ) -> None:
+                    if record is None or error is not None:
+                        briefs.append(self.brief_for(uuid, source))
+                    else:
+                        briefs.append(
+                            AddonBrief(
+                                uuid=uuid,
+                                source=source,
+                                title=record.name,
+                                creator=record.creator,
+                            )
+                        )
+                    step()
+
+                self.client.info(uuid, described)
+                return
+            callback(briefs)
+
+        step()
 
     # -- a Look's whole add-on list ------------------------------------
 
@@ -585,6 +854,7 @@ class ExtensionInstaller:
                         uuid,
                         InstallOutcome.LOCAL_ONLY_MISSING,
                         COPY[InstallOutcome.LOCAL_ONLY_MISSING],
+                        brief=AddonBrief(uuid=uuid, source=source),
                     )
                 )
             else:
@@ -597,6 +867,7 @@ class ExtensionInstaller:
                         uuid,
                         InstallOutcome.NEEDS_RELOGIN,
                         COPY["not-added-yet"],
+                        brief=AddonBrief(uuid=uuid, source=source),
                     )
                 )
         return (

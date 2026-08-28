@@ -320,8 +320,12 @@ and **Updates**.
   preinstalled as well.
 - Combinations known to break things carry a warning that says what will
   happen to you, not what will happen internally.
-- Installing goes through GNOME's own confirmation box — gtheme never installs
-  an add-on behind it.
+- Adding an add-on **from this page** goes through GNOME's own confirmation
+  box: the desktop shows it, naming the add-on, and gtheme cannot install one
+  behind it. Adding the add-ons a whole Look asks for is the other path —
+  there gtheme downloads them itself from extensions.gnome.org after you press
+  the button that says so, and no GNOME box appears. See
+  [SECURITY.md](SECURITY.md) for what that means.
 
 #### Terminal
 

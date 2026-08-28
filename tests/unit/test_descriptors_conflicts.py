@@ -19,12 +19,16 @@ from gtheme.ui import jargon
 
 DOCK = "dash-to-dock@micxgx.gmail.com"
 PANEL = "dash-to-panel@jderose9.github.com"
+UBUNTU_DOCK = "ubuntu-dock@ubuntu.com"
+TILING_ASSISTANT = "tiling-assistant@leleat-on-github"
+TILING_SHELL = "tilingshell@ferrarodomenico.com"
 BLUR = "blur-my-shell@aunetx"
 HIDE = "hidetopbar@mathieu.bidon.ca"
+INTELLIBAR = "intellibar@nightbloom.local"
 PANEL_BLUR = "org.gnome.shell.extensions.blur-my-shell.panel:blur"
 
 
-def test_the_four_known_either_or_pairs_are_all_here():
+def test_the_known_either_or_pairs_are_all_here():
     pairs = {conflict.pair for conflict in CONFLICTS}
     assert frozenset({DOCK, PANEL}) in pairs
     assert frozenset({"clipboard-indicator@tudmotu.com", "clipboard-history@alexsaveau.dev"}) in pairs
@@ -34,9 +38,28 @@ def test_the_four_known_either_or_pairs_are_all_here():
 
 
 def test_a_pair_reads_the_same_from_either_side():
-    assert conflicts_with(DOCK) == [PANEL]
-    assert conflicts_with(PANEL) == [DOCK]
+    assert conflicts_with(DOCK) == [PANEL, UBUNTU_DOCK]
+    assert conflicts_with(PANEL) == [DOCK, UBUNTU_DOCK]
     assert conflicts_with("caffeine@patapon.info") == []
+
+
+# -- add-ons the distribution turned on before the user arrived ------------
+
+
+def test_the_dock_ubuntu_ships_is_seen_as_a_second_dock():
+    """It is a fork of Dash to Dock and it is already on. Two docks, silently."""
+    assert conflicts_with(UBUNTU_DOCK) == [DOCK, PANEL]
+
+
+def test_two_docks_on_an_ubuntu_desktop_are_reported():
+    found = active_conflicts([UBUNTU_DOCK, DOCK])
+    assert [conflict.pair for conflict in found] == [frozenset({UBUNTU_DOCK, DOCK})]
+
+
+def test_the_preinstalled_tiler_is_seen_as_a_second_tiler():
+    assert conflicts_with(TILING_ASSISTANT) == [TILING_SHELL]
+    found = active_conflicts([TILING_ASSISTANT, TILING_SHELL])
+    assert [conflict.pair for conflict in found] == [frozenset({TILING_ASSISTANT, TILING_SHELL})]
 
 
 def test_both_being_on_is_reported_once():
@@ -82,6 +105,29 @@ def test_the_hazard_is_quiet_when_only_one_add_on_is_on():
 def test_with_nothing_to_check_against_the_warning_still_shows():
     """Warning without evidence beats silence without evidence."""
     assert len(active_hazards([BLUR, HIDE])) == 1
+
+
+def test_the_other_top_bar_that_hides_breaks_capture_the_same_way():
+    """NIGHTBLOOM's own auto-hiding top bar. Same job, different name.
+
+    Its data files pin the top-bar blur off because of exactly this, so the
+    running app not seeing the combination was the app knowing less than the
+    files it ships.
+    """
+    hazards = active_hazards([BLUR, INTELLIBAR], is_true=lambda descriptor: descriptor == PANEL_BLUR)
+    assert len(hazards) == 1
+    assert "screen recording" in hazards[0].explain
+
+
+def test_the_other_top_bar_is_quiet_when_the_blur_is_off():
+    assert active_hazards([BLUR, INTELLIBAR], is_true=lambda _descriptor: False) == []
+
+
+def test_every_top_bar_that_hides_is_paired_with_the_blur():
+    from gtheme.panels.conflicts import TOP_BAR_HIDERS
+
+    paired = {uuid for hazard in HAZARDS for uuid in hazard.uuids if uuid != BLUR}
+    assert paired == set(TOP_BAR_HIDERS)
 
 
 # -- pairs that come from panel files --------------------------------------

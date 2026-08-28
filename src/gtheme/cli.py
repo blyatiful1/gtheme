@@ -12,6 +12,11 @@ Three subcommands, and only three:
 
 ``validate <dir>``
     For people authoring a Look: check a preset folder and print what's wrong.
+
+Whichever of the three runs, the log file and the crash hooks are set up first
+(:mod:`gtheme.core.applog`) — including for ``rescue``, which is the one people
+run when something has already gone wrong. That import is stdlib-only, so it
+cannot cost the rescue path its independence from PyGObject.
 """
 
 from __future__ import annotations
@@ -21,6 +26,7 @@ import sys
 from collections.abc import Sequence
 
 from . import __version__
+from .core import applog
 
 #: Returned when a subcommand exists but its implementation has not landed yet.
 #: Distinct from 1 (real failure) so scripts can tell the two apart.
@@ -81,12 +87,20 @@ _COMMANDS = {"gui": _cmd_gui, "rescue": _cmd_rescue, "validate": _cmd_validate}
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
-    handler = _COMMANDS[args.command or "gui"]
+    command = args.command or "gui"
+    log = applog.start()
+    # The command name and the version, never the arguments: a Look folder path
+    # is a path, but it is still somebody's home directory.
+    log.info("gtheme %s: %s", __version__, command)
+    handler = _COMMANDS[command]
     try:
-        return handler(args)
+        result = handler(args)
     except NotImplementedError as exc:
+        log.error("%s is not finished yet: %s", command, exc)
         print(f"gtheme: this is not finished yet — {exc}", file=sys.stderr)
         return EXIT_NOT_IMPLEMENTED
+    log.info("%s finished with %s", command, result)
+    return result
 
 
 if __name__ == "__main__":  # pragma: no cover

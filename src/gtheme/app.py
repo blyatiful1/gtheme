@@ -25,12 +25,15 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 
-from . import APP_ID  # noqa: E402
+from . import APP_ID, __version__  # noqa: E402
+from .core import applog  # noqa: E402
 from .prefs import Prefs  # noqa: E402
 from .ui import onboarding  # noqa: E402
 from .window import Window  # noqa: E402
 
 __all__ = ["Application", "run"]
+
+_log = applog.logger(__name__)
 
 
 class Application(Adw.Application):
@@ -75,6 +78,13 @@ def _present_onboarding(window: Window) -> bool:
 
 def run(argv: list[str] | None = None) -> int:
     """Open the app. Returns the process exit code."""
+    # Before anything graphical: a GTK signal handler that raises prints its
+    # traceback through sys.excepthook, and the launcher sets Terminal=false,
+    # so without this the traceback goes to a console nobody is watching.
+    applog.start()
+    _log.info("opening gtheme %s", __version__)
     Adw.init()
     Gtk.init()
-    return Application().run(argv or [])
+    code = Application().run(argv or [])
+    _log.info("the app closed with %s", code)
+    return code

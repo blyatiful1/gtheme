@@ -8,7 +8,31 @@ loud error at load time rather than a row that quietly does nothing.
 The data lives in the repository during development and beside the package once
 installed, so the search order is: an explicit argument, then
 ``GTHEME_DATA_DIR``, then the repository checkout this module was imported
-from, then the installed share directories.
+from, then the share directory of the prefix this interpreter is running out
+of, then the per-user share directory, then the system ones. The last three are
+all "installed" and they are three different places: ``pip install .`` into a
+virtual environment puts the corpus at ``<venv>/share/gtheme``, ``pip install
+--user`` puts it under ``XDG_DATA_HOME``, and only a distribution package puts
+it anywhere ``XDG_DATA_DIRS`` names. Searching only the last of those meant an
+ordinary non-editable install found no corpus at all and rendered thirteen of
+fifteen pages blank without saying why.
+
+Existing is not the same as being a corpus, and the difference is the whole
+point of searching more than one place. ``~/.local/share/gtheme`` is a
+directory other things live in — a gtheme v1 left one behind holding nothing
+but ``assets/`` and ``themes/`` — so accepting it because it is a directory
+shadowed the distribution's own copy at ``/usr/share/gtheme`` and produced
+exactly the same thirteen blank pages, with ``problems`` empty and nothing said
+about why. A candidate therefore has to hold ``panels/`` or ``domains/`` before
+it is taken. The two candidates somebody named on purpose — the argument and
+``GTHEME_DATA_DIR`` — are the exception and are taken as given: an override
+quietly passed over in favour of some directory further down the list is worse
+than the empty corpus it was pointed at.
+
+The corpus and the coverage manifest are read once per data directory and kept
+(see :func:`reload`). They are read-only files describing the shipped data, and
+re-parsing forty-four of them on every page build put twenty milliseconds of
+file parsing in front of every navigation, on the thread that draws the window.
 
 Failures are collected, never swallowed: :func:`load_panels` returns what it
 could read *and* a list of sentences naming what it could not, so one bad file
@@ -29,6 +53,7 @@ those questions is a function name.
 from __future__ import annotations
 
 import os
+import sys
 import tomllib
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -36,6 +61,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from ..core.paths import xdg_data_home
 from .descriptor import DomainDescriptor, PanelDescriptor, Row
 
 __all__ = [
@@ -44,12 +70,15 @@ __all__ = [
     "Corpus",
     "captured_keys",
     "data_dir",
+    "data_dir_candidates",
     "floor_ids",
+    "holds_corpus",
     "load_corpus",
     "load_dispositions",
     "load_domains",
     "load_panels",
     "page_rows",
+    "reload",
     "surfaced_ids",
 ]
 
@@ -57,21 +86,78 @@ __all__ = [
 #: running the app from a checkout that is not the one it was imported from.
 DATA_DIR_ENV = "GTHEME_DATA_DIR"
 
+#: ``data/`` of the checkout this module was imported from, if it was imported
+#: from one. Derived from ``__file__`` and therefore fixed for the life of the
+#: process — unlike everything else in the search order, which is read from the
+#: environment on every call. src/gtheme/panels/loader.py -> repository root.
+_CHECKOUT_DATA_DIR: Path = Path(__file__).resolve().parents[3] / "data"
 
-def data_dir(explicit: Path | str | None = None) -> Path | None:
-    """Where ``panels/`` and ``domains/`` live, or None if nowhere does."""
-    candidates: list[Path] = []
+
+def _named_data_dirs(explicit: Path | str | None = None) -> list[Path]:
+    """The candidates somebody named on purpose, in order.
+
+    Kept apart from the rest because they are the ones :func:`data_dir` takes
+    on trust: a person who says where the corpus is has said it, and being
+    quietly overruled by a directory further down the list would leave them
+    reading the wrong data with nothing to see it by.
+    """
+    named: list[Path] = []
     if explicit is not None:
-        candidates.append(Path(explicit))
+        named.append(Path(explicit))
     from_env = os.environ.get(DATA_DIR_ENV)
     if from_env:
-        candidates.append(Path(from_env))
-    # src/gtheme/panels/loader.py -> repository root
-    candidates.append(Path(__file__).resolve().parents[3] / "data")
+        named.append(Path(from_env))
+    return named
+
+
+def data_dir_candidates(explicit: Path | str | None = None) -> list[Path]:
+    """Every place the corpus could be, in the order they are tried.
+
+    Separate from :func:`data_dir` so the search order is a thing that can be
+    read and asserted on, rather than a loop nobody can inspect from outside.
+    """
+    candidates: list[Path] = _named_data_dirs(explicit)
+    candidates.append(_CHECKOUT_DATA_DIR)
+    # The prefix this interpreter is running out of. A plain `pip install .`
+    # into the virtual environment CONTRIBUTING tells you to make lands the
+    # corpus at <venv>/share/gtheme, which no environment variable names.
+    candidates.append(Path(sys.prefix) / "share" / "gtheme")
+    # A per-user install. XDG_DATA_HOME is deliberately not part of
+    # XDG_DATA_DIRS, so it has to be searched on its own — and it comes first
+    # of the two, because a copy the person installed for themselves is meant
+    # to win over the one the distribution installed for everybody.
+    candidates.append(xdg_data_home() / "gtheme")
     data_dirs = os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share"
     candidates.extend(Path(entry) / "gtheme" for entry in data_dirs.split(os.pathsep) if entry)
-    for candidate in candidates:
-        if candidate.is_dir():
+    return candidates
+
+
+def holds_corpus(candidate: Path) -> bool:
+    """Whether a directory is a corpus rather than merely a directory.
+
+    One of ``panels/`` or ``domains/``, not both: a corpus with only one half
+    installed is a packaging fault worth finding, and finding it means loading
+    the half that is there and reporting the rest — not walking past the
+    directory and blaming whatever comes next in the search order.
+    """
+    return (candidate / "panels").is_dir() or (candidate / "domains").is_dir()
+
+
+def data_dir(explicit: Path | str | None = None) -> Path | None:
+    """Where ``panels/`` and ``domains/`` live, or None if nowhere does.
+
+    A candidate has to hold one of those two directories to be taken, because
+    the places searched are shared ones that other things also keep files in;
+    see the module docstring for the leftover that made this necessary. The
+    candidates somebody named — the argument and ``GTHEME_DATA_DIR`` — are
+    taken on trust, whatever is in them.
+    """
+    candidates = data_dir_candidates(explicit)
+    named = len(_named_data_dirs(explicit))
+    for position, candidate in enumerate(candidates):
+        if not candidate.is_dir():
+            continue
+        if position < named or holds_corpus(candidate):
             return candidate
     return None
 
@@ -178,12 +264,58 @@ def load_domains(directory: Path | str | None = None) -> tuple[list[DomainDescri
     return domains, problems  # type: ignore[return-value]
 
 
+# ---------------------------------------------------------------------------
+# what has already been read off disk
+# ---------------------------------------------------------------------------
+#
+# Every cache below is keyed on the data directory the read resolved to, so
+# pointing GTHEME_DATA_DIR somewhere else is not something anybody has to
+# remember to invalidate: a different directory is a different key. Changing a
+# file *inside* a directory already read is the case :func:`reload` exists for,
+# and the only caller of it is a test.
+#
+# The corpus and the manifest describe the shipped data files. They do not
+# change while the app is open, and re-reading them made every page build pay
+# for forty-four TOML files and a seven-hundred-line manifest on the thread
+# that draws the window.
+
+_CORPUS_CACHE: dict[Path | None, Corpus] = {}
+_DISPOSITIONS_CACHE: dict[Path | None, dict[str, str]] = {}
+_SURFACED_CACHE: dict[Path | None, dict[str, list[str]]] = {}
+_PAGE_ROWS_CACHE: dict[tuple[Path | None, str], list[Row]] = {}
+_FLOOR_CACHE: dict[tuple[Path | None, str], list[str]] = {}
+
+
+def reload() -> None:
+    """Forget everything read off disk, so the next read goes back to it.
+
+    For tests that write a descriptor file and then want it seen. Nothing in
+    the app calls this: the corpus it reads is installed data, and a file that
+    changes underneath a running window would be a packaging accident rather
+    than something to keep up with.
+    """
+    _CORPUS_CACHE.clear()
+    _DISPOSITIONS_CACHE.clear()
+    _SURFACED_CACHE.clear()
+    _PAGE_ROWS_CACHE.clear()
+    _FLOOR_CACHE.clear()
+
+
 def load_corpus(directory: Path | str | None = None) -> Corpus:
-    """Both halves of the descriptor corpus in one object."""
+    """Both halves of the descriptor corpus in one object.
+
+    Read once per data directory and kept afterwards, so every caller gets the
+    same :class:`Corpus` back. Treat it as read-only; it is shared.
+    """
     base = data_dir(directory)
+    cached = _CORPUS_CACHE.get(base)
+    if cached is not None:
+        return cached
     panels, panel_problems = load_panels(base / "panels" if base else None)
     domains, domain_problems = load_domains(base / "domains" if base else None)
-    return Corpus(panels=panels, domains=domains, problems=panel_problems + domain_problems)
+    corpus = Corpus(panels=panels, domains=domains, problems=panel_problems + domain_problems)
+    _CORPUS_CACHE[base] = corpus
+    return corpus
 
 
 # ---------------------------------------------------------------------------
@@ -205,8 +337,20 @@ def load_dispositions(directory: Path | str | None = None) -> dict[str, str]:
     raising. A packaging mistake that loses the manifest must show up as pages
     with no rows on them — visibly wrong, and survivable — not as an app that
     refuses to open.
+
+    Read once per data directory and kept afterwards, like the corpus, so the
+    mapping handed back is shared. Treat it as read-only.
     """
     base = data_dir(directory)
+    cached = _DISPOSITIONS_CACHE.get(base)
+    if cached is not None:
+        return cached
+    given = _read_dispositions(base)
+    _DISPOSITIONS_CACHE[base] = given
+    return given
+
+
+def _read_dispositions(base: Path | None) -> dict[str, str]:
     if base is None:
         return {}
     path = base / "domains" / COVERAGE_FILENAME
@@ -232,8 +376,14 @@ def surfaced_ids(page_id: str, dispositions: dict[str, str] | None = None) -> li
     """
     from ..ui import registry
 
-    given = load_dispositions() if dispositions is None else dispositions
-    return registry.resolve_surfaced(given).get(page_id, [])
+    if dispositions is not None:
+        return registry.resolve_surfaced(dispositions).get(page_id, [])
+    base = data_dir()
+    resolved = _SURFACED_CACHE.get(base)
+    if resolved is None:
+        resolved = registry.resolve_surfaced(load_dispositions())
+        _SURFACED_CACHE[base] = resolved
+    return list(resolved.get(page_id, []))
 
 
 def page_rows(
@@ -251,7 +401,27 @@ def page_rows(
 
     Keys dispositioned ``floor`` have no hand-written row and are therefore not
     returned here; :func:`floor_ids` is the other half.
+
+    A ``corpus`` handed in is used as given and nothing is read off disk for
+    it. The plain call — no corpus, no dispositions — is answered from the
+    cache after the first time, because fifteen pages asking the same question
+    of the same read-only files is one question.
     """
+    if corpus is not None or dispositions is not None:
+        return _select_page_rows(page_id, corpus, dispositions)
+    key = (data_dir(), page_id)
+    cached = _PAGE_ROWS_CACHE.get(key)
+    if cached is None:
+        cached = _select_page_rows(page_id, None, None)
+        _PAGE_ROWS_CACHE[key] = cached
+    return list(cached)
+
+
+def _select_page_rows(
+    page_id: str,
+    corpus: Corpus | None,
+    dispositions: dict[str, str] | None,
+) -> list[Row]:
     wanted = set(surfaced_ids(page_id, dispositions))
     if not wanted:
         return []
@@ -270,10 +440,28 @@ def floor_ids(
     Sorted, because nobody authored an order for them: they are whatever the
     desktop happens to have that gtheme has not written a control for, and a
     stable alphabetical order is the only honest one.
+
+    Cached on the same terms as :func:`page_rows`: a handed-in corpus is used
+    as given, the plain call is answered from the cache.
     """
     from ..ui import registry
 
     target = registry.FLOOR_PAGE_ID if page_id is None else page_id
+    if corpus is not None or dispositions is not None:
+        return _select_floor_ids(target, corpus, dispositions)
+    key = (data_dir(), target)
+    cached = _FLOOR_CACHE.get(key)
+    if cached is None:
+        cached = _select_floor_ids(target, None, None)
+        _FLOOR_CACHE[key] = cached
+    return list(cached)
+
+
+def _select_floor_ids(
+    target: str,
+    corpus: Corpus | None,
+    dispositions: dict[str, str] | None,
+) -> list[str]:
     loaded = corpus if corpus is not None else load_corpus()
     authored = {row.id for row in loaded.rows}
     return sorted(d for d in surfaced_ids(target, dispositions) if d not in authored)

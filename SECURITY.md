@@ -84,9 +84,19 @@ changes that.
 
 What gtheme does about it:
 
-- **Installing goes through GNOME's own confirmation box.** gtheme asks the
-  desktop to install an add-on; the desktop shows you its own dialog, naming
-  the add-on, and you approve it there. gtheme cannot install one behind that.
+- **Nothing is installed unless you ask for it, and it can only come from one
+  place.** There are two ways an add-on arrives, and they are not the same.
+  Adding one from the Add-ons page asks the desktop to do it: GNOME shows you
+  its own confirmation box, naming the add-on, and gtheme cannot install one
+  behind that box. Adding the add-ons a Look asks for works differently —
+  gtheme downloads them itself from extensions.gnome.org and hands each one to
+  the desktop's own installer program, with **no** GNOME confirmation box in
+  between. On that path the button you press is the confirmation: nothing is
+  fetched until you press it, extensions.gnome.org is the only address gtheme
+  ever downloads an add-on from, and a Look can therefore only ask for add-ons
+  that are already published there. What that button cannot yet do is name the
+  add-ons it is about to fetch — it says how many; naming them is being fixed,
+  and until it is, the Add-ons page is where you can look each one up first.
 - **A Look never carries add-on code.** It can name an add-on it would like,
   and gtheme offers to fetch that add-on from extensions.gnome.org — the same
   place GNOME's own website installs from. A Look that names a private add-on
