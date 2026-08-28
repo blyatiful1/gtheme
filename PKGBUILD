@@ -42,7 +42,7 @@ makedepends=('python-build' 'python-installer' 'python-wheel' 'python-hatchling'
 # glib-compile-schemas binaries the dconf tier needs.
 checkdepends=('python-pytest' 'dbus')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('278132b5157be7f6887fea5d350478a89a219285c9271f2358a0c26dbf0013d5')
+sha256sums=('4f9f4a68691497a584dc3ea3a403c385faf07e1027c108ac2a597cd4bd7aa70e')
 
 build() {
   cd "$pkgname-$pkgver"
