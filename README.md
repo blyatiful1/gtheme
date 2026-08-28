@@ -71,8 +71,11 @@ the app itself will not open. And nothing here can be broken so badly that the
 - [What is this?](#what-is-this)
 - [What you need](#what-you-need)
 - [Install](#install)
+- [Keeping it up to date](#keeping-it-up-to-date)
 - [The first time you open it](#the-first-time-you-open-it)
 - [What's in the app](#whats-in-the-app)
+- [Accessibility: getting around without a mouse, or without seeing the screen](#getting-around-without-a-mouse-or-without-seeing-the-screen)
+- [Troubleshooting: when something is not working](#when-something-is-not-working)
 - [Questions people ask](#questions-people-ask)
 - [Words you might not know](GLOSSARY.md)
 - [For people who want to help](#for-people-who-want-to-help)
@@ -84,7 +87,7 @@ the app itself will not open. And nothing here can be broken so badly that the
 | **A GNOME desktop, version 49 or 50** | This is the desktop Fedora, Ubuntu and Arch ship by default. If your screen has a bar across the very top with a clock in the middle, that is probably GNOME. gtheme checks when it starts and says so plainly if it is somewhere else — it never half-works. |
 | **libadwaita 1.9 or newer** | One of the building blocks GNOME itself is made of. GNOME 49 and 50 both include it; there is nothing separate to install. On an older GNOME the window will not open, and gtheme tells you that instead of misbehaving. |
 | **Python 3.11 or newer** | Already on every desktop Linux system in use today. |
-| **About 60 MB of disk space** | Three quarters of that is the pictures the four built-in Looks use. |
+| **About 60 MB of disk space** | Three quarters of that is the pictures the six built-in Looks use. |
 | **English** | Everything *inside* the window is English only today — every label, every explanation, every warning — and there is no translation machinery behind it yet: no language files, nothing for a translator to fill in. The one part that is already translated is how you find the app: the launcher entry and the software-store listing carry German, Brazilian Portuguese, Spanish and French names, descriptions and search words, so typing "Thema", "aparência", "fondo de pantalla" or "apparence" turns gtheme up in your applications list. That is a plain statement of what it is, not a hint that the app itself is coming in your language next month. If you would like it in yours, [say so in an issue](https://github.com/blyatiful1/gtheme/issues) — translations are welcome, and knowing somebody is waiting is what decides when the groundwork gets built. |
 
 gtheme does **not** need an internet connection to change anything on your
@@ -166,6 +169,39 @@ archive instead. It is the one an AUR package would use, and it is waiting on
 the first version 2 release tag — until that tag exists it cannot download
 anything, so use `PKGBUILD-git`.
 
+## Keeping it up to date
+
+gtheme never updates itself, and nothing in it phones home to see whether a new
+version exists. Updating is you doing the same thing you did to install it.
+
+**Installed the easy way.** Download the new ZIP, unpack it over the same
+folder (or unpack it fresh and delete the old folder afterwards), then run the
+installer again from that folder:
+
+```sh
+./install.sh
+```
+
+Running it a second time is safe and is the intended way to update. It reuses
+the private folder it made last time — rebuilding it only if your system's
+Python changed underneath it — repoints the `gtheme` command at the folder you
+just ran it from, and rewrites the app-list entry. **Keep the folder.** gtheme
+runs *out of* it: deleting it after installing breaks the command and the
+launcher.
+
+**Installed with `makepkg`.** Pull and rebuild:
+
+```sh
+git pull
+makepkg -si -p PKGBUILD-git
+```
+
+**What an update does to your desktop: nothing.** Your saved moments, the
+"Before gtheme" record and the ownership ledger live in
+`~/.local/state/gtheme/v2/`, outside both the program folder and the package,
+so they survive an update, a reinstall and a removal. A new version reads the
+same records the old one wrote.
+
 ## The first time you open it
 
 The first time — and only the first time — gtheme shows four short cards.
@@ -213,8 +249,10 @@ app can tell you. The two safety buttons live here too.
 ![The Looks page showing large picture tiles for the built-in Looks, each with a title, a Built-in badge and a description](docs/media/screenshots/looks-dark.png)
 
 A Look changes your background, colours, icons, text and add-ons all at once.
-Four are built in — HYPERCLASS, MAGMA, NETRUNNER and NIGHTBLOOM — and **Get
-more** lists what the community has published.
+Six are built in — DAYBREAK, HEARTH, HYPERCLASS, MAGMA, NETRUNNER and
+NIGHTBLOOM — and **Get more** lists what the community has published. DAYBREAK
+and HEARTH are the two light ones, and they use only what a stock GNOME desktop
+already has: no add-ons, nothing to download.
 
 Clicking one does not apply it. It opens a dialog that says, in your words,
 what is about to change ("Wallpaper, highlight colour, icons, and 3 add-ons").
@@ -226,6 +264,12 @@ button in it.
 You can also save your own desktop as a Look and share it. gtheme scans what it
 captured for anything private — your username in a file location, a key some
 add-on stored — and shows you what it found before you send it anywhere.
+
+A Look is nothing mysterious once you have one: a folder with a `theme.toml`
+file in it and the pictures it uses beside it, kept in
+`~/.local/share/gtheme/v2/themes`. You can open it, read it and edit it in any
+text editor; `gtheme validate <folder>` checks one over before you share it;
+and [docs/preset-format.md](docs/preset-format.md) explains every field.
 
 ### Change one thing
 
@@ -424,6 +468,103 @@ desktop?](#will-this-break-my-desktop) — the first time gtheme changes any
 setting or file it writes down what was there, and `gtheme rescue` puts all of
 it back, however many Looks you try afterwards.
 
+## Getting around without a mouse, or without seeing the screen
+
+This is the accessibility section, and it is an honest one rather than a
+reassuring one: some of this is done, some of it is not, and the difference is
+written down here so you can decide before you install rather than after.
+
+**What works today.**
+
+| | |
+|---|---|
+| **The keyboard** | Every page is reachable from the keyboard. **Ctrl+?** opens the list of every key gtheme answers — the same window every GNOME app opens on that key. **F6** puts the keyboard into the list of pages on the left, which on a narrow window means showing that list first. **Ctrl+F** searches every setting in the app by name, and Enter takes you to the control itself. **Ctrl+Z** undoes the last change gtheme made. |
+| **Pictures have words** | Every picture the app shows — your background on the Home page, the tiles on Wallpaper, Icons & Pointer and Looks — carries a description for a screen reader, naming what it is a picture *of* rather than "image". |
+| **A Look is told not to take your settings away** | If you have high contrast on, larger text, or animations turned off, and a Look would write over one of those, the preview says so in words **before** anything happens. It is one of the lines in the "here is what is about to change" dialog, not a footnote afterwards. |
+| **Colours that cannot be read are caught** | `gtheme validate` checks a Look's colours against the WCAG contrast ratio and warns about pairs that are not a mood but a mistake. |
+| **The window fits your screen** | gtheme opens at a size that fits the space your desktop actually gives it, rather than a fixed size that can put its buttons off the bottom of a small or scaled screen. |
+
+**What is missing, plainly.**
+
+- gtheme has not been tested with **Orca**, GNOME's screen reader. Widgets are
+  built out of libadwaita's own rows, which carry their names and roles for
+  free, so much of it should work — but "should" is not "was tried", and it
+  would be dishonest to print anything stronger here.
+- The app is **English only**, with no translation machinery behind it yet. See
+  the English row under [What you need](#what-you-need).
+- There is no high-contrast styling of gtheme's own window beyond what GNOME
+  gives every app.
+
+If you use one of these and something is wrong,
+[an issue](https://github.com/blyatiful1/gtheme/issues) naming the tool and what
+happened is worth more than any amount of guessing on this side.
+
+## When something is not working
+
+Recovery is at the [top of this file](#-something-looks-wrong-put-it-back).
+This is the troubleshooting section — the step before recovery, where you find
+out what actually happened.
+
+**1. What did gtheme actually do?** Open the app, then the menu in the top
+right (☰) → **Copy details for a bug report**. That puts on your clipboard: the
+gtheme version, your GNOME and libadwaita versions, your Python version, and
+the last 40 lines of gtheme's own log. No setting values, no file contents,
+nothing about your desktop beyond its version numbers — it is written to be
+safe to paste into a public issue.
+
+**2. The log itself.** `~/.local/state/gtheme/v2/gtheme.log`, plain text, and
+everything gtheme does goes into it including `gtheme rescue`. To get more
+detail out of a run that misbehaves:
+
+```sh
+GTHEME_LOG_LEVEL=DEBUG gtheme
+```
+
+**3. The app will not open at all.** Run it from a terminal — `gtheme` — and
+read what it prints. Two answers are common and neither is a bug: your GNOME is
+older than 49 (gtheme says so and stops, rather than half-working), or the
+window opened on a desktop that is not GNOME.
+
+**4. "Permission denied".** Nothing gtheme does needs `sudo`, and it never asks
+for it, so a permission error is almost always one of these:
+
+- **`./install.sh` says `Permission denied`** — the downloaded file is not
+  marked runnable, which is what unpacking a ZIP often does. Either
+  `chmod +x install.sh` and run it again, or run it without the mark:
+  `bash install.sh`.
+- **`gtheme: command not found`** — a different problem with a similar feel:
+  `~/.local/bin` is not in your `PATH`. The installer says so at the end and
+  prints the line to add; logging out and back in fixes it on most systems.
+- **A control says the change was refused** — your settings store is
+  locked (some managed or corporate desktops do this with a *dconf lock*).
+  gtheme shows the row's real value again and says the change did not happen,
+  rather than showing you a switch that lies. It cannot get past that lock and
+  will not pretend to.
+- **A Look will not write a file** — a folder somewhere in the destination is
+  read-only, or is a symbolic link into a place gtheme will not write. The
+  whole Look is rolled back and the reason names the file.
+
+**5. Checking a Look before blaming the app.** If it is a Look you wrote or
+downloaded:
+
+```sh
+gtheme validate ~/dotfiles/my-look
+```
+
+It reads `theme.toml`, prints every mistake the format does not allow — each
+one naming the field it is in — and warns about colour pairs nobody could read
+against each other, all without changing anything. What a Look is allowed to
+contain, field by field, is
+[docs/preset-format.md](docs/preset-format.md).
+
+For "this Look asks for an icon set this computer does not have", open the Look
+in the app instead: the preview dialog says so before it applies, which is a
+check that needs your actual desktop and so cannot be done from a file alone.
+
+**6. Still wrong?** [Open an
+issue](https://github.com/blyatiful1/gtheme/issues) with the details from step
+1 pasted in.
+
 ## Questions people ask
 
 ### Will this break my desktop?
@@ -438,16 +579,18 @@ Not permanently, and it is designed so that it cannot.
 - **Changes are all-or-nothing.** If any step of applying a Look fails, the
   whole thing is rolled back. gtheme never leaves you with a half-changed
   desktop.
-- **The first record is never overwritten.** The first time a Look changes
+- **The first record is never overwritten.** The first time gtheme changes
   anything it writes down what was there and never writes over that note,
-  however many Looks you try afterwards — so `gtheme rescue` a year later still
-  puts back what this computer looked like before the first Look was applied.
-  Single settings you change by hand on one of the individual pages
-  (Background, Fonts, Terminal and the rest) do not go into that first record
-  yet, so `gtheme rescue` cannot put those back. A restore point does cover
-  them: **Undo & Restore Points** saves every setting gtheme knows how to
-  change, so a moment saved before an afternoon of tweaking takes you back to
-  it.
+  however many changes you make afterwards — so `gtheme rescue` a year later
+  still puts back what this computer looked like before gtheme first touched
+  it. That record is not only about Looks: a switch you flip by hand on one of
+  the individual pages (Background, Colours & Style, Fonts, Terminal and the
+  rest) is written down the same way, before it takes effect, and comes back
+  with everything else. A saved moment is still the more thorough route, and
+  for a different reason: **Undo & Restore Points** captures every setting
+  gtheme knows how to change, not only the ones something has touched, so a
+  moment saved before an afternoon of tweaking takes you back to exactly that
+  afternoon rather than to the day you installed the app.
 - **Looks cannot run programs.** See [SECURITY.md](SECURITY.md).
 
 The honest limits: a badly-behaved *add-on* — third-party code, published by
@@ -463,14 +606,13 @@ Yes. Do it in this order — the first step is the one that matters.
 
 **1. Put your desktop back first.** Open **Undo & Restore Points** and go back
 to the moment you want — that is the thorough route, because a saved moment
-covers every setting gtheme knows how to change, including ones you changed by
-hand on an individual page. `gtheme rescue` in a terminal is the route that
-needs no window: it returns everything *a Look* applied — settings and files
-alike — to how it was before the first Look touched it, and switches off every
-add-on gtheme switched on. Page-by-page edits are not in that record yet, so
-finish with a restore point if you made any. Do this *before* removing
-anything, because removing the app takes away the only thing that can read
-those records.
+covers every setting gtheme knows how to change, whether or not anything has
+touched it. `gtheme rescue` in a terminal is the route that needs no window: it
+returns everything gtheme changed — settings and files alike, a whole Look and
+a switch you flipped by hand on a page — to how it was before gtheme first
+touched it, and switches off every add-on gtheme switched on. Do this *before*
+removing anything, because removing the app takes away the only thing that can
+read those records.
 
 **2. Then remove it.**
 
@@ -549,6 +691,61 @@ Because it would not do anything, and gtheme would rather tell you than let you
 press it. Every greyed-out control carries the reason: the add-on that owns it
 is switched off, the program is not installed, or another setting has to change
 first.
+
+### Why do some of my apps still look wrong?
+
+Almost always because they are **Flatpaks or Snaps**, and that is a boundary
+gtheme cannot cross — nor should it.
+
+A Look changes how apps look by writing `~/.config/gtk-4.0/gtk.css`,
+`~/.config/gtk-3.0/gtk.css` and sometimes a theme folder under
+`~/.local/share/themes/`, and by setting your icon theme and font. An ordinary
+app reads all of that. A Flatpak or a Snap runs in a container that deliberately
+cannot see those files: the Flatpak has its own private `~/.var/app/…/config`,
+and a Snap sees only the themes shipped inside the `gtk-common-themes` snap. So
+the same button is one colour in your text editor and another in the Flatpak
+one, with nothing anywhere saying why. Ubuntu ships a good number of Snaps
+preinstalled, which is why this bites hardest there.
+
+gtheme does not reach into either sandbox, because doing so means punching
+holes in a security boundary somebody else set up on purpose. If you want to
+punch one anyway, that is Flatpak's own job and it is one command per thing you
+want visible:
+
+```sh
+flatpak override --user --filesystem=xdg-config/gtk-4.0:ro
+flatpak override --user --filesystem=xdg-config/gtk-3.0:ro
+flatpak override --user --filesystem=xdg-data/themes:ro
+flatpak override --user --filesystem=xdg-data/icons:ro
+```
+
+Read `man flatpak-override` before running them; `--user` makes them yours
+rather than the system's, and `:ro` makes them read-only. Snap has no
+equivalent for a theme you installed yourself. Neither is something gtheme can
+undo for you, so neither is something gtheme does.
+
+### I changed something in GNOME's own Settings — which one wins?
+
+Whichever moved last, because there is nothing to fight over: gtheme and
+GNOME's Settings write **the same settings**, in the same place. gtheme has no
+private copy of your desktop's configuration and no daemon reapplying anything
+behind you.
+
+What that means in practice:
+
+- Change your highlight colour in GNOME Settings while gtheme is open and the
+  gtheme window updates itself as you watch. It subscribes to every setting on
+  a page you have opened, and refreshes that control rather than leaving a
+  stale value on screen.
+- Change it in gtheme and GNOME's Settings shows the new value next time you
+  open it, for the same reason.
+- Nothing is "locked" by gtheme. Applying a Look does not stop you changing any
+  of it afterwards, from anywhere.
+
+The one thing gtheme knows that Settings does not is *what it changed and what
+was there before*. That is the whole ownership ledger and the first-touch
+record: change something in GNOME's Settings and nothing writes it down, so
+nothing can put it back. Change it in gtheme and both are true.
 
 ### Can I use it on Ubuntu or Fedora?
 

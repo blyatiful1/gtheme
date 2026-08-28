@@ -47,10 +47,12 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
 
+from ..core.backends import is_missing  # noqa: E402
 from ..core.settings_backend import BackendError, SettingsBackend  # noqa: E402
 from ..ui.widgets.recording import WriteRefused, reason_for, recording  # noqa: E402
 from ..ui.widgets.rows import (  # noqa: E402
     RowBuildError,
+    clear_refusal,
     key_for,
     register_kind,
     report_refusal,
@@ -457,10 +459,18 @@ def build_effect_picker(
                 continue
             try:
                 recorder.set(key_of(name), "true" if name == chosen else "false")
-            except BackendError:
+            except BackendError as exc:
                 # An effect this version of the add-on does not have is not a
-                # reason to abandon the rest of the change.
-                continue
+                # reason to abandon the rest of the change — but only that.
+                # A write the desktop *refused* (a locked dconf profile, a
+                # read-only store) is true of all twenty-six keys, and
+                # swallowing it left the row showing a choice that never
+                # happened (review-report M7).
+                if is_missing(exc):
+                    continue
+                refresh()
+                report_refusal(widget, reason_for(exc))
+                return
             except WriteRefused as exc:
                 # This one is not per-effect: the lock is held by an apply, or
                 # nothing can be written down first. It is true of all
@@ -469,6 +479,7 @@ def build_effect_picker(
                 refresh()
                 report_refusal(widget, reason_for(exc))
                 return
+        clear_refusal(widget)
 
     refresh()
     widget.connect("notify::selected", on_selected)

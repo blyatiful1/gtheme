@@ -338,7 +338,7 @@ Nothing is dropped silently.
   entry". Each one is named in the preview before anything happens.
 - Hide a file that can start a program inside a count. A Look **may** write a
   program's own settings file whose format can also name a command —
-  `~/.config/starship.toml` is the shipped example, and three of the four
+  `~/.config/starship.toml` is the shipped example, and three of the six
   bundled Looks write it — but every such destination is listed by name in the
   preview instead of being folded into "23 files".
 - Give itself privileges. A `mode` is honoured with the setuid, setgid and

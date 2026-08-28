@@ -61,7 +61,7 @@ file, `src/gtheme/core/policy.py`, so it can be read and argued with.
 The same list has a second half, for a case where refusing would be wrong: a
 Look may theme your command window by writing that program's own settings file,
 and some of those formats can also name a command for that program to run —
-`~/.config/starship.toml` is the example, and three of the four Looks shipped
+`~/.config/starship.toml` is the example, and three of the six Looks shipped
 with gtheme write it. Those are allowed and are **named one by one** in the
 preview, never folded into "23 files". Being able to see them is what makes
 allowing them reasonable.
@@ -72,8 +72,11 @@ to be malicious rather than merely ugly.
 
 **Nothing is silently overwritten through a link.** If the place a file would
 land is a symbolic link into some other project, gtheme replaces the link
-rather than writing through it — and for the specific case of a settings folder
-managed by another tool, it refuses to write at all until you say otherwise.
+rather than writing through it. One card in the app goes further than that:
+the Ghostty terminal card checks whether that program's settings folder belongs
+to another tool and refuses to write until you say otherwise. That check is
+Ghostty's alone today — no other card makes it, and neither does applying a
+whole Look, which is the honest state the app's own page says out loud.
 
 ## Add-ons are a different matter, and we say so
 
@@ -134,7 +137,7 @@ outside your home folder.
 | `~/.local/state/gtheme/v2/` | the record of what your desktop looked like, the list of what gtheme currently owns, which Look is applied, your saved moments, and the lock file that stops two copies changing things at once |
 | `~/.local/state/gtheme.v1-backup/` | a copy of version 1's records, **read-only, always**. It holds the only surviving record of this desktop before gtheme version 1 ever ran, and nothing in version 2 writes to it |
 | `~/.config/gtheme/prefs.json` | the app's own preferences (window size, which one-off notices you have dismissed) |
-| `~/.local/share/gtheme/v2/themes/` | Looks you saved or downloaded. The four that ship with gtheme are not here — they are inside the installed program |
+| `~/.local/share/gtheme/v2/themes/` | Looks you saved or downloaded. The six that ship with gtheme are not here — they are inside the installed program |
 | `~/.local/share/backgrounds/gtheme/` | copies of background pictures you added yourself, so that moving the original later cannot break your desktop |
 | `~/.local/share/gnome-background-properties/gtheme.xml` | the names of those same pictures. This is the desktop-wide list every wallpaper picker on the machine reads, GNOME's own included, and writing there on purpose is what makes a picture you chose findable outside this app. The file holds names and file paths and nothing else |
 | `~/.cache/gtheme/ego/` | the last few answers from extensions.gnome.org, so the Add-ons page does not re-ask for the same list. Deleting it costs nothing |

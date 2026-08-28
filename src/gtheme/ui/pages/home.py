@@ -22,6 +22,7 @@ here.
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -32,7 +33,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw, Gdk, Gtk  # noqa: E402
+from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
 
 from ...core.backends import get_backend, has_session_bus  # noqa: E402
 from ...core.gvariant import unquote as unquote_variant  # noqa: E402
@@ -117,6 +118,10 @@ COPY: dict[str, str] = {
     "unknown": "Not set",
     "unreadable": "Could not read this one",
     "addons-unavailable": "Can't check right now",
+    # Shown while the answer is still being fetched. Counting the add-ons means
+    # asking GNOME, and GNOME can take its time — so the row says what it is
+    # doing instead of the window waiting for it (review-report M26).
+    "addons-checking": "Counting…",
     "link-looks": "Pick a whole look",
     "link-looks-subtitle": "Background picture, colours, icons and add-ons, all at once.",
     "link-wallpaper": "Change the background picture",
@@ -229,9 +234,19 @@ def addon_summary(shell: Any | None = None) -> str:
 
 
 def _load_extensions(shell: Any | None) -> dict[str, Any] | None:
-    """The installed add-ons, or None when the desktop cannot be asked."""
+    """The installed add-ons, or None when the desktop cannot be asked.
+
+    A connection that has already listed once is *read*, not asked again.
+    ``ShellExtensions`` says in its own docstring that it reads the full list
+    once and then follows ``ExtensionStateChanged`` — so its cached map is the
+    live answer, and calling ``load()`` a second time is a ``ListExtensions``
+    round trip on the main loop for information already in hand
+    (review-report M26).
+    """
     if shell is not None:
         try:
+            if getattr(shell, "loaded", False):
+                return shell.all
             return shell.load()
         except Exception:  # noqa: BLE001 - an unavailable desktop is not an error
             return None
@@ -333,6 +348,12 @@ class HomePage(Adw.Bin):
         self.shell = shell
         self.root = root
         self._want_thumbnails = thumbnails
+        #: Whether the add-on count has been asked for yet. The desktop is
+        #: never asked from the constructor — see :meth:`_refresh_addons`.
+        self._addons_asked = False
+        #: The last answer the deferred count delivered, so a later re-read of
+        #: the card shows it rather than going back to "Counting…".
+        self._addons_text: str | None = None
 
         self._page = Adw.PreferencesPage()
         self.set_child(self._page)
@@ -434,7 +455,7 @@ class HomePage(Adw.Bin):
         self._set("icons", summarise_setting(read(self.backend, "icons")))
         self._set("pointer", summarise_setting(read(self.backend, "pointer")))
         self._set("text", summarise_setting(read(self.backend, "text")))
-        self._set("addons", addon_summary(self.shell))
+        self._refresh_addons()
 
         highlight = self._rows.get("highlight")
         if highlight is not None:
@@ -446,6 +467,88 @@ class HomePage(Adw.Bin):
             self._dot = dot
 
         self._load_picture()
+
+    def _refresh_addons(self) -> None:
+        """The add-on line, without a D-Bus round trip in the constructor.
+
+        Counting add-ons means ``ListExtensions``, a blocking call with GDBus's
+        25-second default timeout. Home is the page the window opens first, so
+        doing it here did it inside ``Window.__init__`` — before ``present()``,
+        which is the very freeze review-report M26 is about: the version half
+        was fixed and the count half kept the stall.
+
+        A connection that was handed in is already open and is read straight
+        away; there is nothing slow left in it. With no connection the row says
+        it is counting and the asking is deferred to :meth:`_start_addon_probe`
+        on an idle, so it happens *after* the window is on the screen — and the
+        asking itself is on a worker thread, so a desktop that takes its time
+        does not stop the app from repainting.
+        """
+        if self.shell is not None:
+            self._set("addons", addon_summary(self.shell))
+            return
+        self._set("addons", self._addons_text or COPY["addons-checking"])
+        if self._addons_asked:
+            return
+        self._addons_asked = True
+        GLib.idle_add(self._start_addon_probe)
+
+    def _start_addon_probe(self) -> bool:
+        """Ask the desktop for its add-ons, off the main loop. Runs once."""
+
+        def worker() -> None:
+            answer = self._connect_for_addons()
+
+            def deliver() -> bool:
+                self._addons_found(answer)
+                return GLib.SOURCE_REMOVE
+
+            GLib.idle_add(deliver)
+
+        threading.Thread(target=worker, name="gtheme-addon-count", daemon=True).start()
+        return GLib.SOURCE_REMOVE
+
+    def _connect_for_addons(self) -> Any:
+        """The slow half. No widgets — this runs off the main loop.
+
+        The *window's* connection is the one asked for, not a second one of
+        this page's own: two connections to the same service mean two
+        subscriptions to the same signal and two answers to "is it running",
+        which is how this page and the Add-ons page end up disagreeing.
+        """
+        shell = getattr(self.window, "shell", None)
+        if shell is None:
+            if not has_session_bus():
+                return None
+            try:
+                from ...ego.shelldbus import GDBusShellProxy, ShellExtensions
+
+                shell = ShellExtensions(GDBusShellProxy())
+            except Exception:  # noqa: BLE001 - no desktop to ask: an ordinary state
+                return None
+        # Listing happens *here*, on this thread. The window's connection is
+        # handed back unlisted when the desktop answered with an error, and
+        # leaving it that way would only move the blocking call to the line
+        # where the summary is built.
+        try:
+            if not getattr(shell, "loaded", False):
+                shell.load()
+        except Exception:  # noqa: BLE001 - the same
+            return None
+        return shell
+
+    def _addons_found(self, shell: Any | None) -> None:
+        """Back on the main loop with whatever the desktop said."""
+        if shell is None:
+            # Not remembered as final: the desktop may be there next time the
+            # card is re-read, exactly as it was when this was a plain call.
+            self._addons_asked = False
+            self._addons_text = COPY["addons-unavailable"]
+            self._set("addons", self._addons_text)
+            return
+        self.shell = shell
+        self._addons_text = None
+        self._set("addons", addon_summary(shell))
 
     def _set(self, name: str, text: str) -> None:
         row = self._rows.get(name)
@@ -634,15 +737,25 @@ def header_button(page: HomePage) -> Gtk.Button:
     return button
 
 
-def build(window: Any | None = None, *, shell: Any = None, **kwargs: Any) -> Gtk.Widget:
+def build(window: Any | None = None, **kwargs: Any) -> Gtk.Widget:
     """Factory named by ``ui.registry``: the Home page.
 
-    ``shell`` is named rather than left to ``**kwargs`` because that is how the
-    window knows it can hand one over: it offers what it owns one of, and a
-    factory takes what it names. Left out, the add-on line asks the desktop
-    itself, which is what every test that builds this page relies on.
+    ``shell`` is deliberately **not** named here, and that is load-bearing.
+    ``Window._offer`` hands a factory exactly what it names — so naming
+    ``shell`` made *building* this page build the shared desktop connection,
+    whose ``load()`` is the blocking ``ListExtensions``. Home is the page the
+    window opens first, so that call landed inside ``Window.__init__``, before
+    ``present()``: the second half of review-report M26, left over after the
+    version half was fixed.
+
+    A connection can still be handed in — ``build(window, shell=…)`` and
+    ``HomePage(window, shell=…)`` both work, through ``**kwargs`` — and
+    ``Window.adopt_shell`` still gives the page the window's one when the
+    Add-ons page re-probes. What has gone away is the window *offering* it at
+    construction time. Left out, the add-on line asks for it after the window
+    is on the screen, on a worker thread (:meth:`HomePage._refresh_addons`).
     """
-    return HomePage(window, shell=shell, **kwargs)
+    return HomePage(window, **kwargs)
 
 
 def copy_strings() -> Iterable[tuple[str, str]]:

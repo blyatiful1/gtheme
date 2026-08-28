@@ -287,7 +287,17 @@ COPY: dict[str, str] = {
     # -- the community list
     "browse-loading": "Looking for Looks other people have published…",
     "browse-empty": "Nothing published yet",
-    "browse-empty-body": "Nobody has published a Look yet. Yours could be the first.",
+    # Names where a Look lives and how to check one over. This is the only
+    # place in the app that does, and it was worth saying somewhere: a Look is
+    # an ordinary folder anybody can open, read and edit, and nothing on any
+    # screen used to hint at that (persona-report §3.4, "hard to find").
+    "browse-empty-body": (
+        "Nobody has published a Look yet. Yours could be the first — and a Look "
+        "is nothing mysterious: one folder with a theme.toml file in it, "
+        "alongside the pictures it uses. Your own live in "
+        "~/.local/share/gtheme/v2/themes. Running “gtheme validate” "
+        "with a folder’s name checks it over before you share it."
+    ),
     "browse-failed": "That list isn't available right now",
     "browse-retry": "Try again",
     "browse-here": "Already on this computer",
@@ -2536,7 +2546,7 @@ class LooksPage(Gtk.Box):
         # (``registry.browsable``): a Look nobody can see is a Look nobody
         # should be offered, and a Look that came with the app is not a
         # discovery. Every entry in the published list is bundled today, so
-        # this grid used to show the user four Looks they already had, each
+        # this grid used to show the user six Looks they already had, each
         # badged "Already on this computer", each bouncing them back to the
         # other tab when clicked — and the honest empty state written for this
         # page was unreachable (persona-report §2.2).

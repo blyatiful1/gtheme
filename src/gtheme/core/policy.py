@@ -30,7 +30,7 @@ were each a way past a list that only looked at one of the two (C1, H4).
 
 **CONSEQUENTIAL** — allowed, never anonymous. Real Looks legitimately theme a
 terminal by writing that terminal's own settings file, and those file formats
-can also name a program to run. Three of the four Looks in this repository
+can also name a program to run. Three of the six Looks in this repository
 write ``~/.config/starship.toml``. Refusing them would refuse the shipped
 product; hiding them inside "23 files" is what made C1 possible. So they are
 allowed *and* every one of them is named individually in the plan the user is
@@ -180,7 +180,7 @@ REFUSED_SUFFIXES: dict[str, str] = {
 #: relative to the home folder: an exact match, or a folder prefix plus a set
 #: of endings.
 #:
-#: Derived from what the four Looks in this repository actually write —
+#: Derived from what the six Looks in this repository actually write —
 #: ``starship.toml``, ``alacritty/*.toml``, ``ghostty/config`` and
 #: ``fastfetch/*.jsonc`` are all in the shipped set — plus the same file for
 #: the two other terminals people commonly use. Adding one is a deliberate,
@@ -329,7 +329,7 @@ def file_verdict(dest: str, *, root: str | Path | None = None) -> Verdict:
 #: check what is being written there — so the answer is a list of the trees a
 #: decorative Look has any business in, and a refusal for everything else.
 #:
-#: Derived empirically: every ``dconf:`` key in the four Looks in this
+#: Derived empirically: every ``dconf:`` key in the six Looks in this
 #: repository falls under one of these three, and the curated add-on corpus in
 #: ``data/panels`` addresses its settings through described schemas rather than
 #: raw locations. An add-on that keeps its settings in its own tree (Hanabi is

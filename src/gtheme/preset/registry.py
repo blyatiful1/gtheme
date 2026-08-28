@@ -324,8 +324,8 @@ def fetch_index_async(
 # what the Browse tab may honestly offer
 # ---------------------------------------------------------------------------
 #
-# Today's published index lists exactly the four Looks that ship inside gtheme,
-# so a Browse grid that shows every entry shows the user four Looks they
+# Today's published index lists exactly the six Looks that ship inside gtheme,
+# so a Browse grid that shows every entry shows the user six Looks they
 # already have, each badged "Already on this computer", and clicking one bounces
 # back to the tab they came from. That is worse than an empty grid: an empty
 # grid says nobody has published a Look yet, which is true, and invites them to

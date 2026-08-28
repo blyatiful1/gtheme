@@ -515,7 +515,7 @@ def custom_file_filters() -> Gio.ListStore:
 
     Pictures, and slideshows. The second one was missing and mattered more than
     it sounds: a slideshow is a small file listing pictures and the times of day
-    to show them, three of the four Looks gtheme ships set one, and the picker
+    to show them, three of the six Looks gtheme ships set one, and the picker
     offered ``add_pixbuf_formats()`` only — so the kind of background this app
     hands out was the one kind it would not accept back (persona-report §3.2).
     """

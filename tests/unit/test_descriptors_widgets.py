@@ -655,3 +655,105 @@ def test_an_already_addressed_row_is_never_redirected(bmw_backend, tmp_path):
         }
     )
     assert resolve_row(row, bmw_backend) is row
+
+
+# -- M7, in the picker: a refused write is never silent here either ---------
+
+
+class _RefusingBackend(MemoryBackend):
+    """Reads like any store; refuses every write, the way a locked one does.
+
+    The machine review-report M7 is about: a dconf lock profile, where ``set``
+    raises. The picker used to swallow that per key and keep the new selection.
+    """
+
+    def set(self, key: str, value: str) -> None:
+        from gtheme.core.settings_backend import BackendError, BackendErrorKind
+
+        raise BackendError(BackendErrorKind.COMMIT_FAILED, f"refused {key}", key=key)
+
+
+class _MissingOneBackend(MemoryBackend):
+    """Writes everything except the one key this add-on version does not have."""
+
+    def __init__(self, schema_source: object = None, absent: str = "") -> None:
+        super().__init__(schema_source)
+        self.absent = absent
+
+    def set(self, key: str, value: str) -> None:
+        from gtheme.core.settings_backend import BackendError, BackendErrorKind
+
+        if key.endswith(self.absent):
+            raise BackendError(BackendErrorKind.NO_KEY, f"no key {key}", key=key)
+        super().set(key, value)
+
+
+def _bmw_source():
+    from gi.repository import Gio
+
+    return Gio.SettingsSchemaSource.new_from_directory(
+        str(CORPUS / BMW_UUID / "schemas"), Gio.SettingsSchemaSource.get_default(), False
+    )
+
+
+def _picker_row(bmw_panel):
+    from gtheme.panels.descriptor import WidgetKind
+
+    return next(r for r in bmw_panel.rows if r.kind is WidgetKind.EFFECT_PICKER)
+
+
+@pytest.mark.gtk
+def test_a_refused_effect_choice_goes_back_and_says_why(bmw_panel):
+    """A locked store must not leave the picker showing a choice that never was."""
+    from gtheme.panels.widgets import build_effect_picker
+
+    backend = _RefusingBackend(schema_source=_bmw_source())
+    # Seeded through the parent's writer: the subclass refuses everything, and
+    # the point of the test is a store that already plays one effect.
+    MemoryBackend.set(backend, _effect_key("fire"), "true")
+    row = _picker_row(bmw_panel)
+    widget, _refresh = build_effect_picker(backend, row)
+    before = widget.get_selected()
+
+    labels = widget.get_model()
+    target = next(
+        i for i in range(labels.get_n_items()) if labels.get_string(i) == "Rain of green letters"
+    )
+    widget.set_selected(target)
+
+    assert widget.get_selected() == before, "the row shows what the desktop really plays"
+    assert widget.get_subtitle().startswith("Not changed.")
+
+
+@pytest.mark.gtk
+def test_a_refused_effect_choice_says_it_in_words_a_person_knows(bmw_panel):
+    from gtheme.panels.widgets import build_effect_picker
+
+    backend = _RefusingBackend(schema_source=_bmw_source())
+    widget, _refresh = build_effect_picker(backend, _picker_row(bmw_panel))
+    widget.set_selected(3)
+
+    assert widget.get_subtitle() == "Not changed. Your desktop would not keep the change."
+    assert "refused gsettings" not in widget.get_subtitle(), (
+        "never the settings machinery's own message"
+    )
+
+
+@pytest.mark.gtk
+def test_an_effect_this_version_lacks_still_does_not_stop_the_change(bmw_panel):
+    """The half that was always right: a key the add-on lacks is skipped, quietly."""
+    from gtheme.panels.widgets import build_effect_picker
+
+    backend = _MissingOneBackend(schema_source=_bmw_source(), absent="fire-enable-effect")
+    row = _picker_row(bmw_panel)
+    widget, _refresh = build_effect_picker(backend, row)
+    subtitle = widget.get_subtitle()
+
+    labels = widget.get_model()
+    target = next(
+        i for i in range(labels.get_n_items()) if labels.get_string(i) == "Rain of green letters"
+    )
+    widget.set_selected(target)
+
+    assert backend.get(_effect_key("matrix")).strip() == "true", "the rest of the change landed"
+    assert widget.get_subtitle() == subtitle, "a key that is simply absent is not a refusal"

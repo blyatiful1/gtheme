@@ -112,6 +112,67 @@ def test_the_add_on_row_is_honest_when_the_desktop_cannot_be_asked(window, backe
     assert _subtitles(page)["addons"] == home.COPY["addons-unavailable"]
 
 
+# -- M26: counting add-ons never holds up the window ------------------------
+
+
+def test_building_the_page_never_asks_the_desktop_for_its_add_ons(
+    window, backend, tmp_path, monkeypatch
+):
+    """Home is the first page the window opens, so its constructor is the freeze.
+
+    ``ListExtensions`` is a blocking call with GDBus's 25-second default
+    timeout, and it used to run while ``Window.__init__`` was building this
+    page — before anything was drawn (review-report M26). The count is deferred
+    now: the row says what it is doing and the asking happens on an idle, after
+    the window is up.
+    """
+    from gtheme.ego import shelldbus
+
+    def never(*_a, **_k):
+        raise AssertionError("the desktop was asked while the page was being built")
+
+    monkeypatch.setattr(shelldbus, "GDBusShellProxy", never)
+    page = _page(window, backend, tmp_path)
+    assert _subtitles(page)["addons"] == home.COPY["addons-checking"]
+
+
+def test_the_count_lands_on_the_row_once_the_desktop_has_answered(
+    window, backend, tmp_path
+):
+    class Shell:
+        loaded = True
+        all = {"a": type("E", (), {"is_running": True})()}
+
+    page = _page(window, backend, tmp_path)
+    page._addons_found(Shell())
+    assert _subtitles(page)["addons"] == "1 of 1 switched on"
+
+
+def test_a_desktop_that_never_answered_says_so_rather_than_counting_forever(
+    window, backend, tmp_path
+):
+    page = _page(window, backend, tmp_path)
+    page._addons_found(None)
+    assert _subtitles(page)["addons"] == home.COPY["addons-unavailable"]
+    # And a later re-read of the card keeps the honest answer instead of
+    # dropping back to "Counting…" with nothing on its way.
+    page.refresh()
+    assert _subtitles(page)["addons"] == home.COPY["addons-unavailable"]
+
+
+def test_the_slow_half_borrows_the_windows_connection_rather_than_making_one(
+    window, backend, tmp_path
+):
+    """One connection, or the two pages disagree about what is running."""
+
+    class Shell:
+        loaded = True
+
+    window.shell = Shell()
+    page = _page(window, backend, tmp_path)
+    assert page._connect_for_addons() is window.shell
+
+
 def test_the_first_visit_explainer_shows_once_and_stays_dismissed(window, backend, tmp_path):
     assert window.prefs.should_show_banner(home.BANNER_ID)
     _page(window, backend, tmp_path)

@@ -185,6 +185,79 @@ D3 first-run + a11y + look-value honesty, agents CD4 (+CD5 for U3's fix):
 - [ ] CHANGELOG entry for the whole campaign — still pending; no Wave CD agent touched CHANGELOG.md.
 - [ ] CLOSURE: per-ID adversarial verification of the full diff; ./verify.sh AND ./verify.sh --full (sandbox tier, page walk, screenshot regeneration committed, live-desktop-unchanged canary); final report — this Wave CD integration pass covers the "re-run verify.sh, reconcile per-ID status, re-baseline" portion; `./verify.sh --full` (sandbox tier) and the final closure report are still outstanding and belong to whoever runs the campaign's final closure step.
 
+## Closure gap-fix pass — the four IDs verification found not fully closed
+
+Run after the closure audit re-checked every ID against the final tree. Four
+came back open; all four are closed here, each with a test that fails against
+the tree as it was.
+
+- [x] **M7** (residual) — `panels/widgets.py` `build_effect_picker`'s per-key
+  `except BackendError: continue` swallowed a *refused* write as if it were a
+  missing key, so on a locked settings store the picker kept the new selection,
+  said nothing, and the desktop played the old animation. Now
+  `core.backends.is_missing(exc)` discriminates: an effect this add-on version
+  does not have is still skipped quietly; anything else refreshes the row and
+  reports the refusal once, exactly like the `WriteRefused` arm beside it. A
+  successful run clears a stale refusal (`clear_refusal`). Three tests in
+  `tests/unit/test_descriptors_widgets.py`; the two refusal ones fail against
+  the old code (`assert 18 == 1`, subtitle unchanged), the "missing key is
+  still skipped" one passes both ways on purpose — it guards the fix from
+  over-correcting.
+- [x] **M26** (residual) — the version half was fixed in Wave CD3, but on a
+  fresh machine `Window.__init__` opens **Home**, and building Home read
+  `self.shell` (→ `ListExtensions`, GDBus's 25 s default) *and* built a second
+  connection of its own. Two blocking round trips inside `Window(...)`, before
+  `present()`. Closed in three places: `home.build()` no longer names `shell`,
+  so `Window._offer` stops handing it over at construction time; the add-on
+  line shows "Counting…" and defers the ask to an idle **after** the window is
+  up, doing the listing on a worker thread and borrowing the *window's*
+  connection (not a second one) so the two pages cannot disagree;
+  `ShellExtensions.loaded` lets `addon_summary` read the map the object already
+  keeps live off `ExtensionStateChanged` instead of re-listing. `Window.shell`,
+  `adopt_shell` and `teardown` take a lock, because the property now has a
+  second caller thread. Six tests across
+  `test_window_infra.py`/`test_pages_home_gtk.py`/`test_pages_home_logic.py`;
+  all six fail against the old code. Proven on a real desktop as well: the
+  regenerated `home-light.png` shows "2 of 27 switched on", i.e. the deferred
+  count landed inside a live headless session.
+- [x] **DOCS §3.4** — the six MISSING bullets that were still missing are
+  written: an accessibility section (README "Getting around without a mouse, or
+  without seeing the screen" — honest, including that Orca was never tested), a
+  Flatpak/Snap confinement answer that names the boundary and does not pretend
+  gtheme can cross it, a "which one wins" answer for gtheme vs GNOME Settings,
+  a "Keeping it up to date" section, a "permission denied" answer, and a
+  troubleshooting/diagnosis path (Copy details → the log → `GTHEME_LOG_LEVEL` →
+  `gtheme validate`). HARD TO FIND closed too: `docs/preset-format.md` is now
+  linked from two user-facing sections rather than only from "For people who
+  want to help", and `looks.COPY["browse-empty-body"]` — the empty Get-more
+  state, which is reachable today — names `theme.toml`, the Looks folder and
+  `gtheme validate`. That string passes `ui.jargon.check`.
+- [x] **DOCS-SWEEP** — all six false sentences corrected. (1) README:445-449
+  and :470 claimed page-by-page edits are not in the first-touch record; H3
+  made that false and `install.sh`'s NOTE said the same thing — all three
+  rewritten, and the ledger claim in the uninstall guard is now described as
+  what it does. (2) "four Looks" → six at all six documented sites, plus seven
+  stale code comments saying the same thing (each count re-derived: 3 of 6
+  write `starship.toml`, 3 of 6 set a slideshow, `themes/` is 43 MB).
+  (3) SECURITY.md's foreign-tool refusal is scoped to the Ghostty card, which
+  is the only adapter that computes a `foreign_root`. (4) `architecture.md:62`
+  now names all seven op types and states the one deliberate second writer
+  (`ui/widgets/recording.py`) instead of a sentence that module's own docstring
+  calls false. (5) `:70` credits `onboarding.capture_pristine_point` and
+  `:75` separates the ported derivation maths from the WCAG maths added on top.
+  (6) `testing.md`'s tier sizes re-measured at HEAD (~1,880 / 42 / ~660 / 28).
+- [x] **screenshot blemish** (cosmetic, named in DOCS-SWEEP) — the shipped
+  `looks-dark.png` had GNOME's own "Apps now have unrestricted access" banner
+  across the app's header bar. It is not incidental: the sandbox harness turns
+  on `unsafe_mode` on purpose, and that banner is persistent, so every page
+  walk would reproduce it. Fixed at the source —
+  `SandboxSession.silence_notifications()` turns off banners and destroys the
+  source already up — with a sandbox test asserting the tray is empty during
+  the walk, and the thirty pictures regenerated. `tools/check_screenshots.py`:
+  "30 fresh screenshots, 15 pages, light and dark, all distinct".
+
+Not done, and why: nothing. The four IDs and the cosmetic note are all closed.
+
 **Known gaps carried forward, named and not silently dropped:**
 - U10's picture-only Look tiles (looks.py:1208, :1674) still lack `a11y.name`/`a11y.hide_from_screen_readers` — CD4 flagged this explicitly as a note for whoever owns looks.py; not done by any CD agent.
 - `ExtensionInstaller.describe_batch` (ego/install.py) has no production caller left after CD5 dropped `name_addons` — only a test exercises it now; left in place rather than ripped out mid-review-fix, flagged for a maintainer.
@@ -192,8 +265,8 @@ D3 first-run + a11y + look-value honesty, agents CD4 (+CD5 for U3's fix):
 - fish's `~/.config/fish/fish_variables` remains outside the terminal transaction's own restore point (covered by `gtheme rescue` via the pristine Baseline, not by Undo) — a known, documented asymmetry, not closed this wave.
 - The AS4 "nothing changed" gate is now reachable by an install-only apply (X1-wiring made the installer real); nobody has touched the gate itself.
 - Ghostty's "Take them over" button still moves a directory and writes its own JSON record outside the transaction/ledger system (H8 named `apply`, not the takeover).
-- `docs/architecture.md:62` ("transaction.py is the only path by which anything changes"), `:70` ("Before gtheme" only from the v1 importer — now incomplete after U3) and `:75` (color.py "ported unchanged" — no longer literally true after U10-contrast added functions to it, though `luminance()` itself is untouched) are all stale by small margins; none were in any Wave CD agent's file list.
-- README:216/:87 ("Four are built in") is still wrong (six ship) — pre-existing before Wave CD, not fixed by any CD agent despite three of them editing README.
+- ~~`docs/architecture.md:62`/`:70`/`:75` are stale by small margins~~ — **closed in the closure gap-fix pass above.**
+- ~~README:216/:87 ("Four are built in") is still wrong (six ship)~~ — **closed in the closure gap-fix pass above**, along with the four other doc sites and seven code comments that said the same thing.
 
 ## Deferred (user decision required — not silently dropped)
 - gettext/i18n adoption (U9 ships the honest minimum)

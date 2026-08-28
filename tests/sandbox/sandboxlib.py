@@ -674,6 +674,30 @@ exec sleep {BUS_ONLY_LIFETIME}
         answer = self.shell_eval("Main.overview.hide(); Main.overview.visible")
         return "true" in answer and "'false'" in answer
 
+    def silence_notifications(self) -> bool:
+        """Take the desktop's own banners off the screen before anything is photographed.
+
+        This harness turns on ``unsafe_mode`` on purpose — ``Eval`` and the
+        screenshot call both need it — and GNOME answers that by raising a
+        banner reading "Apps now have unrestricted access". It is not
+        transient: it sat across the app's header bar in a picture shipped in
+        the README (audit closure sweep, DOCS-SWEEP).
+
+        Two moves, because either alone leaves a picture with a banner in it:
+        stop new banners appearing, and destroy the source of the one already
+        up. Both are the session's own settings and the session's own tray —
+        nothing here reaches outside the private bus.
+
+        Returns:
+            Whether the tray is empty afterwards.
+        """
+        self.gsettings("set", "org.gnome.desktop.notifications", "show-banners", "false")
+        answer = self.shell_eval(
+            "Main.messageTray.getSources().forEach(source => source.destroy()); "
+            "Main.messageTray.getSources().length"
+        )
+        return "'0'" in answer
+
     def screenshot(self, path: Path) -> Path:
         """Capture the session to a PNG. Tries both proven routes.
 

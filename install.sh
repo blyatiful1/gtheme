@@ -56,10 +56,9 @@ if [ "$DO_UNINSTALL" -eq 1 ]; then
   # every single thing gtheme is holding, look or no look; an untouched one
   # reads as `{}`, so "has a quoted name in it" is the emptiness test.
   #
-  # NOTE: today the ledger is written by the whole-look path only. The
-  # one-thing-at-a-time pages record their edits in it from a later change
-  # (audit finding H3); until that lands, a desktop changed only from those
-  # pages still reads as clean here.
+  # The one-thing-at-a-time pages write the ledger too (audit finding H3, now
+  # landed), so a desktop changed only from those pages reads as still-applied
+  # here and is not stranded by an uninstall.
   STILL_APPLIED=0
   if [ -s "$STATE_DIR/v2/current.json" ]; then
     STILL_APPLIED=1

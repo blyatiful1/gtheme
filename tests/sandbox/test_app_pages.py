@@ -304,6 +304,9 @@ def walk(
         window = session.wait_for_window("gtheme")
         running.rect = session.wait_for_frame(int(window["id"]))
         session.hide_overview()
+        # The unsafe-mode banner this harness provokes is not transient: it
+        # sat across the app's header bar in a picture shipped in the README.
+        session.silence_notifications()
         # A settle beat so the compositor has painted the frame before anyone
         # photographs it.
         time.sleep(1.5)
@@ -378,6 +381,19 @@ def test_the_pictures_are_of_different_pages(walk: Walk):
         light = (SHOTS / f"{page_id}-light.png").read_bytes()
         dark = (SHOTS / f"{page_id}-dark.png").read_bytes()
         assert light != dark, f"{page_id}: the light and dark pictures are the same file"
+
+
+def test_no_banner_of_the_desktops_own_was_on_top_of_the_pictures(walk: Walk):
+    """Nothing of the session's is over the app in anything shipped in the README.
+
+    This harness turns unsafe mode on, and GNOME answers with a persistent
+    "Apps now have unrestricted access" banner that lands across the app's
+    header bar. It did land there, in `docs/media/screenshots/looks-dark.png`
+    as shipped — a picture of gtheme with somebody else's notice on top of it.
+    """
+    assert walk.session.silence_notifications(), (
+        "a desktop banner was on screen while the pages were photographed"
+    )
 
 
 def test_the_terminal_page_was_not_asked_to_take_anything_over(walk: Walk):

@@ -104,8 +104,8 @@ gtheme fetch it from extensions.gnome.org), or contain anything executable.
 There is no field for the second one and there never will be.
 
 Wallpapers ship in the repository rather than being fetched at apply time —
-one-click Looks beat remote downloads. Keep them to what you need; the four
-bundled Looks are about 40 MB between them and that is the budget.
+one-click Looks beat remote downloads. Keep them to what you need; the six
+bundled Looks are about 43 MB between them and that is the budget.
 
 ## 2. Add a settings row
 

@@ -37,8 +37,8 @@ and the rewrite is said out loud like every other one. Files that are not text
 
 **A saved desktop is a whole Look, not a wallpaper.** For a long time it was
 the wallpaper and nothing else: no ``[[files]]`` beyond the picture and no
-``[palette]`` at all, while the four Looks in this repository ship eighteen to
-twenty files each. Saving your own desktop and then using it therefore left the
+``[palette]`` at all, while the add-on-heavy Looks in this repository ship
+eighteen to twenty files each. Saving your own desktop and then using it therefore left the
 Terminal page permanently blank — it reads its colours from ``[palette]`` — and
 threw away every file gtheme had written to produce the desktop being saved
 (persona-report 2.7). So the capture now also carries:

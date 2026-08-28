@@ -124,6 +124,55 @@ def test_the_version_is_read_without_listing_every_add_on(prefs: Prefs, monkeypa
     assert built._shell_asked is False, "the shared connection must still be unbuilt"
 
 
+def test_the_page_a_fresh_machine_opens_first_lists_nothing_either(
+    prefs: Prefs, monkeypatch
+):
+    """The same promise, on the page the window actually opens (M26, residual).
+
+    The test above presets ``window/last-page``, so it only ever proved the
+    *gate* half. On a machine with no remembered page the first page is Home,
+    whose add-on line asked the desktop while it was being built — two blocking
+    ``ListExtensions`` round trips inside ``Window(...)``, before ``present()``.
+    """
+    from gtheme.core import backends
+    from gtheme.ego import shelldbus
+
+    calls: list[str] = []
+
+    class CountingProxy:
+        def __init__(self, *_a: Any, **_k: Any) -> None:
+            calls.append("proxy")
+
+        def shell_version(self) -> str:
+            return "50.4"
+
+        def list_extensions(self) -> dict[str, Any]:
+            calls.append("ListExtensions")
+            return {}
+
+        def connect_state_changed(self, _handler: Any) -> int:
+            return 1
+
+        def disconnect_state_changed(self, _token: int) -> None:
+            pass
+
+    def never() -> Any:
+        raise AssertionError("the shared connection was built before the window was shown")
+
+    monkeypatch.setattr(backends, "has_session_bus", lambda: True)
+    monkeypatch.setattr(shelldbus, "GDBusShellProxy", CountingProxy)
+    monkeypatch.setattr(window_module, "_connect_shell", never)
+
+    built = Window(prefs, mirror=False)
+
+    assert built._first_page() == "home", "the finding is about the default first page"
+    assert "ListExtensions" not in calls, (
+        "listing the add-ons must not happen while the window is being built"
+    )
+    assert calls == ["proxy"], "the version's bare proxy, and nothing else"
+    assert built._shell_asked is False, "the shared connection must still be unbuilt"
+
+
 def test_a_connection_that_already_exists_is_asked_rather_than_a_second_one(
     prefs: Prefs, monkeypatch
 ):

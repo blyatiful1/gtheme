@@ -39,6 +39,7 @@ import json
 import os
 import platform
 import sys
+import threading
 from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
@@ -385,6 +386,13 @@ class Window(Adw.ApplicationWindow):
         #: on the machine that wrote it than anywhere else.
         self._shell_asked = shell is not None or not ask_desktop
         self._shell_is_ours = shell is None
+        #: The connection is now built from a worker thread as well as from the
+        #: main loop — the Home page's add-on count asks for it off the main
+        #: loop so the window is never held up by ``ListExtensions``
+        #: (review-report M26). Two threads racing the "not asked yet" check
+        #: would build two connections, which is two subscriptions to the same
+        #: signal and one of them leaked.
+        self._shell_lock = threading.Lock()
         #: Kept apart from ``_shell_asked``: the version read below is allowed
         #: to touch the bus without *building* the shared connection, and it
         #: has to know whether it is allowed to touch it at all.
@@ -797,11 +805,16 @@ class Window(Adw.ApplicationWindow):
         Asked for once. A second connection would mean two ``changed``
         subscriptions to the same signal and two answers to "is it running",
         which is how the Add-ons page and the Home page end up disagreeing.
+
+        "Once" is now enforced with a lock rather than by everything happening
+        on the main loop: the Home page asks for this from a worker thread so
+        that counting add-ons cannot hold up the window (review-report M26).
         """
-        if not self._shell_asked:
-            self._shell_asked = True
-            self._shell = _connect_shell()
-        return self._shell
+        with self._shell_lock:
+            if not self._shell_asked:
+                self._shell_asked = True
+                self._shell = _connect_shell()
+            return self._shell
 
     def adopt_shell(self, shell: Any) -> Any:
         """Take a freshly-made desktop connection as the window's shared one.
@@ -821,10 +834,11 @@ class Window(Adw.ApplicationWindow):
         Returns:
             The connection now in force, so a caller can carry on with it.
         """
-        previous, was_ours = self._shell, self._shell_is_ours
-        self._shell = shell
-        self._shell_asked = True
-        self._shell_is_ours = True
+        with self._shell_lock:
+            previous, was_ours = self._shell, self._shell_is_ours
+            self._shell = shell
+            self._shell_asked = True
+            self._shell_is_ours = True
         if previous is not None and previous is not shell and was_ours:
             try:
                 previous.close()
@@ -1125,13 +1139,17 @@ class Window(Adw.ApplicationWindow):
             if settings is not None:
                 _disconnect(settings, self._on_external_change)
         self._watchers.clear()
-        if self._shell is not None and self._shell_is_ours:
-            try:
-                self._shell.close()
-            except Exception:  # noqa: BLE001 - going away anyway
-                pass
-        self._shell = None
-        self._shell_asked = True
+        with self._shell_lock:
+            # ``_shell_asked`` is set inside the lock so that a background
+            # add-on count still in flight cannot build a connection nothing
+            # will ever close (review-report M26).
+            if self._shell is not None and self._shell_is_ours:
+                try:
+                    self._shell.close()
+                except Exception:  # noqa: BLE001 - going away anyway
+                    pass
+            self._shell = None
+            self._shell_asked = True
 
     # -- about -------------------------------------------------------------
 

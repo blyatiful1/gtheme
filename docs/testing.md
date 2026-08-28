@@ -26,9 +26,9 @@ the system typelibs and break.
 
 | Tier | Size | Needs | When it runs |
 |---|---|---|---|
-| **unit + regression** | ~1500 tests | nothing but Python and GLib | always — plain `pytest`, and both CI jobs |
+| **unit + regression** | ~1,880 tests | nothing but Python and GLib | always — plain `pytest`, and both CI jobs |
 | **dconf** (`-m dconf`) | 42 tests | a private D-Bus session and the dconf-service it activates — no shell | always — plain `pytest`, and both CI jobs |
-| **gtk** (`-m gtk`) | ~410 tests | GTK 4 and libadwaita 1.9, offscreen is fine | plain `pytest` locally; in CI only inside an Arch container |
+| **gtk** (`-m gtk`) | ~660 tests | GTK 4 and libadwaita 1.9, offscreen is fine | plain `pytest` locally; in CI only inside an Arch container |
 | **sandbox** (`-m sandbox`) | 28 tests | a private D-Bus session **and a real headless GNOME Shell** | `./verify.sh --full` only. **Never in CI.** |
 
 `addopts = -m "not sandbox"` in `pyproject.toml` is what a plain `pytest` obeys:
