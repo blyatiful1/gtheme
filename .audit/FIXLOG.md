@@ -63,36 +63,57 @@ Agent A2 owns settings_backend.py, gvariant.py, baseline.py, restorepoints.py, c
 
 **Re-baselined verify numbers (measured this session at HEAD `14247f8`):** `--collect-only`: 2047/2075 collected (28 deselected); `verify.sh`: 2045 passed · 2 skipped · 28 deselected · ruff clean · `verify.sh: OK`. Delta from the prior baseline (1960 collected / 1958 passed): +115 collected total across the wave — A2's bb8de6a (+26), A1's 4df58e1 (+42 net: two new regression files, test_look_write_policy.py=29 + test_apply_contract.py=13), review-fix 14247f8 (+13: 6 C1 symlink cases, 5+4 H4 Ptyxis-key cases, 3 H10 capture-omission cases — some overlap between A1's declared 42 and the review-fix's 13 additive cases, both verified independently against a before/after diff in this session). No skip/deselect count moved (2 skipped, 28 deselected, unchanged from the prior baseline), so no harness/marker change occurred this wave. No existing test was weakened to get green — every changed (not just added) test in this wave is argued in-place by its author and independently spot-checked by the reviewer's before/after diff runs (see `.audit/review-report.md` Wave A section).
 
-## Wave B — UI truth & safety (parallel by file, then serial consolidator)
+## Wave B — UI truth & safety (parallel by file, then serial consolidator) — CLOSED 2026-08-28
+Wave commits: `e2d0f30` (B1), `835cf28` (B2), `666b415` (B3), `2d23aa1` (B4), `7fd2fca` (review-fix: M3/H2 post-ops OSError, U8 toast-names-the-moment). Gate green at `7fd2fca`: 2186 passed, 2 skipped, 28 deselected, ruff clean, `verify.sh: OK` (measured this session, worktree venv).
+
 B1 rows.py, panels/widgets.py, colors/icons/fonts/wallpaper write paths, _style_common:
-- [ ] H3 rows through coalesced recording backend: first-touch Baseline record + MANUAL_OWNER ledger claim + ONE coalesced restore point per edit burst + LockBusy handled; NO per-toggle Transaction (cap-eviction trap) — pending
-- [ ] M3 apply_ops catches OSError — pending
-- [ ] M7 row write BackendError → refresh to truth + reason surfaced — pending
+- [x] H3 rows through coalesced recording backend: first-touch Baseline record + MANUAL_OWNER ledger claim + ONE coalesced restore point per edit burst + LockBusy handled; NO per-toggle Transaction (cap-eviction trap) — fixed@e2d0f30 (new `ui/widgets/recording.py`, `RecordingBackend`; every descriptor-row write/reset routes through it). Advisory not re-opened: burst coalescing rewrites the restore-point document once per key (26 small JSON writes for one effect-picker selection — bounded, correct, flagged as the heaviest single interaction in the app); a burst spanning an intervening Look apply can mix vintages in "Before your changes" (sound reasoning, deserves a deliberate policy decision in a later wave, not a defect); `first_touch_value()` re-parses the whole pristine index on every reset-row refresh (perf note for Wave C).
+- [x] M3 apply_ops catches OSError — **fixed@e2d0f30, corrected@7fd2fca**. B1's original arm unconditionally claimed "your desktop is exactly as it was", which review's must_fix proved false (reproduced in-process: a late `Baseline.save()` OSError after the op already landed). Review-fix closed both sides: `core/transaction.py` now guards the two post-ops writes (`baseline.save()` and the closing ledger `write_entry`) so a late OSError becomes `TransactionError(rolled_back=False)` instead of escaping bare, and `_style_common.apply_ops`'s OSError arm now states only the reason with no state claim. Residual named, not fixed: `_apply_locked`'s AS4 switch-cleanup branch (`self._restore_ledger(...)`) can still raise a bare OSError after a cleanup already changed the desktop — no longer a lie (nothing downstream claims a state), but not a full narration either; left for Wave C.
+- [x] M7 row write BackendError → refresh to truth + reason surfaced — fixed@e2d0f30. One gap found by review and left open rather than silently closed: `panels/widgets.py`'s effect picker (~line 446-466) `continue`s past a per-key `BackendError` with no refresh/message, so a store that refuses writes leaves a stale-looking combo with no toast; review's suggested fix (`is_missing(exc)` discriminator) was not applied this wave — flagged for whoever next touches that file.
+
 B2 looks.py, window.py:
-- [ ] H2(looks) unknown failure defaults rolled_back=False; half-copy reachable; Undo offered — pending
-- [ ] M6 undo toast requires result.transaction is None — pending
-- [ ] M15 toasts escape markup — pending
-- [ ] U4 "Show exactly what changes" expander (before → after; DiffEntry frozen-contract amendment explicit+justified); file destinations + add-on names listed — pending
-- [ ] U8 undo = Adw.ButtonContent with label, packed from window construction; Ctrl+Z → confirm_apply, editable-focus guard; toast names the moment — pending
-- [ ] L6 header undo independent of Home page — pending
-- [ ] X3 _capture_restore_point OSError surfaced (no silent proceed); point.warnings shown — pending
+- [x] H2(looks) unknown failure defaults rolled_back=False; half-copy reachable; Undo offered — fixed@835cf28
+- [x] M6 undo toast requires result.transaction is None — fixed@835cf28
+- [x] M15 toasts escape markup — fixed@835cf28 (both Adw.Toast sites; verified by introspection that Adw.Toast:use-markup defaults True and AlertDialog/Label/Expander do not, so those were correctly left alone)
+- [x] U4 "Show exactly what changes" expander (before → after; DiffEntry frozen-contract amendment explicit+justified); file destinations + add-on names listed — fixed@835cf28
+- [x] U8 undo = Adw.ButtonContent with label, packed from window construction; Ctrl+Z → confirm_apply, editable-focus guard; toast names the moment — **header/shortcut half fixed@835cf28 + 666b415; toast-names-the-moment half was NOT actually done despite both agents ticking it (B3 explicitly skipped it, B2 delivered only the tooltip) — closed by review-fix@7fd2fca**, which added `restore.done_sentence(point)` routed through `point_title()` and wired it into all four success-toast sites (restore.py, home.py, window.py, and a fourth site in looks.py that the must_fix didn't enumerate but fails the same acceptance line). Do not re-open on B2/B3's original claims; the acceptance line is met only as of 7fd2fca.
+- [x] L6 header undo independent of Home page — fixed@835cf28. Known trap left in place, not silently dropped: `home.py`'s own "Undo the last change" row (`HomePage.undo_last_change`) still applies the newest moment with no confirmation/preview, while the header button and Ctrl+Z both now confirm via `RestorePage.confirm_undo_last` — same label, two behaviours. `home.header_button` is now dead in production (only tests call it) after `_pack_undo_button` was removed. Flagged for Wave C/F, not required by L6's stated scope.
+- [x] X3 _capture_restore_point OSError surfaced (no silent proceed); point.warnings shown — fixed@835cf28 (required touching `core/transaction.py`, outside B2's declared file list — checked clean, no collision). Sibling half named as unowned by review and left unfixed: `core/restorepoints.py::apply_point` still catches only `TransactionError`, so the same OSError class can escape an *undo* (guarded on the threaded path by `RestorePage._failed`'s cautious default, unguarded on `start_apply`'s no-runner branch) — a Wave C/D follow-up, not claimed fixed here.
+
 B3 restore.py, home.py, topbar.py, windows.py, more.py, addons.py:
-- [ ] H2(restore) on_failed two-branch honest wording — pending
-- [ ] H11 manual moments pass dests (ledger destinations) — pending
-- [ ] L1(ui) RestorePage._report branches on rolled_back — pending
-- [ ] M10 restore save via runner (+ onboarding first-point) — pending
-- [ ] M5 addons failed-enable resets switch (not NEEDS_RELOGIN) — pending
-- [ ] M30 topbar/windows filter corpus problems to own domains — pending
-- [ ] L5 more-page floor group hides when empty — pending
-- [ ] L7 no-runner double report fixed — pending
+- [x] H2(restore) on_failed two-branch honest wording — fixed@666b415 (same fix applied to home.py's identical bug, P1 pattern)
+- [x] H11 manual moments pass dests (ledger destinations) — fixed@666b415, proven end-to-end by a real-engine regression test
+- [x] L1(ui) RestorePage._report branches on rolled_back — fixed@666b415
+- [x] M10 restore save via runner (+ onboarding first-point) — fixed@666b415
+- [x] M5 addons failed-enable resets switch (not NEEDS_RELOGIN) — fixed@666b415 (uncovered and fixed a real pre-existing suppression bug in the same code path: a switch flipped from inside another notify::active handler was reading its own correction as a user toggle)
+- [x] M30 topbar/windows filter corpus problems to own domains — fixed@666b415. Judgment call flagged for a second opinion, not silently resolved: the page still raises when NOTHING it renders loaded at all (an empty page with no message would be a lie of omission) — a two-line deletion if a future gate wants literal never-raise.
+- [x] L5 more-page floor group hides when empty — fixed@666b415
+- [x] L7 no-runner double report fixed — fixed@666b415
+
 B4 serial consolidator (cross-file):
-- [ ] M28 one banner helper, nine call sites — pending
-- [ ] M29 one scaffold constant pair + PageShell.group plain-text + Windows wording — pending
-- [ ] L15 accent table single source — pending
-- [ ] L16 shared banner/action-row helpers — pending
-- [ ] L19 one gvariant quote/unquote pair — pending
-- [ ] M17 apply_ops success+failure tests — pending
-- [ ] L18(ui) SchemaProbe.source_for_row, Prefs.as_dict, PageShell.built_ids resolved (delete or write the claimed test) — pending
+- [x] M28 one banner helper, nine call sites — fixed@2d23aa1. Audit undercounted the call sites (nine named, eleven found and consolidated: addons.py has two, looks.py is the eleventh). Corrects the audit's `Adw.Banner:use-markup` claim: it defaults FALSE (measured this session, libadwaita 1.9.3), so the two sites the report said were "escaping and therefore wrong" were actually the two rendering correctly, and the fix (route everything through one `set_plain_text` path) is right regardless — recorded as measured truth in the code, not the report's claim.
+- [x] M29 one scaffold constant pair + PageShell.group plain-text + Windows wording — fixed@2d23aa1 (a fourth hardcoded site beyond the audit's three found and fixed: wallpaper.py:428)
+- [x] L15 accent table single source — fixed@2d23aa1
+- [x] L16 shared banner/action-row helpers — fixed@2d23aa1 (`Adw.ActionRow:use-markup` confirmed True by introspection, so this consolidation also closed a live markup hazard, not just a duplication)
+- [x] L19 one gvariant quote/unquote pair — fixed@2d23aa1. Audit undercounted here too (five named, eight hand-rolled copies found and removed). Also fixed a real latent bug the audit called "not live": `quote`/`unquote` did not actually round-trip a backslash; `unquote` is now the true inverse via GLib parsing.
+- [x] M17 apply_ops success+failure tests — fixed@2d23aa1 (four real Transaction-driven tests, mutation-checked)
+- [x] L18(ui) SchemaProbe.source_for_row, Prefs.as_dict, PageShell.built_ids resolved (delete or write the claimed test) — fixed@2d23aa1 (all three deleted after verifying zero callers repo-wide; `built_ids`'s claimed guarantee is proven instead by the existing RowIndex tests, which is the mechanism actually used)
+
+**Review must_fix, both closed at `7fd2fca` (see notes on M3 and U8 above):**
+1. `_style_common.apply_ops`'s OSError arm made a state claim (rolled_back=True) it could not know was true for a post-ops OSError — fixed, both UI arm and the `core/transaction.py` source of the escape.
+2. U8's toast-names-the-moment half was ticked "fixed" by two agents without actually landing — fixed, four toast sites now route through `point_title()`.
+
+**M21 (Wave 0) dependency now satisfied:** M21's install.sh ledger guard was marked partial pending "Wave B's H3" making per-page edits write the ownership ledger. H3 (`e2d0f30`) does this — every recorded row write claims its key for `MANUAL_OWNER` in the same ledger `install.sh --uninstall` reads. **M21 should be re-verified and closed** by whoever next touches Wave 0/closure bookkeeping; not re-ticked here because M21 lives in the Wave 0 section and is not one of this wave's owned IDs.
+
+**Re-baselined verify numbers (measured this session at HEAD `7fd2fca`):** `--collect-only`: 2188/2216 collected (28 deselected); `verify.sh`: 2186 passed · 2 skipped · 28 deselected · ruff clean · `verify.sh: OK`. Delta from the Wave A baseline (2047/2075 collected): +141 collected across the wave (B2 +37, B3 +34, B1 +28, B4 +37, review-fix +5), independently re-traced commit-by-commit this session by checking out each wave SHA and re-measuring `--collect-only` (chain: b2dbf81=1960 → waveA-close 5024dc7=2047 → B2 835cf28=2084 → B3 666b415=2118 → B1 e2d0f30=2146 → B4 2d23aa1=2183 → reviewfix 7fd2fca=2188). Skipped (2) and deselected (28) unchanged at every commit in the chain — no test hidden or quarantined anywhere in Wave B. No git state left modified; worktree clean at HEAD `7fd2fca`; sibling live checkout `/home/crocco/gtheme` untouched; gtheme app never launched.
+
+**Not fully closed / flagged for later waves (do not re-tick without doing the work):**
+- M7's effect-picker `BackendError` gap in `panels/widgets.py` (silent `continue`, no refresh/toast) — Wave C.
+- X3's sibling half in `core/restorepoints.py::apply_point` (same OSError class unguarded on undo) — Wave C/D.
+- M3's residual AS4 switch-cleanup OSError path in `_apply_locked` — Wave C.
+- L6/U8's home-page "Undo the last change" row still applies unconfirmed while the header/Ctrl+Z path confirms (P1 pattern); `home.header_button` now dead in production — Wave C/F.
+- `docs/architecture.md:62` ("transaction.py is the only path by which anything changes") still literally false for page edits — one-line doc fix, unowned this wave.
+- wallpaper.py's custom-picture file copy sits outside the H3 burst point (undo restores the setting, leaves the copied file) — out of H3's stated scope, flagged not fixed.
 
 ## Wave C — terminal, ego, window infra/perf
 C1 terminal/ package + ui/pages/terminal.py:
