@@ -278,3 +278,172 @@ def test_the_missing_ancestors_helper_lists_deepest_first(tmp_path):
 def test_the_missing_ancestors_helper_stops_at_what_exists(tmp_path):
     (tmp_path / "a").mkdir()
     assert missing_ancestors(tmp_path / "a") == []
+
+
+# -- a recording that cannot be made (review-report H1) --------------------
+#
+# The rule these pin: the recording comes first, so a recording that failed
+# means the change must not happen. Silence here is the worst outcome
+# available — the caller writes over the file believing it is covered, and the
+# only copy of what was there is gone.
+
+
+def _boom(*_args, **_kwargs):
+    raise OSError(28, "No space left on device")
+
+
+def test_a_copy_that_cannot_be_made_is_raised_not_swallowed(baseline, tmp_path, monkeypatch):
+    """``shutil.copy2`` used to run unguarded: a full disk raised a bare
+    ``OSError`` out of the middle of an apply, which skipped the rollback."""
+    from gtheme.core.baseline import BaselineError
+
+    dest = tmp_path / "target"
+    dest.write_text("the only copy there is", encoding="utf-8")
+    monkeypatch.setattr("gtheme.core.baseline.shutil.copy2", _boom)
+
+    with pytest.raises(BaselineError) as caught:
+        baseline.record_file(dest)
+
+    assert "could not save a copy" in str(caught.value)
+    assert str(dest) in str(caught.value), "the message names the file"
+    assert str(dest) not in baseline.files, "a failed recording claims nothing"
+    assert list(baseline.files_dir.glob("*")) == [], "and leaves no half-copy behind"
+    assert dest.read_text(encoding="utf-8") == "the only copy there is"
+
+
+def test_an_index_that_cannot_be_written_is_raised_not_swallowed(baseline, tmp_path, monkeypatch):
+    """A record only in memory is a record a crash loses, so it is a failure.
+
+    The blob is on disk and the entry is in memory, but nothing on disk says
+    the destination is covered. Proceeding to write the file would leave a
+    changed desktop that the recording does not admit to.
+    """
+    from gtheme.core.baseline import BaselineError
+
+    dest = tmp_path / "target"
+    dest.write_text("original", encoding="utf-8")
+    monkeypatch.setattr("gtheme.core.baseline.atomic_write_json", _boom)
+
+    with pytest.raises(BaselineError) as caught:
+        baseline.record_file(dest)
+    assert "could not write down what was at" in str(caught.value)
+
+
+def test_a_setting_record_that_cannot_be_written_is_raised_not_swallowed(
+    baseline, backend, monkeypatch
+):
+    from gtheme.core.baseline import BaselineError
+
+    backend.set(WORD, "'before'")
+    monkeypatch.setattr("gtheme.core.baseline.atomic_write_json", _boom)
+
+    with pytest.raises(BaselineError) as caught:
+        baseline.record_setting(WORD)
+    assert WORD in str(caught.value)
+
+
+def test_a_shortcut_that_cannot_be_read_is_refused_rather_than_recorded_blank(
+    baseline, tmp_path, monkeypatch
+):
+    """A link recorded with no target restores as "cannot put this back".
+
+    Writing over it anyway would destroy somebody's own shortcut with no way to
+    recreate it, so the recording refuses instead of recording a blank target.
+    """
+    from gtheme.core.baseline import BaselineError
+
+    link = tmp_path / "link"
+    link.symlink_to(tmp_path / "elsewhere")
+    monkeypatch.setattr("gtheme.core.baseline.os.readlink", _boom)
+
+    with pytest.raises(BaselineError):
+        baseline.record_file(link)
+    assert str(link) not in baseline.files
+
+
+def test_a_failed_recording_is_not_an_oserror(baseline, tmp_path, monkeypatch):
+    """Deliberate: an ``except OSError`` written to guard the *write* must not
+    swallow the failure of the recording that has to precede it."""
+    from gtheme.core.baseline import BaselineError
+
+    dest = tmp_path / "target"
+    dest.write_text("original", encoding="utf-8")
+    monkeypatch.setattr("gtheme.core.baseline.shutil.copy2", _boom)
+
+    with pytest.raises(BaselineError) as caught:
+        baseline.record_file(dest)
+    assert not isinstance(caught.value, OSError)
+    assert isinstance(caught.value.cause, OSError), "the real cause is kept"
+
+
+# -- a location that has never been written (review-report H7) -------------
+
+
+class _NeverWrittenDconf(MemoryBackend):
+    """A backend where every ``dconf:`` path reads as never having been set.
+
+    Which is what the real subprocess backend does for a path nothing has
+    written: ``dconf read`` exits 0 and prints nothing.
+    """
+
+    def get(self, key: str) -> str:
+        from gtheme.core.settings_backend import BackendError, BackendErrorKind
+
+        if key.startswith("dconf:"):
+            raise BackendError(
+                BackendErrorKind.UNSET, f"{key} has never been set", key=key
+            )
+        return super().get(key)
+
+
+DCONF_KEY = "dconf:/org/gnome/shell/extensions/blur-my-shell/panel/blur"
+
+
+def test_a_location_never_written_records_as_having_no_value(tmp_path, schema_source_factory):
+    """It is not "missing" — the recording still has to say what was there.
+
+    Before H7 this read came back as NO_KEY, which meant "not on this machine",
+    which meant the write was skipped entirely. Now the write happens, so the
+    recording of what was there first has to be right: no value, restoring by
+    unsetting it again.
+    """
+    backend = _NeverWrittenDconf(schema_source=schema_source_factory(SCHEMA_XML))
+    baseline = Baseline(tmp_path / "baseline", backend=backend).load()
+
+    baseline.record_setting(DCONF_KEY)
+
+    assert baseline.settings[DCONF_KEY]["saved"] is None
+
+
+def test_putting_back_a_location_that_was_never_written_is_already_done(
+    tmp_path, schema_source_factory
+):
+    """Nothing was there and nothing is there: that is the state we wanted.
+
+    It must count as done rather than dead, or a rescue would report a thing it
+    could never put back and refuse to finish.
+    """
+    backend = _NeverWrittenDconf(schema_source=schema_source_factory(SCHEMA_XML))
+    baseline = Baseline(tmp_path / "baseline", backend=backend).load()
+    baseline.settings[DCONF_KEY] = {
+        "key": DCONF_KEY,
+        "saved": None,
+        "component": "",
+        "label": "",
+    }
+
+    outcome = baseline.restore_settings()
+
+    assert outcome.done == [DCONF_KEY]
+    assert outcome.dead == []
+
+
+# -- the API this class does not have (review-report L18) ------------------
+
+
+def test_the_baseline_offers_no_way_to_delete_the_whole_recording():
+    """``wipe()`` was an unexercised ``rmtree`` of the pristine recording on the
+    public API of this class — one careless call from making "Before gtheme"
+    unrecoverable, for a job ``forget_files``/``forget_settings`` already do
+    record by record. It has no callers and must not grow one."""
+    assert not hasattr(Baseline, "wipe")

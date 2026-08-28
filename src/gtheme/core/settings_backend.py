@@ -50,6 +50,17 @@ differently-typed value than the one it captured.
 match on a message string — v1 did that against ``gsettings`` stderr and it
 broke under a locale change, which is why every subprocess call in the
 subprocess backend pins ``LC_ALL=C`` and still does not trust the text.
+
+One distinction inside that set is load-bearing enough to spell out here:
+**"unset" is not "missing"**. A ``dconf:`` location that has never been written
+reads back empty, and reading that as "this add-on is not installed" is what
+made such a key permanently unwritable — the write was skipped as unavailable,
+so the location stayed empty, so the next apply skipped it again
+(review-report H7). :attr:`BackendErrorKind.UNSET` says "the location is
+addressable and holds no value yet", which is a *writable* state with no
+current value; ``core.backends.is_missing`` therefore excludes it, and every
+caller that interprets a read treats it as "there is nothing here" rather than
+as "there is nowhere here".
 """
 
 from __future__ import annotations
@@ -83,6 +94,13 @@ class BackendErrorKind(enum.Enum):
     NO_SCHEMA = "no-schema"
     #: The schema exists but has no such key. Usually a version skew.
     NO_KEY = "no-key"
+    #: The location is addressable and has never been written, so it has no
+    #: current value. NOT a missing thing: a ``dconf:`` path with nothing under
+    #: it is somewhere a value can be put, and ``core.backends.is_missing``
+    #: deliberately excludes this kind. Reading an empty dconf path as "not on
+    #: this machine" is what made a never-written key impossible to set for
+    #: good — the skip preserved the very condition it keyed on.
+    UNSET = "unset"
     #: The write was accepted and then not persisted. dconf's classic failure:
     #: ``gsettings set`` exits 0 while printing "failed to commit changes to
     #: dconf" — v1 was bitten by this, so a zero exit is never proof.
@@ -95,7 +113,7 @@ class BackendError(Exception):
     """A typed settings failure.
 
     Attributes:
-        kind: which of the four closed failure modes this is.
+        kind: which of the closed failure modes this is.
         key: the key string the call was about, when there was one.
     """
 
@@ -267,8 +285,24 @@ class SettingsBackend(ABC):
     def get(self, key: str) -> str:
         """Return the current value as GVariant text.
 
+        There is no "empty" return: a key with no value raises rather than
+        handing back a string that could be mistaken for one.
+
         Raises:
-            BackendError: NO_SCHEMA / NO_KEY / OTHER.
+            BackendError: NO_SCHEMA / NO_KEY / UNSET / OTHER.
+
+                NO_SCHEMA and NO_KEY mean *there is nowhere to put this* — the
+                add-on is not installed, or this GNOME predates the setting —
+                and ``core.backends.is_missing`` is true of them, which is the
+                AS8 branch: a skip with a sentence, never a failed apply.
+
+                UNSET means the opposite: the location exists and simply holds
+                no value yet, which only a raw ``dconf:`` path can be. It is
+                **writable**, ``is_missing`` is false of it, and a caller
+                reading a value treats it as "no current value" (record None,
+                write the wanted value, show it in the preview as a real
+                change). Skipping it as unavailable is the H7 defect: the skip
+                left the location unwritten, which is the state it keyed on.
         """
 
     @abstractmethod
@@ -615,6 +649,23 @@ class GioBackend(SettingsBackend):
         settings, _schema, parsed = self._resolve(key)
         settings.reset(parsed.key)
         settings.sync()
+        # A reset is a write, and the contract above lists COMMIT_FAILED for it
+        # for exactly the reason ``set`` reads back: dconf accepts a change and
+        # then fails to commit it, and exiting without an error proves nothing.
+        # Two thirds of putting "Before gtheme" back is resets, so a reset that
+        # silently did not happen is a restore that silently did not restore.
+        #
+        # The check is "is there still a value of the user's own here?" rather
+        # than "does this now equal the schema default": on a managed machine a
+        # system-wide dconf database supplies a different default, and
+        # comparing against the schema's would call a perfectly good reset a
+        # failure.
+        if settings.get_user_value(parsed.key) is not None:
+            raise BackendError(
+                BackendErrorKind.COMMIT_FAILED,
+                f"{key} would not go back to its normal value",
+                key=key,
+            )
 
 
 class SubprocessBackend(SettingsBackend):
@@ -729,9 +780,14 @@ class SubprocessBackend(SettingsBackend):
             raise self._classify(err, key)
         if parsed.kind is KeyKind.DCONF and out == "":
             # dconf prints nothing and exits 0 for a location that has never
-            # been written. There is no value to hand back.
+            # been written. There is no value to hand back — but there is
+            # somewhere to put one, which is why this is UNSET and not NO_KEY.
+            # As NO_KEY it counted as "not on this machine", so the write was
+            # skipped, so the location stayed empty, so the next apply skipped
+            # it again: eight keys of the shipped Looks were unwritable on this
+            # machine for good (review-report H7).
             raise BackendError(
-                BackendErrorKind.NO_KEY,
+                BackendErrorKind.UNSET,
                 f"{parsed.path} has never been set",
                 key=key,
             )
@@ -750,8 +806,18 @@ class SubprocessBackend(SettingsBackend):
             )
         try:
             written = self.get(key)
-        except BackendError:  # pragma: no cover - readable if it was writable
-            return
+        except BackendError as exc:
+            if exc.kind is BackendErrorKind.UNSET:
+                # The location still holds nothing after a write that exited
+                # zero. That is precisely the "accepted and not persisted"
+                # failure this read-back exists to catch, and it is only
+                # visible now that an empty dconf read is its own kind.
+                raise BackendError(
+                    BackendErrorKind.COMMIT_FAILED,
+                    f"the change to {key} did not stick",
+                    key=key,
+                ) from exc
+            return  # pragma: no cover - readable if it was writable
         from .gvariant import values_equal
 
         if not values_equal(written, value):

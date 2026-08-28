@@ -47,9 +47,48 @@ from pathlib import Path
 from .atomic import atomic_write_json, load_json
 from .backends import get_backend, is_missing
 from .paths import baseline_dir
-from .settings_backend import BackendError, SettingsBackend
+from .settings_backend import BackendError, BackendErrorKind, SettingsBackend
 
-__all__ = ["Baseline", "RestoreOutcome", "missing_ancestors"]
+__all__ = ["Baseline", "BaselineError", "RestoreOutcome", "missing_ancestors"]
+
+
+class BaselineError(Exception):
+    """The recording could not be made, so the change must not happen.
+
+    Raised by :meth:`Baseline.record_file` and :meth:`Baseline.record_setting`
+    when the snapshot itself fails: the disk is full, the stored copy cannot be
+    written, the index cannot be persisted. It is deliberately **not** an
+    ``OSError`` subclass — an ``except OSError`` written to guard a *write*
+    would otherwise swallow the failure of the recording that has to precede
+    it, and the whole point is that this one may not be swallowed.
+
+    Every caller must treat it as "abandon this change": the destination is
+    still untouched at the moment it is raised, and writing over something
+    whose prior state was not recorded is the one thing this class exists to
+    prevent. ``core.transaction`` turns it into a rolled-back
+    ``TransactionError`` (review-report H1); it is never caught here.
+    """
+
+    def __init__(self, message: str, *, cause: BaseException | None = None) -> None:
+        super().__init__(message)
+        #: The underlying failure, kept for a caller that wants to name it.
+        self.cause = cause
+
+
+def _no_value(error: BackendError) -> bool:
+    """Does this read failure mean "there is no value here" (rather than "it broke")?
+
+    Two different kinds say it. NO_SCHEMA/NO_KEY mean the setting does not
+    exist on this machine at all; UNSET means a ``dconf:`` location that exists
+    and has never been written. For *recording what was there before*, both are
+    the same answer — there was nothing — and both restore the same way, by
+    unsetting the key again rather than by inventing a value nobody chose.
+
+    They are not the same answer for deciding whether to *write*: an unset
+    location is writable, which is why ``core.backends.is_missing`` excludes it
+    and this helper does not (review-report H7).
+    """
+    return is_missing(error) or error.kind is BackendErrorKind.UNSET
 
 
 def missing_ancestors(parent: Path) -> list[str]:
@@ -168,13 +207,12 @@ class Baseline:
     def is_empty(self) -> bool:
         return not self.files and not self.settings
 
-    def wipe(self) -> None:
-        """Delete the whole recording. Only ever after a complete restore."""
-        if self.dir.is_dir():
-            shutil.rmtree(self.dir)
-        self.files = {}
-        self.settings = {}
-        self._counter = 0
+    # (There is deliberately no ``wipe()``. It existed, called nothing, and was
+    # an untested ``shutil.rmtree`` of the pristine recording sitting on the
+    # public API of this class — one careless call from making "Before gtheme"
+    # unrecoverable, for a job the narrower ``forget_files``/``forget_settings``
+    # already do record by record. Deleted rather than kept for symmetry:
+    # review-report L18.)
 
     # -- files -------------------------------------------------------------
 
@@ -192,6 +230,14 @@ class Baseline:
             skip the write: overwriting something that cannot be put back is
             exactly what this class exists to prevent. True otherwise,
             including when ``dest`` does not exist yet.
+
+        Raises:
+            BaselineError: the recording could not be made — the copy failed
+                (a full disk, an unreadable file), the shortcut could not be
+                read, or the index could not be persisted. The destination is
+                untouched at that point and the caller must leave it that way.
+                A half-made recording is worse than none: it says a file was
+                covered when the only copy of it is about to be overwritten.
         """
         key = str(dest)
         if key in self.files:
@@ -199,8 +245,15 @@ class Baseline:
         if dest.is_symlink():
             try:
                 target = os.readlink(dest)
-            except OSError:
-                target = ""
+            except OSError as exc:
+                # A link recorded with no target restores as "cannot put this
+                # back" — so writing over it anyway would destroy somebody's
+                # own shortcut with no way to recreate it. Refuse instead.
+                raise BaselineError(
+                    f"could not read the shortcut at {dest}, so what is there "
+                    f"cannot be saved first: {exc}",
+                    cause=exc,
+                ) from exc
             self.files[key] = {
                 "existed": True,
                 "symlink": True,
@@ -210,10 +263,24 @@ class Baseline:
                 "label": label,
             }
         elif dest.is_file():
-            self.files_dir.mkdir(parents=True, exist_ok=True)
-            self._counter += 1
-            stored = self.files_dir / f"{self._counter:04d}"
-            shutil.copy2(dest, stored)
+            number = self._counter + 1
+            stored = self.files_dir / f"{number:04d}"
+            try:
+                self.files_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(dest, stored)
+            except OSError as exc:
+                # Leave no half-copy behind: a truncated blob under a number
+                # would be indistinguishable from a good one at restore time,
+                # and the number is not consumed, so the next record reuses it.
+                try:
+                    stored.unlink(missing_ok=True)
+                except OSError:  # pragma: no cover - already the failing case
+                    pass
+                raise BaselineError(
+                    f"could not save a copy of {dest} before changing it: {exc}",
+                    cause=exc,
+                ) from exc
+            self._counter = number
             self.files[key] = {
                 "existed": True,
                 "symlink": False,
@@ -234,7 +301,16 @@ class Baseline:
                 "component": component,
                 "label": label,
             }
-        self._save_files()
+        try:
+            self._save_files()
+        except OSError as exc:
+            # The record exists in memory and its stored copy is on disk, but
+            # nothing on disk says so. Proceeding would write over the file
+            # with the only description of it unpersisted — a crash then leaves
+            # a changed desktop that the recording does not admit to.
+            raise BaselineError(
+                f"could not write down what was at {dest}: {exc}", cause=exc
+            ) from exc
         return True
 
     def restore_files(self, only: set[str] | None = None) -> RestoreOutcome:
@@ -345,11 +421,19 @@ class Baseline:
     # -- settings ----------------------------------------------------------
 
     def read_setting(self, key: str) -> str | None:
-        """The current value of a setting, or None if it has never been set."""
+        """The current value of a setting, or None if it has never been set.
+
+        Both "there is no such setting here" and "this location has never been
+        written" come back as None: for a recording of what was there before,
+        the answer is the same and it restores the same way. Any other failure
+        — the settings service unreachable, a value that would not parse —
+        raises, because recording an unknown value as "there was nothing here"
+        would make a later restore *clear* a setting nobody read.
+        """
         try:
             return self.backend.get(key)
         except BackendError as exc:
-            if is_missing(exc):
+            if _no_value(exc):
                 return None
             raise
 
@@ -359,16 +443,30 @@ class Baseline:
         A value of None means the key had none — restore resets it rather than
         writing a value back, which is the difference between "put it back" and
         "invent a value nobody chose".
+
+        Raises:
+            BackendError: the current value could not be read at all (and so is
+                unknown, not absent). Typed, so the caller can still branch on
+                the kind.
+            BaselineError: the record could not be persisted. Same rule as
+                :meth:`record_file`: the setting is unchanged at that point and
+                must stay that way.
         """
         if key in self.settings:
             return
-        self.settings[key] = {
+        record = {
             "key": key,
             "saved": self.read_setting(key),
             "component": component,
             "label": label,
         }
-        self._save_settings()
+        self.settings[key] = record
+        try:
+            self._save_settings()
+        except OSError as exc:
+            raise BaselineError(
+                f"could not write down what {key} was set to: {exc}", cause=exc
+            ) from exc
 
     def _already_at(self, key: str, saved: str | None) -> bool:
         """Is the setting already at its recorded value?
@@ -381,7 +479,7 @@ class Baseline:
         try:
             current = self.backend.get(key)
         except BackendError as exc:
-            return saved is None and is_missing(exc)
+            return saved is None and _no_value(exc)
         if saved is None:
             return False
         return values_equal(current, saved)
@@ -410,9 +508,10 @@ class Baseline:
                 else:
                     backend.set(target, saved)
             except BackendError as exc:
-                if saved is None and is_missing(exc):
+                if saved is None and _no_value(exc):
                     # Nothing was set before and there is nothing to reset —
-                    # the add-on is gone. That state is already pristine.
+                    # the add-on is gone, or the location was never written.
+                    # That state is already pristine.
                     outcome.log.append(f"{target} was already unset")
                     outcome.done.append(key)
                     continue

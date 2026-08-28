@@ -65,6 +65,13 @@ def values_equal(current: str | None, wanted: str) -> bool:
 
     A key that has never been set has no current value, which is never equal to
     anything: writing it is a real change.
+
+    That sentence was true here and false one layer down: a raw ``dconf:``
+    location that had never been written came back from the backend as "no such
+    key", which the engine read as "not on this machine" and skipped — so this
+    function was never asked. ``BackendErrorKind.UNSET`` is what reunites the
+    two (review-report H7): an unset location now reaches here as ``None`` and
+    is written, exactly as this docstring always said.
     """
     if current is None:
         return False
