@@ -94,7 +94,10 @@ COPY: dict[str, str] = {
         "Undo could not be opened. Open Undo & Restore Points from the list on the left."
     ),
     "undo-nothing": "There is no saved moment to go back to yet.",
-    "undo-done": "Put back how it was.",
+    # There is deliberately no "undo-done" here any more. It said "Put back how
+    # it was." and did not say what "it" was; the sentence now comes from
+    # ``restore.done_sentence``, which names the moment and is the same sentence
+    # the Undo page and the Home card say about the same event (U8).
     "undo-failed": "gtheme could not put everything back. Open Undo & Restore Points.",
     "undo-heading": "Putting your desktop back",
     "undo-starting": "Going back to how it was…",
@@ -706,8 +709,22 @@ class Window(Adw.ApplicationWindow):
             return None
 
     def undo_point(self, point_id: str) -> None:
-        """Go back to one saved moment, narrating it on the shared runner."""
+        """Go back to one saved moment, narrating it on the shared runner.
+
+        This is what the Undo button on a toast does, so the person who presses
+        it is by definition not looking at the list of saved moments — which is
+        why the sentence at the end names the one that ran (U8). The moment is
+        read *before* the work rather than after it, because going back takes a
+        restore point of its own: read afterwards, "the newest moment" is the
+        one this undo just created, not the one it went back to.
+        """
         from .core import restorepoints
+        from .ui.pages import restore as restore_page
+
+        try:
+            point = restorepoints.load(point_id)
+        except OSError:  # pragma: no cover - defensive; a name is never worth a crash
+            point = None
 
         def work(narrate: Any) -> Any:
             return restorepoints.apply_point(point_id, lambda *a: narrate(_narration(a)))
@@ -715,7 +732,9 @@ class Window(Adw.ApplicationWindow):
         def done(result: Any) -> None:
             warnings = list(getattr(result, "warnings", []) or [])
             failed = warnings and getattr(result, "transaction", None) is None
-            self.toast(COPY["undo-failed"] if failed else COPY["undo-done"])
+            self.toast(
+                COPY["undo-failed"] if failed else restore_page.done_sentence(point)
+            )
             self.after_change()
 
         self.runner.run(

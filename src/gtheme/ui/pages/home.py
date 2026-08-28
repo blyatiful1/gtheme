@@ -571,7 +571,11 @@ class HomePage(Adw.Bin):
                 )
             )
             return result
-        self._toast(restore_page.COPY["done"])
+        # Named, through the Undo page's own sentence. This card has no list of
+        # moments under it, so "back the way it was" answered a question the
+        # person had not asked and left the one they had — back to *when*? —
+        # unanswered (U8).
+        self._toast(restore_page.done_sentence(point))
         self._changed()
         return result
 

@@ -27,6 +27,7 @@ temporary Looks folder and a temporary state directory.
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -55,7 +56,7 @@ from gtheme.core.transaction import (  # noqa: E402
 from gtheme.prefs import Prefs  # noqa: E402
 from gtheme.preset.loader import load  # noqa: E402
 from gtheme.ui.applyrunner import ApplyRunner  # noqa: E402
-from gtheme.ui.pages import looks  # noqa: E402
+from gtheme.ui.pages import looks, restore  # noqa: E402
 from gtheme.ui.search import escape_markup  # noqa: E402
 
 pytestmark = pytest.mark.gtk
@@ -308,10 +309,19 @@ def test_an_undo_that_skipped_something_it_no_longer_has_is_not_a_failure(
             transaction=object(), warnings=["one add-on is no longer on this computer"]
         ),
     )
+    moment = SimpleNamespace(kind="auto", label="Before MAGMA")
+    monkeypatch.setattr(looks.restorepoints, "load", lambda *_a, **_k: moment)
 
     toasts = capture_toasts(lambda: page._undo("2026-08-28-120000"))
 
-    assert [t.get_title() for t in toasts] == [escape_markup(looks.COPY["undone"])]
+    # U8: the toast on this page names the moment too. It used to be the
+    # unnamed ``COPY["undone"]`` ("Put back how it was."), which is what the
+    # requirement's "toast names the moment" half was asking for and not
+    # getting on any of the four surfaces that can start an undo.
+    assert [t.get_title() for t in toasts] == [
+        escape_markup(restore.done_sentence(moment))
+    ]
+    assert "Before MAGMA" in toasts[0].get_title()
 
 
 def test_an_undo_that_wrote_nothing_at_all_is_still_reported_as_one(

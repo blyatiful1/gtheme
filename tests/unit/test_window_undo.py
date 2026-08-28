@@ -192,6 +192,46 @@ def test_the_tooltip_is_honest_when_there_is_no_moment_yet(window: Window, state
     assert window.undo_tooltip_text() == COPY["undo-nothing"]
 
 
+# -- U8, the other half: the sentence at the end names the moment too -------
+
+
+@pytest.mark.mutating
+def test_the_toast_after_a_toast_undo_names_the_moment(
+    window: Window, state_dir, memory_settings, tmp_dest_root
+):
+    """U8's acceptance line ends "toast names the moment". This is that.
+
+    The tooltip above answers "back to what?" *before* the press. Afterwards
+    the window said "Put back how it was." and named nothing — and this is the
+    undo furthest from the list of saved moments: it is the button on the toast
+    that follows applying a Look, pressed by somebody looking at the Looks
+    page. The sentence is now the same one the Undo page and the Home card say,
+    which is why it is asserted through ``done_sentence`` rather than by
+    copying the wording here.
+    """
+    from gtheme.core import backends
+    from gtheme.ui.applyrunner import ApplyRunner
+    from gtheme.ui.pages import restore as restore_page
+
+    window.runner = ApplyRunner(threaded=False)
+    said: list[str] = []
+    original = Adw.ToastOverlay.add_toast
+    with backends.use_backend(memory_settings):
+        point = restorepoints.capture(
+            ["gsettings:org.gnome.desktop.interface icon-theme"],
+            label="My desktop, 25 August",
+            backend=memory_settings,
+        )
+        Adw.ToastOverlay.add_toast = lambda _self, toast: said.append(toast.get_title())
+        try:
+            window.undo_point(point.id)
+        finally:
+            Adw.ToastOverlay.add_toast = original
+
+    assert said == [escape_markup(restore_page.done_sentence(point))]
+    assert "My desktop, 25 August" in said[-1], "the moment, by name"
+
+
 # -- M15 -------------------------------------------------------------------
 
 

@@ -7,6 +7,7 @@ written to.
 
 from __future__ import annotations
 
+import errno
 from typing import Any
 
 import pytest
@@ -20,6 +21,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk  # noqa: E402
 
 from gtheme.core.backends import use_backend  # noqa: E402
+from gtheme.core.baseline import Baseline  # noqa: E402
 from gtheme.core.settings_backend import (  # noqa: E402
     BackendError,
     BackendErrorKind,
@@ -429,11 +431,20 @@ def test_a_half_applied_change_admits_the_desktop_may_have_moved(
     assert backend.get(FIRST) == "'moved'", "the premise of the test: it is still there"
 
 
-def test_a_change_that_cannot_even_start_says_the_desktop_is_untouched(tmp_path):
+def test_a_change_that_cannot_even_start_is_reported_without_a_state_claim(tmp_path):
     """``OSError`` out of the lock file, from before the guarded section.
 
     Kept next to its siblings because it is the same branch seen from the third
     side: a failure that is not a ``TransactionError`` at all.
+
+    This assertion was rewritten by the Wave B review-fix pass, deliberately
+    and not to get anything green. It used to require the words "exactly as it
+    was" — a *state claim* — from a branch that is reached by substituting a
+    fake ``Transaction`` raising before it does anything, so it pinned the
+    wording without proving the wording true. The sibling test below drives the
+    real engine to the same branch after an op has landed, which is where that
+    wording became a lie. What this branch may promise is therefore only what
+    it can know: that it failed, and why.
     """
     window = make_window(tmp_path)
 
@@ -454,5 +465,65 @@ def test_a_change_that_cannot_even_start_says_the_desktop_is_untouched(tmp_path)
         common.Transaction = original
 
     assert done is False
-    assert "exactly as it was" in window.said[-1]
-    assert MAYBE_CHANGED not in window.said[-1]
+    said = window.said[-1]
+    assert "could not be made" in said
+    assert "Permission denied" in said, "the reason M3 exists to surface"
+    assert "exactly as it was" not in said, (
+        "this arm cannot see whether anything landed, so it may not say"
+    )
+
+
+@pytest.mark.mutating
+def test_a_change_that_lands_and_then_cannot_be_recorded_never_claims_it_did_not(
+    tmp_path, tmp_dest_root, state_dir, schema_source_factory, monkeypatch
+):
+    """The real engine, out of room at the *last* write of the apply.
+
+    The M3 arm above used to end "Your desktop is exactly as it was." on the
+    strength of an argument that an ``OSError`` can only escape ``apply()``
+    from before the guarded section. It cannot: ``_apply_locked`` calls
+    ``baseline.save()`` and writes the closing ledger entry **after** every op
+    has landed and outside every ``except``, so a full ``~/.local/state``
+    raised a bare ``OSError`` over a desktop that really had changed — the
+    exact H2 sentence, on the dark-mode switch and the window-heading
+    lettering. B4's fake-``Transaction`` test could not see it.
+
+    So this one uses no fakes below the page: a real ``Transaction``, a real
+    ``MemoryBackend`` with a compiled schema, and one ``Baseline`` that runs
+    out of room when it is asked to record what just happened.
+    """
+    backend = MemoryBackend(schema_source=schema_source_factory(APPLY_SCHEMA_XML))
+    backend.set(FIRST, "'one'")
+    window = make_window(tmp_path)
+
+    real_save = Baseline.save
+
+    def no_room(self):
+        # The rollback journal is a Baseline too, pointed at its own temporary
+        # directory. It has to keep working, or this would be testing a
+        # different failure than the one being reproduced.
+        if "gtheme-rollback-" in str(self.dir):
+            return real_save(self)
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(Baseline, "save", no_room)
+
+    with use_backend(backend):
+        done = common.apply_ops(
+            window,
+            [SettingWrite(key=FIRST, value="'moved'", component="colours")],
+            done="never shown",
+        )
+
+    assert done is False
+    assert backend.get(FIRST) == "'moved'", (
+        "the premise of the test: the op really landed before the recording failed"
+    )
+    said = window.said[-1]
+    assert "could not be made" in said
+    assert "exactly as it was" not in said, (
+        "the setting moved; this is the one sentence the whole wave exists to remove"
+    )
+    assert MAYBE_CHANGED in said, (
+        "nothing was rolled back, so the honest half-sentence is owed here"
+    )

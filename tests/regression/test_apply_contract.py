@@ -173,6 +173,69 @@ def test_a_settings_failure_that_is_not_a_missing_add_on_unwinds_too(engine, tmp
     assert ledger_store.current_look() is None
 
 
+def test_a_change_that_lands_and_then_cannot_be_recorded_says_so(engine, monkeypatch):
+    """H2/M3. The last two writes of an apply are after the ops, not before.
+
+    ``baseline.save()`` and the closing ``write_entry`` run once every op has
+    landed, outside every ``except`` — so a full or read-only
+    ``~/.local/state`` sent a bare ``OSError`` out of ``apply()`` over a
+    desktop that really had changed. Every caller reads ``TransactionError``
+    for "did the desktop move?", so a bare ``OSError`` meant they could only
+    guess, and one of them guessed the reassuring way: the style pages told the
+    person "Your desktop is exactly as it was." with the setting sitting at its
+    new value.
+
+    Leaving by ``TransactionError`` with ``rolled_back=False`` is the whole
+    fix: nothing was put back, and now the type says so.
+    """
+    real_save = Baseline.save
+
+    def no_room(self):
+        if "gtheme-rollback-" in str(self.dir):  # the journal must keep working
+            return real_save(self)
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(Baseline, "save", no_room)
+
+    with pytest.raises(TransactionError) as caught:
+        _apply(engine, [SettingWrite(key=SCHEME, value="'prefer-dark'", component="colors")])
+
+    assert caught.value.rolled_back is False, (
+        "the write landed and nothing put it back — claiming a rollback here is the H2 lie"
+    )
+    assert engine.backend.get(SCHEME) == "'prefer-dark'", "the premise: it really moved"
+    assert isinstance(caught.value.__cause__, OSError)
+
+
+def test_a_change_whose_closing_ledger_entry_fails_says_so_too(engine, monkeypatch):
+    """The same hole, the other post-ops write: the ledger entry.
+
+    Written separately because the two are separate statements with separate
+    handlers, and a fix that guarded only the one the reviewer named would
+    leave the other reachable by exactly the same full disk.
+    """
+    real_write = transaction_module.ledger_store.write_entry
+    calls: list[int] = []
+
+    def refuse_the_closing_entry(*args, **kwargs):
+        calls.append(1)
+        # R4 writes the claim first and replaces it afterwards; only the
+        # second call is the one that runs after the ops.
+        if len(calls) >= 2:
+            raise OSError(28, "No space left on device")
+        return real_write(*args, **kwargs)
+
+    monkeypatch.setattr(
+        transaction_module.ledger_store, "write_entry", refuse_the_closing_entry
+    )
+
+    with pytest.raises(TransactionError) as caught:
+        _apply(engine, [SettingWrite(key=SCHEME, value="'prefer-dark'", component="colors")])
+
+    assert caught.value.rolled_back is False
+    assert engine.backend.get(SCHEME) == "'prefer-dark'"
+
+
 # -- H9: a switch whose tidy-up already happened ---------------------------
 
 

@@ -61,6 +61,7 @@ __all__ = [
     "coverage_keys",
     "descriptor_keys",
     "describe_point",
+    "done_sentence",
     "failure_sentence",
     "point_title",
     "preview_lines",
@@ -107,6 +108,14 @@ COPY: dict[str, str] = {
     "working-heading": "Putting your desktop back",
     "working": "Going back to how it was…",
     "done": "Your desktop is back the way it was.",
+    # The same news, with the answer to "back to *what*?" in it. Going back can
+    # be started from four places — this page's list, its Undo button, the Home
+    # card and the header button that Ctrl+Z lands on — and three of those show
+    # no list at the moment they finish, so "back the way it was" left the
+    # person to work out which moment they had just landed on (persona-report
+    # §2.8 / U8). The unnamed sentence above is still what a caller says when it
+    # genuinely does not know which moment ran.
+    "done-named": "Your desktop is back to “{label}”.",
     "saved": "Saved how your desktop looks right now. You can come back to it any time.",
     "save-failed": "Could not save how your desktop looks.",
     "failed": "Nothing was changed. Your desktop is exactly as it was.",
@@ -225,6 +234,25 @@ def point_title(point: RestorePoint) -> str:
     parts of the app end up calling one thing two things.
     """
     return COPY["pristine-title"] if point.kind == "pristine" else point.label
+
+
+def done_sentence(point: RestorePoint | None) -> str:
+    """What to say when going back worked, naming the moment it went back to.
+
+    The counterpart of :func:`failure_sentence`, and the reason both live here
+    rather than at the four call sites: every surface that can start an undo —
+    this page's list, its own Undo button, the Home card and the header button
+    Ctrl+Z lands on — has to say the same thing about the same event, and three
+    of the four have no list on screen when they say it.
+
+    ``None`` is a real answer, not a defensive default: it means the caller
+    genuinely could not say which moment ran (a saved moment deleted between
+    the click and the finish), and inventing a name for it would be worse than
+    the plainer sentence.
+    """
+    if point is None:
+        return COPY["done"]
+    return COPY["done-named"].format(label=point_title(point))
 
 
 def failure_sentence(reason: str, *, rolled_back: bool) -> str:
@@ -614,7 +642,7 @@ class RestorePage(Adw.Bin):
         if point is None:
             self._toast(COPY["undo-nothing"])
             return
-        self._finish_apply(result)
+        self._finish_apply(result, point)
 
     def _on_forget(self, point: RestorePoint) -> None:
         restorepoints.delete(point.id, root=self.root)
@@ -705,13 +733,13 @@ class RestorePage(Adw.Bin):
             # then reporting again raised two toasts and sent two
             # ``after_change()`` cascades through every page in the window
             # (review-report L7).
-            self._finish_apply(self.apply_point(point, report=False))
+            self._finish_apply(self.apply_point(point, report=False), point)
             return
         runner.run(
             lambda _narrate: self.apply_point(point, report=False),
             heading=COPY["working-heading"],
             starting=COPY["working"],
-            on_done=self._finish_apply,
+            on_done=lambda result: self._finish_apply(result, point),
             on_failed=self._failed,
         )
 
@@ -727,11 +755,15 @@ class RestorePage(Adw.Bin):
             dest_root=self.dest_root,
         )
         if report:
-            self._finish_apply(result)
+            self._finish_apply(result, point)
         return result
 
-    def _finish_apply(self, result: restorepoints.RestoreResult | None) -> None:
-        self._report(result)
+    def _finish_apply(
+        self,
+        result: restorepoints.RestoreResult | None,
+        point: RestorePoint | None = None,
+    ) -> None:
+        self._report(result, point)
         self._changed()
 
     def _progress(self, *args: Any) -> None:
@@ -762,7 +794,11 @@ class RestorePage(Adw.Bin):
         else:
             self.refresh()
 
-    def _report(self, result: restorepoints.RestoreResult | None) -> None:
+    def _report(
+        self,
+        result: restorepoints.RestoreResult | None,
+        point: RestorePoint | None = None,
+    ) -> None:
         if result is None:
             self._toast(COPY["undo-nothing"])
             return
@@ -774,7 +810,7 @@ class RestorePage(Adw.Bin):
             # it could say.
             self._toast(failure_sentence(result.warnings[0], rolled_back=result.rolled_back))
             return
-        self._toast(COPY["done"])
+        self._toast(done_sentence(point))
 
     def _failed(self, error: BaseException) -> None:
         """What to say when going back raised instead of reporting.

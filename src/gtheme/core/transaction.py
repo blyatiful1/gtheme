@@ -1273,8 +1273,29 @@ class Transaction:
             shutil.rmtree(journal_dir, ignore_errors=True)
             raise
 
-        baseline.save()
-        shutil.rmtree(journal_dir, ignore_errors=True)
+        # Everything the transaction meant to do has now happened. What is left
+        # is *recording* it — the pristine baseline, and the closing ledger
+        # entry below — and both of those write to ``~/.local/state``, which can
+        # be full, read-only or over quota like any other directory.
+        #
+        # Those two writes sit after the guarded section and outside every
+        # handler, so an ``OSError`` from either used to leave ``apply()`` as a
+        # bare ``OSError``. The UI has no way to tell that apart from a failure
+        # that happened before anything moved, and one caller said so out loud:
+        # the style pages' ``apply_ops`` answered an out-of-space
+        # ``baseline.save()`` with "Your desktop is exactly as it was." over a
+        # desktop whose setting had just been changed — the H2 lie, reached
+        # through the M3 fix. The desktop HAS changed here and nothing was
+        # rolled back, so this leaves by the door that carries that fact.
+        try:
+            baseline.save()
+        except OSError as exc:
+            raise TransactionError(
+                f"the change was made, but recording it failed: {exc}",
+                rolled_back=False,
+            ) from exc
+        finally:
+            shutil.rmtree(journal_dir, ignore_errors=True)
 
         # AS4. A transaction where every setting was skipped and nothing else
         # happened did not apply anything, and recording it as the current Look
@@ -1323,11 +1344,20 @@ class Transaction:
             for op in result.applied
             if isinstance(op, FileWrite | FileRemove | FileLink)
         ]
-        ledger_store.write_entry(
-            owner,
-            prior_files | set(applied_files),
-            prior_settings | set(self._applied_setting_keys(result, context)),
-        )
+        # The same reasoning as ``baseline.save()`` above, for the same reason:
+        # the ops have landed, so a failure to write down what landed is not
+        # "nothing happened".
+        try:
+            ledger_store.write_entry(
+                owner,
+                prior_files | set(applied_files),
+                prior_settings | set(self._applied_setting_keys(result, context)),
+            )
+        except OSError as exc:
+            raise TransactionError(
+                f"the change was made, but recording it failed: {exc}",
+                rolled_back=False,
+            ) from exc
 
         report(Progress.DONE, "Done")
         return result

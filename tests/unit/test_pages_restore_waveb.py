@@ -296,10 +296,13 @@ def test_going_back_without_a_runner_reports_exactly_once(window, backend, tmp_p
     window.toasts.clear()
     before = window.changes
 
-    page.start_apply(page.points()[0])
+    point = page.points()[0]
+    page.start_apply(point)
 
     assert backend.get(ACCENT) == "'green'"
-    assert window.toasts == [restore.COPY["done"]]
+    # Exactly one toast, and it names the moment (U8) rather than saying only
+    # that something was put back.
+    assert window.toasts == [restore.done_sentence(point)]
     assert window.changes - before == 1
 
 
@@ -349,6 +352,39 @@ def test_the_header_undo_reaches_for_the_newest_moment_and_never_the_pristine_on
     assert dialog is not None
     assert restore.default_label() in dialog.get_body()
     assert restore.COPY["pristine-title"] not in dialog.get_body()
+
+
+def test_the_sentence_at_the_end_names_the_moment_and_uses_the_page_s_own_names(
+    backend, tmp_path
+):
+    """U8's acceptance line ends "toast names the moment".
+
+    ``point_title`` had two call sites when this was first ticked closed — the
+    list row and the confirmation — and every success toast was still the
+    unnamed "Your desktop is back the way it was.". Naming is why this function
+    exists, and the pristine moment is why it goes through ``point_title``
+    rather than reading ``point.label``: "Before gtheme" is a name this page
+    gives, and a toast that called it something else would be the third name
+    for one thing.
+    """
+    saved = restorepoints.capture(
+        [ACCENT], label="My desktop, 25 August", backend=backend, root=tmp_path
+    )
+    pristine = restorepoints.capture(
+        [ACCENT],
+        label="whatever the engine stored",
+        kind="pristine",
+        backend=backend,
+        root=tmp_path,
+        point_id=restorepoints.PRISTINE_ID,
+    )
+
+    assert "My desktop, 25 August" in restore.done_sentence(saved)
+    assert restore.COPY["pristine-title"] in restore.done_sentence(pristine)
+    assert restore.done_sentence(None) == restore.COPY["done"], (
+        "a caller that genuinely does not know which moment ran may not invent one"
+    )
+    assert jargon.find_banned(restore.done_sentence(saved)) == []
 
 
 def test_the_header_undo_with_nothing_saved_says_so_instead_of_asking(

@@ -215,13 +215,20 @@ def apply_ops(window: Any, ops: Iterable[Op], *, done: str) -> bool:
         # transaction's own guarded section — so a full or read-only
         # ~/.local/state raised PermissionError straight out of a GTK signal
         # handler: no message, no error, and the switch left showing a change
-        # that never happened (review-report M3). The desktop is untouched at
-        # that point, which is why this branch says so.
-        toast(
-            window,
-            f"That change could not be made: {exc.strerror or exc}. "
-            "Your desktop is exactly as it was.",
-        )
+        # that never happened (review-report M3).
+        #
+        # It says the reason and stops there. It first said "Your desktop is
+        # exactly as it was." as well, on the argument that an OSError can only
+        # escape apply() from before anything is written. That argument was
+        # wrong — the engine's own closing writes (the pristine baseline, the
+        # ledger entry) run after every op has landed — and it put the H2 lie
+        # back on the dark-mode switch and the window-heading lettering, this
+        # time over a setting that really had moved. Those two writes now leave
+        # by TransactionError above, carrying rolled_back=False, which is the
+        # branch that owns state claims. This one has no way to know what
+        # landed, so it does not say: a sentence that is only sometimes true is
+        # worse here than no sentence at all.
+        toast(window, f"That change could not be made: {exc.strerror or exc}.")
         return False
     toast(window, done)
     return True

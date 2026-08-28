@@ -1465,6 +1465,20 @@ class LooksPage(Gtk.Box):
     # -- undo --------------------------------------------------------------
 
     def _undo(self, point_id: str) -> None:
+        # The moment is read before the work, and named in the sentence at the
+        # end. This is the fourth surface that could start an undo and the
+        # fourth that said only "Put back how it was." — U8's acceptance line
+        # is "toast names the moment", and one page still not naming it is the
+        # same failure as four pages not naming it. Read first, because going
+        # back takes a restore point of its own and the newest moment
+        # afterwards is a different one.
+        from . import restore as restore_page
+
+        try:
+            point = restorepoints.load(point_id)
+        except OSError:  # pragma: no cover - defensive; a name is never worth a crash
+            point = None
+
         def work(narrate: Any) -> Any:
             return restorepoints.apply_point(point_id, lambda *a: narrate(_first_sentence(a)))
 
@@ -1480,7 +1494,9 @@ class LooksPage(Gtk.Box):
             # nothing written: no transaction.
             warnings = list(getattr(result, "warnings", []) or [])
             failed = bool(warnings) and getattr(result, "transaction", None) is None
-            self._toast(COPY["undo-failed"] if failed else COPY["undone"])
+            self._toast(
+                COPY["undo-failed"] if failed else restore_page.done_sentence(point)
+            )
             self._changed()
 
         self._runner().run(
