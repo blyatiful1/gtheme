@@ -8,7 +8,11 @@ three properties that answer it, and the safety rule underneath the third:
 * every step the work narrates is kept and shown, whichever route it arrives by;
 * the Stop appears only for work that has proved there is a moment to stop at;
 * the stop is raised **once** — the engine narrates while it rolls back, and a
-  stop raised inside a rollback would abandon the desktop halfway home.
+  stop raised inside a rollback would abandon the desktop halfway home;
+* and, because there is only one raise, nothing between the narrator and the
+  engine's failure path may swallow it. The add-on download used to (E5), which
+  is what the last two tests here pin, driving the real ``LookAddons`` and the
+  real ``Transaction._install_extensions``.
 
 Everything runs inline with no window, so no dialog is ever shown.
 """
@@ -154,39 +158,56 @@ def test_pressing_stop_says_what_stopping_is_doing():
     runner.run(work, heading="MAGMA", starting="Starting…", on_done=lambda _o: None)
 
 
+def test_pressing_stop_does_not_claim_a_rollback_that_has_not_happened():
+    """What the label says is what is certain at the moment it is pressed.
+
+    It used to say "Putting back anything that had already changed…" the
+    instant Stop was pressed — before the stop had reached the engine, and in
+    one case (E5) when it never would. The putting back is the engine's own
+    narration and arrives in this same dialog when it really happens.
+    """
+    assert "put" not in COPY["stopping"].lower()
+    assert "back" not in COPY["stopping"].lower()
+
+
 def test_the_stop_is_raised_only_once_so_a_rollback_can_finish():
     """The safety rule. The engine narrates its rollback through the same call.
 
     A stop raised a second time would come out of ``_roll_back`` before it had
-    put anything back, which is the one outcome worse than not stopping.
+    put anything back, which is the one outcome worse than not stopping. This
+    is the shape ``Transaction.apply`` really has: the stop comes out of the
+    narrator, the failure arm catches it, and everything the rollback says is
+    said from inside that arm.
     """
     runner = ApplyRunner(threaded=False)
-    swallowed: list[int] = []
-    outcomes: list[str] = []
+    caught: list[Exception] = []
+    failures: list[Exception] = []
 
     def work(narrate):
         narrate("Getting 11 add-on(s)")
         pump()
         runner.dialog.stop_button.emit("clicked")
         try:
-            narrate("could not get an add-on")
-        except Stopped:
-            # Exactly what the engine's installer arm does with it.
-            swallowed.append(1)
-        narrate("Putting everything back the way it was")
-        narrate("Nothing was changed")
-        return "rolled back"
+            narrate("Changing 40 setting(s)")
+        except Stopped as stopped:
+            caught.append(stopped)
+            # Exactly where ``Transaction._failed`` narrates from.
+            narrate("Putting everything back the way it was")
+            narrate("Nothing was changed")
+            raise
+        return "applied"
 
     runner.run(
         work,
         heading="MAGMA",
         starting="Starting…",
-        on_done=outcomes.append,
-        on_failed=lambda error: pytest.fail(f"the rollback was interrupted: {error}"),
+        on_done=lambda _o: pytest.fail("the stop was lost"),
+        on_failed=failures.append,
     )
 
-    assert swallowed == [1]
-    assert outcomes == ["rolled back"]
+    assert [str(error) for error in caught] == [COPY["stopped"]]
+    assert failures == caught, "the rollback finished and the stop still came out"
+    assert runner.dialog is None
 
 
 def test_work_that_must_not_be_interrupted_is_never_offered_a_stop():
@@ -204,6 +225,102 @@ def test_work_that_must_not_be_interrupted_is_never_offered_a_stop():
         starting="Saving…",
         on_done=lambda _o: None,
         stoppable=False,
+    )
+
+
+# -- nothing between the narrator and the rollback may swallow it (E5) ------
+
+
+class _Batch:
+    """Stands in for ``AddonBatch``: narrates, then says the add-on arrived.
+
+    Stop is pressed while the *first* add-on is downloading, which is the phase
+    the button exists for and the phase that used to eat it.
+    """
+
+    def __init__(self, press) -> None:
+        self.calls: list[str] = []
+        self.press = press
+
+    def run_and_wait(self, wanted, *, on_progress=None, timeout=None):
+        self.calls.append(wanted[0][0])
+        if on_progress is not None:
+            on_progress("Getting add-ons…")
+        if len(self.calls) == 1:
+            self.press()
+        return None, []
+
+
+def _install_phase(runner, monkeypatch):
+    """Drive the real install phase of a three-add-on Look, stopping mid-way.
+
+    Returns ``(addons, result, outcomes, failures, batch)``.
+    """
+    from gtheme.core import transaction as engine
+    from gtheme.core.transaction import Diff, ExtensionInstall, Transaction, TransactionResult
+    from gtheme.ui.pages.looks import LookAddons
+
+    monkeypatch.setattr(engine, "installed_extension_uuids", lambda: set())
+
+    def press():
+        pump()
+        runner.dialog.stop_button.emit("clicked")
+
+    batch = _Batch(press)
+    addons = LookAddons(batch)
+    transaction = Transaction(
+        [
+            ExtensionInstall(uuid="blur-my-shell@aunetx"),
+            ExtensionInstall(uuid="just-perfection-desktop@just-perfection"),
+            ExtensionInstall(uuid="dash-to-dock@micxgx.gmail.com"),
+        ]
+    )
+    transaction.installer = addons
+    result = TransactionResult(diff=Diff())
+    outcomes: list[object] = []
+    failures: list[Exception] = []
+    reached: list[str] = []
+
+    def work(narrate):
+        addons.on_progress = narrate
+        narrate("Saving how things look right now")
+        transaction._install_extensions(result, lambda _stage, text: narrate(text))
+        reached.append("the settings phase")
+        narrate("Changing 40 setting(s)")
+        return "applied"
+
+    runner.run(
+        work,
+        heading="MAGMA",
+        starting="Starting…",
+        on_done=outcomes.append,
+        on_failed=failures.append,
+    )
+    pump()
+    return addons, reached, outcomes, failures, batch
+
+
+def test_a_stop_during_a_download_stops_the_apply(monkeypatch):
+    """It used to be swallowed twice over, and the Look landed anyway (E5)."""
+    runner = ApplyRunner(threaded=False)
+    _addons, reached, outcomes, failures, batch = _install_phase(runner, monkeypatch)
+
+    assert reached == [], "the apply carried on past the phase that was stopped"
+    assert outcomes == [], "a stopped apply must not be reported as a success"
+    assert isinstance(failures[0], Stopped)
+    assert batch.calls == [
+        "blur-my-shell@aunetx",
+        "just-perfection-desktop@just-perfection",
+    ], "the third add-on was never started"
+
+
+def test_a_stop_is_never_reported_as_a_download_that_failed(monkeypatch):
+    """The reason shown blamed the reader's internet for their own decision."""
+    runner = ApplyRunner(threaded=False)
+    addons, _reached, _outcomes, _failures, _batch = _install_phase(runner, monkeypatch)
+
+    assert addons.problems == [], (
+        "a stop is not a download that failed, and must not be worded as one"
     )
 
 

@@ -9,7 +9,9 @@ These tests are about the *first run*, not about the engine: capturing and
 restoring a moment are covered in ``tests/unit/core_restorepoints.py``. What is
 proved here is that the moment is taken, taken once, taken with the right kind
 and id so the Undo page draws it as "Before gtheme", and never taken over the
-top of a record that reaches back further.
+top of a record that reaches back further — nor over a desktop gtheme has
+already changed from a terminal, which the window has no other way to notice
+(review-report U3).
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ import pytest
 
 pytest.importorskip("gi", reason="PyGObject is needed for the onboarding module")
 
+from gtheme.core import ledger, restorepoints  # noqa: E402
 from gtheme.core.restorepoints import PRISTINE_ID, list_restore_points  # noqa: E402
 from gtheme.core.settings_backend import MemoryBackend  # noqa: E402
 from gtheme.ui import onboarding  # noqa: E402
@@ -94,6 +97,46 @@ def test_it_is_never_written_over_once_it_exists(tmp_path, backend):
 
     assert again is None, "the moment before gtheme happened once and cannot happen twice"
     assert _document(tmp_path)["settings"] == {ACCENT: "'green'"}
+
+
+def test_a_desktop_gtheme_already_changed_gets_no_before_gtheme_row(tmp_path, backend):
+    """The first *window* is not the first run (review-report U3).
+
+    ``gtheme apply <look>`` themes the desktop from a terminal and never marks
+    the onboarding banner ``maybe_present`` fires on. Opening the app for the
+    first time afterwards used to write a moment labelled "Before gtheme" over
+    a desktop gtheme had already changed — the one label the app cannot afford
+    to get wrong.
+    """
+    restorepoints.capture(
+        [ACCENT], [], label="Before MAGMA", kind="auto", backend=backend, root=tmp_path
+    )
+    backend.set(ACCENT, "'purple'")
+
+    point = onboarding.capture_pristine_point(
+        backend=backend, root=tmp_path, keys=[ACCENT], dests=[]
+    )
+
+    assert point is None, "a themed desktop is not how it looked before gtheme"
+    assert not (tmp_path / PRISTINE_ID).exists()
+    assert [p.kind for p in list_restore_points(tmp_path)] == ["auto"]
+
+
+def test_the_ownership_ledger_counts_as_having_been_touched(tmp_path, backend):
+    """A change can leave a ledger entry without leaving a moment behind."""
+    ledger.write_entry("magma", {"~/.config/gtk-4.0/gtk.css"}, set())
+
+    assert onboarding.already_touched(tmp_path) is True
+    assert (
+        onboarding.capture_pristine_point(
+            backend=backend, root=tmp_path, keys=[ACCENT], dests=[]
+        )
+        is None
+    )
+
+
+def test_an_untouched_desktop_is_still_recognised_as_one(tmp_path):
+    assert onboarding.already_touched(tmp_path) is False
 
 
 def test_an_upgrade_keeps_version_ones_records_rather_than_todays_desktop(

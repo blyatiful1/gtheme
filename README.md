@@ -20,8 +20,8 @@ Three ways, from easiest to most stubborn. Any one of them is enough.
 
 1. **In the app** — press **Ctrl+Z**, or click **Undo last change** at the top
    of the window. Or open **Undo & Restore Points** in the list on the left and
-   pick the moment you want back, including *Before gtheme* — how your desktop
-   looked before this app ever changed anything.
+   pick the moment you want back, including *Before gtheme* if it is there —
+   how your desktop looked before this app ever changed anything.
 2. **The app won't open, but the desktop works** — open a terminal window
    (hold **Ctrl**, **Alt** and press **T**; if that does nothing,
    [docs/start-here.md](docs/start-here.md) shows another way) and type:
@@ -411,6 +411,13 @@ never pruned. If you are coming from the old command-line gtheme, that row is
 read from version 1's own records instead, so it reaches back to before *that*
 ever ran.
 
+There is one way not to get that row, and gtheme would rather leave it out than
+put the wrong name on it: if you used `gtheme apply` in a terminal before ever
+opening the window, your desktop had already been changed by the time the app
+first ran, and a snapshot taken then would not be "before gtheme" at all. So it
+is not taken. The first-touch record below still covers you, and so does the
+saved moment that `gtheme apply` took before it changed anything.
+
 Underneath it there is a second, independent way back that needs no saved
 moment at all: the first-touch record described under [Will this break my
 desktop?](#will-this-break-my-desktop) — the first time gtheme changes any
@@ -497,6 +504,7 @@ deliberately:
 | `~/.local/state/gtheme/` | your saved moments and the record of what your desktop was before gtheme changed it |
 | `~/.local/share/gtheme/` | Looks you saved or downloaded |
 | `~/.local/share/backgrounds/gtheme/` | copies of background pictures you added yourself |
+| `~/.local/share/gnome-background-properties/gtheme.xml` | the entry naming those pictures in the desktop-wide list, so GNOME's own settings can find them too |
 | `~/.config/gtheme/` | the app's own preferences |
 | `~/.cache/gtheme/` | cached answers from extensions.gnome.org; safe to delete at any time |
 | `~/.local/state/gtheme.v1-backup/` | only if you ever ran the old command-line gtheme. It is the one surviving record of this computer from before *that* ever ran, and nothing can rebuild it — keep it unless you are certain |

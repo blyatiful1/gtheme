@@ -46,6 +46,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
 from ...core import restorepoints  # noqa: E402
 from ...core.backends import get_backend  # noqa: E402
 from ...core.gvariant import parse_string_list, unquote  # noqa: E402
+from ...core.stop import Stopped  # noqa: E402
 from ...core.transaction import (  # noqa: E402
     ENABLED_EXTENSIONS_KEY,
     Diff,
@@ -428,9 +429,9 @@ class ApplyPlan:
             ``ego.install.describe_addons``. The count was all the dialog ever
             said, and a count is not something anybody can agree to: the button
             underneath downloads third-party code (review-report H6). Filled in
-            without asking the network anything, so the dialog opens offline;
-            :meth:`LooksPage.name_addons` replaces it with the real titles and
-            authors when the library answers.
+            from the Look's own file, without asking the network anything, so
+            the preview says the same thing with the network unplugged and
+            opening one is not a request to extensions.gnome.org.
         conflicts: pairs of add-ons that would end up doing the same job once
             this Look is on, in the words ``panels.conflicts`` already uses for
             the Add-ons page (persona-report §2.6).
@@ -1146,6 +1147,14 @@ class LookAddons:
                 InstallReport(op.uuid, InstallOutcome.FAILED, COPY["addons-timeout"])
             )
             return False
+        except Stopped:
+            # The progress callback is the runner's narrator, and the narrator
+            # is where Stop is raised — so a stop pressed during a download
+            # arrives here, looking exactly like a download that failed. It is
+            # not one. Recording it as one told the reader their internet
+            # connection was at fault for their own decision, and the arm below
+            # then let the apply run to the end (review-report E5).
+            raise
         except Exception as error:  # noqa: BLE001 - one add-on may fail; the Look may not
             self.problems.append(_not_added(op.uuid, error))
             return False
@@ -1952,6 +1961,23 @@ class LooksPage(Gtk.Box):
         dialog.present(self)
 
     def _show_preview(self, tile: LookTile, plan: ApplyPlan) -> None:
+        """The preview, built entirely from this computer.
+
+        Nothing here asks the network anything, and that is a promise rather
+        than an accident: README says gtheme "only goes online if you ask it to
+        look for new add-ons or new Looks, and it says so when it does", and
+        SECURITY.md lists the two requests it ever makes. Opening a preview is
+        neither of them.
+
+        A version of this did look the missing add-ons up on
+        extensions.gnome.org — one request each, to replace their identifiers
+        with the titles their authors gave them — behind a dialog that said
+        nothing about going online. The names H6 asked for are already here
+        without it: ``ApplyPlan.addon_lines`` is filled in from the Look's own
+        file when the plan is built, so the reader still agrees to named
+        add-ons rather than to a count, offline, with the network unplugged.
+        A nicer title was not worth the third silent request.
+        """
         dialog = Adw.AlertDialog(heading=tile.title, body=plan.body(), prefer_wide_layout=True)
         if plan.details:
             dialog.set_extra_child(_details_widget(plan.details))
@@ -1968,34 +1994,6 @@ class LooksPage(Gtk.Box):
         dialog.set_close_response("cancel")
         dialog.connect("response", self._on_preview_response, tile, plan)
         dialog.present(self)
-        self.name_addons(plan, dialog)
-
-    def name_addons(self, plan: ApplyPlan, dialog: Adw.AlertDialog) -> None:
-        """Put the add-ons' real titles and authors into a dialog already open.
-
-        The dialog names them the moment it opens, from this computer alone, so
-        it says the same thing with the network unplugged. This asks the library
-        for the titles their authors gave them and rewrites the body when the
-        answer comes — one lookup per add-on, no download, and nothing waits on
-        it. A library that will not answer costs a title and never a name
-        (review-report H6).
-        """
-        if not plan.missing:
-            return
-        batch = self._addon_batch(plan.title)
-        if batch is None or batch.installer.client is None:
-            return
-
-        def named(briefs: Sequence[Any]) -> None:
-            if not self._alive or not briefs:
-                return
-            plan.addon_lines = describe_addons(briefs)
-            dialog.set_body(plan.body())
-
-        try:
-            batch.installer.describe_batch(list(plan.missing), named)
-        except Exception:  # noqa: BLE001 - a nicer title is never worth a crash
-            return
 
     def _on_preview_response(
         self, _dialog: Adw.AlertDialog, response: str, tile: LookTile, plan: ApplyPlan
@@ -2176,10 +2174,11 @@ class LooksPage(Gtk.Box):
     def _addon_client(self, version: str) -> Any:
         """The add-on library, built once per page.
 
-        Once, because the preview now asks it for the add-ons' real titles as
-        well as the download path asking it for builds — and a new session with
-        a new on-disk store per dialog would throw away the answers that make
-        the second look-up free.
+        Once, because one batch asks it for a build per add-on and a new
+        session with a new on-disk store per dialog would throw away the
+        answers that make the next look-up free. Built lazily, on the first
+        thing that really needs the network — opening a preview is not one of
+        them, and must not become one.
         """
         from ...ego.client import DiskCache, EgoClient, SoupTransport
 

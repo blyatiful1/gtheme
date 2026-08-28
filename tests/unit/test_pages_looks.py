@@ -10,6 +10,7 @@ only a temporary Looks folder.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -475,10 +476,63 @@ def test_a_community_tile_is_held_to_the_same_width_and_ellipsis(
     assert entry.description in (tile.get_tooltip_text() or "")
 
 
+def test_security_md_quotes_the_button_that_is_really_on_screen():
+    """The one gesture that consents to downloading third-party shell code.
+
+    SECURITY.md is the document somebody opens to find out exactly what they
+    are agreeing to and where. It named "Get the missing ones" after the button
+    had been relabelled, so it pointed at a control that is not there — and a
+    consent gesture quoted wrongly is worse than one not quoted at all.
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    security = " ".join((repo_root / "SECURITY.md").read_text(encoding="utf-8").split())
+
+    assert f'"{looks.COPY["get-addons"]}"' in security, (
+        "SECURITY.md quotes a button label the app does not use"
+    )
+
+
+def test_opening_a_preview_asks_the_network_for_nothing(
+    config_dir, themes_dir, backend, monkeypatch
+):
+    """The third silent request that was not in the two the docs list.
+
+    README says gtheme "only goes online if you ask it to look for new add-ons
+    or new Looks, and it says so when it does", and SECURITY.md names the two
+    requests it ever makes. A version of this page looked every missing add-on
+    up on extensions.gnome.org as the preview opened — one request each, to
+    swap an identifier for a nicer title, with nothing on screen saying so.
+    """
+    import gtheme.ego.client as client_module
+
+    reached: list[object] = []
+
+    def watched(*args, **_kwargs):
+        # Recorded rather than merely refused: every layer between here and the
+        # preview catches ``Exception``, so a probe that only raises proves
+        # nothing about whether it was called.
+        reached.append(args)
+        raise RuntimeError("there is no network in a test")
+
+    monkeypatch.setattr(client_module, "SoupTransport", watched)
+    write_look(themes_dir, name="wantsaddons", title="Wants add-ons", source="ego")
+    window = FakeWindow(Prefs())
+    window.shell = object()  # there is a desktop to add add-ons to
+    page = looks.build(window)
+    tile = next(tile for tile in page._tiles if tile.title == "Wants add-ons")
+    plan = looks.plan_apply(tile, installed=[], enabled=[])
+    assert plan.missing, "the case that used to reach for the library"
+
+    page._show_preview(tile, plan)
+
+    assert reached == [], "opening a preview reached for extensions.gnome.org"
+    assert plan.addon_lines, "and the names H6 asked for are here without it"
+
+
 def test_the_second_button_still_just_opens_the_add_ons_page(
     config_dir, themes_dir, backend
 ):
-    """"Get the missing ones" is the offer; "Open Add-ons" is still there."""
+    """"Get them and use this look" is the offer; "Open Add-ons" is still there."""
     window = FakeWindow(Prefs())
     page = looks.build(window)
     tile = page._tiles[0]

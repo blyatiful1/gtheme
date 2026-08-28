@@ -136,8 +136,17 @@ outside your home folder.
 | `~/.config/gtheme/prefs.json` | the app's own preferences (window size, which one-off notices you have dismissed) |
 | `~/.local/share/gtheme/v2/themes/` | Looks you saved or downloaded. The four that ship with gtheme are not here — they are inside the installed program |
 | `~/.local/share/backgrounds/gtheme/` | copies of background pictures you added yourself, so that moving the original later cannot break your desktop |
+| `~/.local/share/gnome-background-properties/gtheme.xml` | the names of those same pictures. This is the desktop-wide list every wallpaper picker on the machine reads, GNOME's own included, and writing there on purpose is what makes a picture you chose findable outside this app. The file holds names and file paths and nothing else |
 | `~/.cache/gtheme/ego/` | the last few answers from extensions.gnome.org, so the Add-ons page does not re-ask for the same list. Deleting it costs nothing |
 | `~/.local/share/gnome-shell/extension-updates/` | GNOME's own folder for an add-on update waiting to be moved into place at your next login. gtheme writes an update there rather than over a running add-on |
+
+The last two rows are the only ones that are *yours* rather than gtheme's: the
+picture you picked and the name it goes by. Neither is written down in the
+ownership ledger, so `gtheme rescue` puts your background setting back but
+leaves the copy and its entry where they are. That is deliberate — a rescue is
+for undoing what gtheme changed, not for deleting a picture you added — and it
+means those two are the one thing on this page you have to remove by hand. The
+README says where, under [Can I remove it?](README.md#can-i-remove-it).
 
 Two more places belong to somebody else:
 `~/.local/share/gnome-shell/extensions/` and `/usr/share/gnome-shell/extensions/`,
@@ -146,10 +155,11 @@ add-ons into the first one — by handing the downloaded package to GNOME's own
 `gnome-extensions install` command rather than unpacking files there itself.
 Whether you are shown GNOME's own confirmation box first depends on the route:
 the **Add-ons** page asks the desktop to install, so the desktop shows you its
-dialog; the add-ons a **Look** fetches when you press its "Get the missing
-ones" button are installed from the package without that dialog. Nothing in
-`/usr/share/gnome-shell/extensions/` is ever written — that one is read-only to
-gtheme, and would need administrator rights it never asks for.
+dialog; the add-ons a **Look** fetches, when you press
+its "Get them and use this look" button, are installed from the package without
+that dialog. Nothing in `/usr/share/gnome-shell/extensions/` is ever written —
+that one is read-only to gtheme, and would need administrator rights it never
+asks for.
 
 Files a Look writes are a separate matter: those go where the Look says, which
 may be anywhere below your home folder (`~/.config/alacritty/alacritty.toml`,

@@ -88,7 +88,10 @@ yourself whenever you like. The oldest are pruned when there are too many.
 looked before this app ever changed anything. gtheme saves it the first time
 you open the app, before you have touched a thing, and never writes over it. If
 you upgraded from the old command-line gtheme, it is read from version 1's own
-records instead, so it reaches back to before that ever ran.
+records instead, so it reaches back to before that ever ran. If gtheme had
+already changed something — `gtheme apply` in a terminal, before the window was
+ever opened — the row is left out rather than given to a desktop that was
+already themed.
 
 Every install also has the *first-touch record*, which needs no saved moment at
 all: the first time gtheme changes a setting or a file it writes down what was

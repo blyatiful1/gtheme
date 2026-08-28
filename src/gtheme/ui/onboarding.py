@@ -32,6 +32,15 @@ touched anything, the desktop as it stands *is* "before gtheme", so it is
 recorded under the same id, with the same label, as the imported one. It runs
 once, it is never overwritten, and an upgrader still gets the richer v1 record
 rather than a snapshot of a desktop v1 had already themed.
+
+**And it refuses to write when it would be lying.** A first *window* is not a
+first run: ``gtheme apply <look>`` changes the desktop from a terminal and
+never marks the banner this fires on, so somebody can theme their desktop from
+the command line for a week and then open the app for the first time
+(review-report U3). :func:`already_touched` asks the ownership ledger and the
+saved moments whether gtheme has changed anything here yet, and nothing is
+written when it has. The Undo page then shows no "Before gtheme" row, which is
+the honest outcome: the label means what it says or it is not there.
 """
 
 from __future__ import annotations
@@ -48,7 +57,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gtk  # noqa: E402
 
-from ..core import applog, restorepoints  # noqa: E402
+from ..core import applog, ledger, restorepoints  # noqa: E402
 from ..core.restorepoints import PRISTINE_ID, RestorePoint  # noqa: E402
 from ..core.settings_backend import SettingsBackend  # noqa: E402
 from .applyrunner import ApplyRunner  # noqa: E402
@@ -62,6 +71,7 @@ __all__ = [
     "SECURITY_SENTENCE",
     "SLIDES",
     "Slide",
+    "already_touched",
     "capture_pristine_point",
     "ensure_pristine_point",
     "mark_finished",
@@ -165,6 +175,26 @@ def mark_finished(prefs: Any | None) -> None:
 # --------------------------------------------------------------------------
 
 
+def already_touched(root: str | Path | None = None) -> bool:
+    """Whether gtheme has changed anything on this computer yet.
+
+    Two records answer it, and either one is enough:
+
+    * the **ownership ledger** — every file and setting gtheme currently owns.
+      A Look applied from anywhere writes it, including ``gtheme apply`` from a
+      terminal, which never opens a window;
+    * any **saved moment** under ``root``. One is taken before every change, so
+      a moment that exists at all means a change was about to happen.
+
+    Read rather than assumed because the first *GUI* run is not the same thing
+    as the first run: :func:`maybe_present` fires on the onboarding banner, and
+    ``gtheme apply <look>`` changes the desktop without ever marking it.
+    """
+    if any(restorepoints.list_restore_points(root=root)):
+        return True
+    return bool(ledger.read_ledger())
+
+
 def capture_pristine_point(
     *,
     backend: SettingsBackend | None = None,
@@ -174,7 +204,7 @@ def capture_pristine_point(
 ) -> RestorePoint | None:
     """Make the "Before gtheme" moment exist. No widgets, no thread.
 
-    Three answers, in this order, and the order is the whole design:
+    Four answers, in this order, and the order is the whole design:
 
     1. **It already exists.** Nothing is written. The moment before gtheme
        arrived happened once and cannot happen again, so this function will
@@ -187,12 +217,21 @@ def capture_pristine_point(
        themed it. :func:`~gtheme.core.restorepoints.import_v1_baseline` is
        tried first for exactly that reason, and an upgrader keeps the record
        they have always had.
-    3. **Neither.** Then this desktop, right now, before the reader has pressed
-       anything, *is* how it looked before gtheme. It is recorded over the same
-       two lists a hand-saved moment covers — every setting gtheme knows how to
-       change (:func:`~gtheme.ui.pages.restore.descriptor_keys`) and every file
-       the ownership ledger claims — under the fixed id and the same label, so
-       the Undo page draws it exactly like an imported one.
+    3. **gtheme has already changed something here.** Then today's desktop is
+       not "before gtheme" either, and calling it that would be the same lie
+       the v1 case above exists to avoid. This is not hypothetical: ``gtheme
+       apply <look>`` from a terminal changes the desktop and never marks the
+       onboarding banner, so the *first* time the window opens can be long
+       after the first change (review-report U3). :func:`already_touched` is
+       what asks, and nothing is written when the answer is yes — a missing row
+       is honest; a row labelled "Before gtheme" over an already-themed desktop
+       is not.
+    4. **None of those.** Then this desktop, right now, before the reader has
+       pressed anything, *is* how it looked before gtheme. It is recorded over
+       the same two lists a hand-saved moment covers — every setting gtheme
+       knows how to change (:func:`~gtheme.ui.pages.restore.descriptor_keys`)
+       and every file the ownership ledger claims — under the fixed id and the
+       same label, so the Undo page draws it exactly like an imported one.
 
     Args:
         backend: where current values are read from. Defaults to the process
@@ -202,13 +241,18 @@ def capture_pristine_point(
             read five hundred real settings.
 
     Returns:
-        The moment, or None when there already was one.
+        The moment, or None when there already was one and None when this
+        desktop has been changed already — the row is worth losing, the label
+        is not worth breaking.
     """
     if restorepoints.load(PRISTINE_ID, root=root) is not None:
         return None
     imported = restorepoints.import_v1_baseline(root=root)
     if imported is not None:
         return imported
+    if already_touched(root):
+        _log.info("not saving %r: gtheme has already changed this desktop", PRISTINE_LABEL)
+        return None
     covered = list(keys) if keys is not None else restore_page.descriptor_keys()
     files = list(dests) if dests is not None else restore_page.claimed_dests()
     return restorepoints.capture(

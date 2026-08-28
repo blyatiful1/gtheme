@@ -51,6 +51,7 @@ from .gvariant import format_string_list, merge_string_lists, parse_string_list,
 from .lock import LockBusy, process_lock
 from .paths import dest_root, xdg_data_home
 from .settings_backend import BackendError, BackendErrorKind, SettingsBackend
+from .stop import Stopped
 
 __all__ = [
     "Diff",
@@ -1830,6 +1831,13 @@ class Transaction:
         installed add-on that is never turned on changes nothing about the
         desktop. What *does* change the desktop — the enabled list — is written
         in the settings phase and rolls back with it.
+
+        The one thing coming out of the installer that is *not* a failed
+        download is :class:`~gtheme.core.stop.Stopped`, and it is named and
+        re-raised rather than swallowed with the rest. This is the longest
+        phase of the longest apply and therefore the phase somebody is most
+        likely to stop during; treating that as "this add-on could not be
+        downloaded" and carrying on was review-report E5.
         """
         ops = self._install_ops()
         if not ops:
@@ -1845,6 +1853,14 @@ class Transaction:
             if installer is not None and op.source != "local-only":
                 try:
                     landed = bool(installer(op))
+                except Stopped:
+                    # Somebody pressed Stop. Not a download that failed: the
+                    # arm below would record it as one, this loop would carry
+                    # on to the next add-on, and the Look the reader had just
+                    # asked to stop would land anyway (review-report E5). It
+                    # leaves by the ordinary failure door instead, which is the
+                    # door that rolls back.
+                    raise
                 except Exception as exc:  # noqa: BLE001 - a download is allowed to fail
                     landed = False
                     report(Progress.EXTENSIONS, f"could not get an add-on: {exc}")

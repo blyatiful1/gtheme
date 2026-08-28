@@ -37,15 +37,26 @@ while it rolls *back* too, and a stop raised inside a rollback would abandon
 the desktop halfway home — the one outcome worse than not stopping. So the
 first raise is the only one.
 
-**One known gap, named rather than papered over.** A Look that fetches add-ons
-runs the download through an installer seam, and both
+**Which is why nothing between here and the rollback may swallow it.** That
+one raise has to reach the engine's failure path or it is simply lost. A Look
+that fetches add-ons runs the download through an installer seam, and both
 ``LookAddons.__call__`` and ``Transaction._install_extensions`` wrap that call
 in ``except Exception`` — correctly, because one add-on failing must not lose
-the Look. A stop raised while an add-on is downloading is therefore recorded as
-"this add-on could not be downloaded" and the apply carries on to the end; the
-change lands, and the way back is the Undo the toast already carries. Closing
-that properly means the installer seam telling a stop apart from a failed
-download, which belongs to the file that owns the seam, not to this one.
+the Look. Those two arms used to catch the stop as well, so a Stop pressed
+during the download — the longest phase of the longest apply, and the phase
+this button exists for — was recorded as "this add-on could not be downloaded",
+blaming the reader's internet for their own decision, and the apply then ran to
+the end and reported success under a dialog that had just said it was putting
+things back (review-report E5). Both arms now name
+:class:`~gtheme.core.stop.Stopped` and re-raise it, and that module carries the
+argument for why it is an ordinary exception rather than a ``BaseException``.
+
+**What the dialog says once Stop is pressed is only what is certain.** It says
+the change is stopping, and not that anything is being put back: the putting
+back is the engine's own narration, which arrives in this same dialog when it
+really happens. Pressed during the last step of all, a Stop lands too late to
+stop anything, and a label that had already announced a rollback would be the
+same lie in a smaller font.
 """
 
 from __future__ import annotations
@@ -60,6 +71,8 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
 from gi.repository import Adw, GLib, Gtk  # noqa: E402
+
+from ..core.stop import Stopped  # noqa: E402
 
 __all__ = ["COPY", "ApplyRunner", "Narrate", "Stopped", "Work"]
 
@@ -77,7 +90,11 @@ COPY: dict[str, str] = {
         "Stopping takes effect between steps, never in the middle of one. "
         "Anything that had already been changed is put back."
     ),
-    "stopping": "Stopping. Putting back anything that had already changed…",
+    # Only what is true the instant Stop is pressed. The step that is running
+    # cannot be interrupted, and whether anything is put back depends on there
+    # being a next step to refuse — so the rollback is announced by the engine
+    # narrating it into this same dialog, not promised here in advance (E5).
+    "stopping": "Stopping as soon as the step that is running has finished…",
     "stopped": "You stopped this change.",
 }
 
@@ -88,16 +105,6 @@ HISTORY_LINES = 6
 #: How often the bar moves while a single long step is running. The bar also
 #: moves on every step, so this is only about the three-minute one.
 PULSE_MS = 700
-
-
-class Stopped(Exception):
-    """Raised out of the narrator when somebody pressed Stop.
-
-    Deliberately an ordinary exception: it travels the engine's existing
-    failure path, which is the path that rolls back. A separate cancellation
-    channel would need the engine to learn about cancellation, and would then
-    need its own rollback.
-    """
 
 
 class _Stop:
@@ -192,7 +199,12 @@ class ProgressDialog(Adw.AlertDialog):
         self.stop_note.set_visible(True)
 
     def stopping(self) -> None:
-        """Say what pressing Stop is now doing, and that it cannot be pressed twice."""
+        """Say what pressing Stop is now doing, and that it cannot be pressed twice.
+
+        It does not say the desktop is being put back. That happens when the
+        stop reaches the engine, and the engine says so itself, in this dialog,
+        one step later (E5).
+        """
         self.stop_button.set_sensitive(False)
         self.stop_note.set_label(COPY["stopping"])
 
