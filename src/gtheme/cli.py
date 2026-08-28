@@ -1,6 +1,6 @@
 """Command line entry point.
 
-Three subcommands, and only three:
+Four subcommands, and only four:
 
 ``gui`` (the default)
     Open the app. This is what the ``.desktop`` launcher runs.
@@ -13,7 +13,14 @@ Three subcommands, and only three:
 ``validate <dir>``
     For people authoring a Look: check a preset folder and print what's wrong.
 
-Whichever of the three runs, the log file and the crash hooks are set up first
+``apply <name|folder> [--dry-run]``
+    Use a Look without opening the app, for anyone who keeps their setup in a
+    repository or rebuilds a machine from a script. Same compiler, same
+    refusals and same restore point as the button in the window; see
+    :mod:`gtheme.headless_apply`. Imported late, like ``gui``, because the
+    rescue path must not pay for anything it does not need.
+
+Whichever of them runs, the log file and the crash hooks are set up first
 (:mod:`gtheme.core.applog`) — including for ``rescue``, which is the one people
 run when something has already gone wrong. That import is stdlib-only, so it
 cannot cost the rescue path its independence from PyGObject.
@@ -51,6 +58,22 @@ def _build_parser() -> argparse.ArgumentParser:
     validate = subs.add_parser("validate", help="check a Look folder for mistakes")
     validate.add_argument("directory", help="folder containing theme.toml")
 
+    apply_look = subs.add_parser(
+        "apply",
+        help="use a Look, without opening the app",
+        description=(
+            "Use a Look on this desktop. Takes the name of a Look you have, or "
+            "the folder one lives in. A saved moment is taken first, so the Undo "
+            "page can put your desktop back."
+        ),
+    )
+    apply_look.add_argument("look", help="the name of a Look, or the folder one lives in")
+    apply_look.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="say what would change, and change nothing",
+    )
+
     return parser
 
 
@@ -82,7 +105,18 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     return 0
 
 
-_COMMANDS = {"gui": _cmd_gui, "rescue": _cmd_rescue, "validate": _cmd_validate}
+def _cmd_apply(args: argparse.Namespace) -> int:
+    from .headless_apply import run_apply
+
+    return run_apply(args.look, dry_run=args.dry_run)
+
+
+_COMMANDS = {
+    "gui": _cmd_gui,
+    "rescue": _cmd_rescue,
+    "validate": _cmd_validate,
+    "apply": _cmd_apply,
+}
 
 
 def main(argv: Sequence[str] | None = None) -> int:

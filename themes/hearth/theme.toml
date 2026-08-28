@@ -1,0 +1,149 @@
+# HEARTH — the warm Look.
+#
+# The other half of the answer to a collection of four dark rices. Cream and
+# amber with a terracotta highlight, and the one thing in the collection that
+# touches Night Light: warmth in the evening is what the word means.
+#
+# Like DAYBREAK it is deliberately small — one picture and a handful of
+# settings, no add-ons, no terminal files, nothing to install first. README.md
+# says what it does and what it does not.
+
+format = 2
+
+[meta]
+name = "hearth"
+title = "HEARTH — banked embers"
+description = "A warm desk: cream surfaces, amber light low in the frame, terracotta highlight. Turns on Night Light so the evening matches the picture. It uses only what a stock GNOME desktop already has — no add-ons, no downloads, nothing to install."
+author = "blyatiful1"
+version = "1.0.0"
+min_shell = "49"
+screenshots = ["wallpaper/hearth-firelight.png"]
+
+# Named colours. gtheme does not interpret these; they are here so the app can
+# show swatches and so the Terminal page can offer to put the same colours in
+# your command window. This Look does not write a terminal file itself — see
+# README.md — so the sixteen below are an offer, not a change.
+[palette]
+cream = "#FBF3E6"
+oat = "#F2E5D0"
+sand = "#E2C7A2"
+ember = "#F4BE6E"
+amber = "#E0A040"
+terracotta = "#C2703F"
+clay = "#9C4F2E"
+soot = "#46362B"
+ash = "#7A6857"
+sage = "#6B7F3A"
+bg = "#FBF3E6"
+fg = "#46362B"
+cursor = "#C2703F"
+ansi_black = "#46362B"
+ansi_red = "#B0442F"
+ansi_green = "#6B7F3A"
+ansi_yellow = "#B07818"
+ansi_blue = "#46708F"
+ansi_magenta = "#8E5470"
+ansi_cyan = "#3E7F76"
+ansi_white = "#E7D9C2"
+ansi_bright_black = "#7A6857"
+ansi_bright_red = "#C75C40"
+ansi_bright_green = "#83984A"
+ansi_bright_yellow = "#D08F22"
+ansi_bright_blue = "#5A85A6"
+ansi_bright_magenta = "#A66886"
+ansi_bright_cyan = "#4E9890"
+ansi_bright_white = "#FBF3E6"
+
+# ---------------------------------------------------------------- files
+# One picture. That is the whole of it.
+
+[[files]]
+src = "wallpaper/hearth-firelight.png"
+dest = "~/.local/share/backgrounds/hearth/hearth-firelight.png"
+
+# ------------------------------------------------------------- settings
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background picture-uri"
+value = "'file://{{ home }}/.local/share/backgrounds/hearth/hearth-firelight.png'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background picture-uri-dark"
+value = "'file://{{ home }}/.local/share/backgrounds/hearth/hearth-firelight.png'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background picture-options"
+value = "'zoom'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background primary-color"
+value = "'#FBF3E6'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.screensaver picture-uri"
+value = "'file://{{ home }}/.local/share/backgrounds/hearth/hearth-firelight.png'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.screensaver picture-options"
+value = "'zoom'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface color-scheme"
+value = "'prefer-light'"
+component = "colors"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface accent-color"
+value = "'orange'"
+component = "colors"
+
+# Adwaita, not adw-gtk3: the stock theme is already installed on every GNOME
+# desktop, and naming a theme that is not there is a Look that half-applies.
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface gtk-theme"
+value = "'Adwaita'"
+component = "colors"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface icon-theme"
+value = "'Adwaita'"
+component = "icons"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface cursor-theme"
+value = "'Adwaita'"
+component = "cursor"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface font-name"
+value = "'Adwaita Sans 11'"
+component = "fonts"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface document-font-name"
+value = "'Adwaita Sans 11'"
+component = "fonts"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface monospace-font-name"
+value = "'Adwaita Mono 11'"
+component = "fonts"
+
+# The warm half of the Look. Night Light shifts the screen towards orange in
+# the evening; this is the one Look in the collection that switches it on, and
+# the preview says so in as many words.
+[[settings]]
+key = "gsettings:org.gnome.settings-daemon.plugins.color night-light-enabled"
+value = "true"
+component = "night-light"
+
+[[settings]]
+key = "gsettings:org.gnome.settings-daemon.plugins.color night-light-temperature"
+value = "uint32 3400"
+component = "night-light"

@@ -551,6 +551,27 @@ window that half-works. gtheme was built and tested on Arch; the easy-way
 installer is written to work anywhere and says exactly what is missing if it
 does not.
 
+### Can I use a Look without opening the app?
+
+Yes, from a terminal window:
+
+```sh
+gtheme apply nightbloom
+gtheme apply ~/dotfiles/my-look
+gtheme apply ~/dotfiles/my-look --dry-run
+```
+
+Give it the name of a Look you have, or the folder one lives in. `--dry-run`
+prints exactly what would change and changes nothing — including, by name, any
+file the Look would write that can start a program.
+
+It is the same machinery the button in the window uses: the same saved moment
+taken before anything changes, the same refusal of anything a Look may not do,
+and the same putting-everything-back if a step fails. It prints the reason and
+stops with a failure code if the Look cannot be used, so a script can tell.
+This is for people who keep their setup in a repository or rebuild a computer
+from a script; everyone else should use the window.
+
 ### Where did the old command-line gtheme go?
 
 Nowhere. v1 is preserved in full on the

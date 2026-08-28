@@ -86,8 +86,7 @@ To have it bundled with gtheme, it also needs:
   publish time by `tools/build_index.py`, not by the format — an unpreviewable
   Look is exactly what this app exists to spare people.
 - **A `README.md` in the Look's folder** naming anything from your original
-  desktop that did *not* come across, and why. The four bundled Looks all have
-  one. This matters more than it sounds: a Look that quietly delivers two
+  desktop that did *not* come across, and why. Every bundled Look has one. This matters more than it sounds: a Look that quietly delivers two
   thirds of what its screenshot shows is how people stop trusting the whole
   collection.
 - **Regenerate the index** and commit the result:

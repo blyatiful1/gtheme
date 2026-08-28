@@ -7,6 +7,7 @@ touches nothing on the machine running it.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -39,7 +40,18 @@ SCHEMA_XML = f"""<?xml version="1.0" encoding="UTF-8"?>
 
 
 @pytest.fixture
-def backend(memory_settings, schema_source_factory):
+def backend(memory_settings, schema_source_factory, tmp_dest_root):
+    """The in-memory backend, and a throwaway home folder to go with it.
+
+    ``tmp_dest_root`` is not decoration here. ``capture_share`` reads a palette
+    back from the terminal when no Look is applied, and the terminal adapters
+    resolve their configuration through ``terminal.fsio.config_root()``, which
+    is the *real* ``~/.config`` unless ``GTHEME_DEST_ROOT`` says otherwise. Nine
+    tests in this file call ``capture_share``; without the root they read the
+    developer's own ghostty colours and their result depends on the machine —
+    the one property ``tests/conftest.py`` exists to guarantee.
+    """
+    del tmp_dest_root  # requested for its environment, not its value
     memory_settings.schema_source = schema_source_factory(SCHEMA_XML)
     return memory_settings
 
@@ -193,11 +205,103 @@ def test_a_shared_look_is_valid_and_loadable(backend, tmp_path):
 
 
 @mutating
+def test_a_save_here_reads_nothing_off_the_machine_running_the_suite(backend, tmp_path):
+    """The ``backend`` fixture's second half, pinned.
+
+    ``capture_share`` falls back to the colours a terminal on this computer is
+    wearing, and the terminal adapters resolve their configuration through
+    ``terminal.fsio.config_root()`` — the developer's real ``~/.config`` unless
+    ``GTHEME_DEST_ROOT`` says otherwise. Nine tests in this file call
+    ``capture_share``; without that root they read whatever ghostty config the
+    machine happens to have, and their result depends on who ran them.
+    """
+    from gtheme.terminal import fsio
+
+    root = Path(os.environ["GTHEME_DEST_ROOT"])
+    assert fsio.config_root().is_relative_to(root)
+
+    result = cap.capture_share(
+        [key("icon-theme")], backend, out_dir=tmp_path / "look", name="mine", title="Mine"
+    )
+    assert result.preset.palette == {}
+    assert [o.kind for o in result.omissions if o.kind == "palette"] == ["palette"]
+
+
+@mutating
 def test_a_shared_look_with_no_picture_asks_for_one(backend, tmp_path):
     result = cap.capture_share(
         [key("icon-theme")], backend, out_dir=tmp_path / "look", name="mine", title="Mine"
     )
     assert any("add a screenshot" in w for w in result.warnings)
+
+
+#: Refused by ``core.policy`` — gtheme describes this setting on its own page,
+#: so it is in the corpus every save reads, and every save leaves it out.
+TERMINAL_EXEC = "gsettings:org.gnome.desktop.default-applications.terminal exec"
+TERMINAL_EXEC_ARG = "gsettings:org.gnome.desktop.default-applications.terminal exec-arg"
+
+
+@mutating
+def test_the_notes_after_a_save_say_each_thing_once_and_in_words(backend, tmp_path):
+    """The dialog after "save my desktop" is read by a person, not a programmer.
+
+    It said the same omission twice — once as "one setting was left out …
+    (gsettings:org.gnome.desktop.lockdown disable-show-password)" and once as
+    "gsettings:org.gnome.desktop.lockdown disable-show-password: it may contain
+    something private…" — and it showed a raw schema path to everybody who ever
+    saved a desktop, because one refused setting is left out of every single
+    save. The keys stay in ``omissions`` for a dialog that wants to lay them
+    out; the sentences say what happened.
+    """
+    backend.set(key("api-token"), "'hunter2'")
+    result = cap.capture_share(
+        [key("api-token"), key("icon-theme"), TERMINAL_EXEC],
+        backend,
+        out_dir=tmp_path / "look",
+        name="mine",
+        title="Mine",
+    )
+
+    assert [w for w in result.warnings if "something private" in w] == [
+        "one setting was left out because it may contain something private, like a password"
+    ]
+    assert [w for w in result.warnings if "not allowed to change" in w] == [
+        "one setting was left out because a Look is not allowed to change it"
+    ]
+    assert len(set(result.warnings)) == len(result.warnings), result.warnings
+    assert not [w for w in result.warnings if "gsettings:" in w or "org.gnome" in w]
+    assert {o.what for o in result.omissions if o.kind == "setting"} == {
+        key("api-token"),
+        TERMINAL_EXEC,
+    }
+
+
+def test_the_lines_a_save_shows_are_words_the_app_is_allowed_to_say():
+    """The jargon lint reaches ``gtheme.ui``; these sentences are written here.
+
+    That is how ``gsettings:org.gnome.…`` ended up in a dialog with nothing red
+    anywhere. The generated half of the copy gets the same lint as the written
+    half.
+    """
+    from gtheme.ui import jargon
+
+    for _reason, one, many in cap._SETTING_NOTES:
+        assert jargon.find_banned(one) == [], one
+        assert jargon.find_banned(many) == [], many
+
+
+@mutating
+def test_settings_left_out_for_the_same_reason_are_counted_together(backend, tmp_path):
+    result = cap.capture_share(
+        [TERMINAL_EXEC, TERMINAL_EXEC_ARG],
+        backend,
+        out_dir=tmp_path / "look",
+        name="mine",
+        title="Mine",
+    )
+    assert [w for w in result.warnings if "not allowed to change" in w] == [
+        "2 settings were left out because a Look is not allowed to change them"
+    ]
 
 
 @pytest.mark.parametrize(

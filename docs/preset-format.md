@@ -466,6 +466,8 @@ file first, or the selection names something that is not there yet.
   collection.
 - [docs/architecture.md](architecture.md) — what happens to a Look after it
   loads.
-- The four bundled Looks under [`themes/`](../themes) are the best worked
-  examples there are, and each has its own `README.md` naming anything from the
-  original that did not survive the conversion.
+- The bundled Looks under [`themes/`](../themes) are the best worked examples
+  there are, and each has its own `README.md` naming anything from the original
+  that did not survive the conversion. `daybreak` and `hearth` are the two
+  smallest — one picture and a handful of settings each — and the place to
+  start if you are writing your first one.
