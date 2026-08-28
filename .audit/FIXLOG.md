@@ -30,30 +30,38 @@ Wave commits: `465cdcd` (packaging), `4f9f9d0` (docs), `ca88c0e` + `f6486ff` (ha
 
 Review found one item that had drifted worse than "pending" during Wave 0 itself and is tracked under its real ID, not a Wave-0 one: **H6** (Wave C, add-on install overclaim) — the docs pass's SECURITY.md rewrite at 4f9f9d0 introduced a *new* instance of the H6 overclaim ("Add-ons are installed there by GNOME's own installer, never by gtheme directly" — false, `gnome-extensions install` is called directly from the Look path). Fixed for SECURITY.md at `b2dbf81`. H6 is **not** closed: SECURITY.md:64-66, README:323-324 and docs/preset-format.md:249 still carry the original instances and remain Wave C's to fix — do not re-check H6's box in Wave C from this note alone.
 
-## Wave A — core engine (core/, preset/ only; UI halves of these IDs live in Wave B)
+## Wave A — core engine (core/, preset/ only; UI halves of these IDs live in Wave B) — CLOSED 2026-08-28
+Wave commits: `bb8de6a` (A2), `4df58e1` (A1), `14247f8` (review-fix, C1/H4/H10). Gate green at `14247f8`: 2045 passed, 2 skipped, 28 deselected, ruff clean, `verify.sh: OK` (measured this session).
+
+**Policy-design note (C1/H4):** C1 and H4 did not ship as two separate ad-hoc refusal lists. A1 introduced a single two-tier write policy (`src/gtheme/core/policy.py`): REFUSED destinations/keys (autostart, systemd, environment.d, shell rc files, `.desktop`/`.service` suffixes anywhere, media-keys commands, default-applications exec, keyfile: keys, non-allow-listed dconf trees) are blocked outright at compile+apply time; a CONSEQUENTIAL tier (starship.toml, alacritty/ghostty/kitty/wezterm/tmux/fastfetch config) is allowed but named individually in the preview instead of collapsing into an anonymous file count. The review-fix pass closed a symlink-classification bypass in this same policy module (C1) and a Ptyxis-profile `custom-command`/`use-custom-command`/`login-shell` gap in the dconf allow-list (H4) rather than reopening the two-tier design.
+
 Agent A1 owns transaction.py, preset/compile.py, preset/model.py, preset/placeholders glue:
-- [ ] C1 file-destination policy (autostart/systemd/rc/starship/.desktop/.service refusal) — pending
-- [ ] H4 settings-key policy (media-keys command, default-applications exec, dconf: scope) — pending
-- [ ] H5 confine_src called in compile_preset + re-checked in _rendered + regression test through apply — pending
-- [ ] H1(txn) rollback on Exception, ledger restored, real rolled_back re-raised as TransactionError — pending
-- [ ] H9 rolled_back &= not cleanup_changed; no re-point at stripped Look; tidy-up narrated — pending
-- [ ] M1 cleanup warnings/kept/dead surfaced on TransactionResult — pending
-- [ ] M2 no-op ops not claimed (or orphan-without-baseline = satisfied) — pending
-- [ ] M12 unresolved value tokens skip the op — pending
-- [ ] L4 add-on install skips reported without session bus — pending
-- [ ] L8 min_shell compared at plan/apply; doc aligned — pending
-- [ ] X1 captured-Look add-on settings apply AFTER extension install (phase order/two-pass) — pending
-- [ ] M16-AS5 settings phase gate asks the backend, not the env — pending
+- [x] C1 file-destination policy (autostart/systemd/rc/starship/.desktop/.service refusal) — fixed@4df58e1 (two-tier policy.py + preflight), fixed@14247f8 (review-fix: symlink-bypass closed — `file_verdict` now takes the worse of the as-written and fully-resolved destination, both directions)
+- [x] H4 settings-key policy (media-keys command, default-applications exec, dconf: scope) — fixed@4df58e1 (policy.setting_verdict + dconf allow-list), fixed@14247f8 (review-fix: `/org/gnome/Ptyxis/` tree allow-list gap closed — `custom-command`/`use-custom-command`/`login-shell` explicitly refused for both dconf: and gsettings-path:/gsettings: spellings). Advisory left open (not re-opening the box): `/org/gnome/shell/extensions/` is still a tree-shaped allow-list, so a shell-extension that stores its own exec command in dconf (Executor, Command Menu, Argos) is reachable the same way Ptyxis was — named in review as an inherent limit of a tree allow-list, not fixed this wave.
+- [x] H5 confine_src called in compile_preset + re-checked in _rendered + regression test through apply — fixed@4df58e1
+- [x] H1(txn) rollback on Exception, ledger restored, real rolled_back re-raised as TransactionError — fixed@4df58e1 (BaseException-only-flush behavior deliberately unchanged — verified against 3 crash-survival tests that require it, see commit for reasoning)
+- [x] H9 rolled_back &= not cleanup_changed; no re-point at stripped Look; tidy-up narrated — fixed@4df58e1
+- [x] M1 cleanup warnings/kept/dead surfaced on TransactionResult — fixed@4df58e1
+- [x] M2 no-op ops not claimed (or orphan-without-baseline = satisfied) — fixed@4df58e1
+- [x] M12 unresolved value tokens skip the op — fixed@4df58e1
+- [~] L4 add-on install skips reported without session bus — fixed@4df58e1
+- [~] L8 min_shell compared at plan/apply; doc aligned — **partial**: engine half fixed@4df58e1 (`compile.shell_warning()` + `compile_preset(shell_version=...)`); UI half NOT done — `ui/pages/looks.py:build_apply_plan` never passes `shell_version`, so the warning cannot fire in the running app. ~2-line follow-up, explicitly deferred to whoever picks up Wave B's looks.py (B2/U4 territory per A1's own concern list). Do not tick fully closed until that lands.
+- [~] X1 captured-Look add-on settings apply AFTER extension install (phase order/two-pass) — **partial**: engine half fixed@4df58e1 (install phase hoisted above settings + above the no-session guard, `installer` seam added to Transaction). Real installer wiring (so one Apply both installs and configures an add-on) is explicitly deferred to Wave C / C2 (`ego/install.py` + `looks.py`); until then the user-visible symptom (install, then a second Apply) persists. Also carries an advisory from review: the reorder lets an install-only apply satisfy the AS4 "nothing changed" gate and report success — only reachable once Wave C wires a real installer; note for whoever does.
+- [x] M16-AS5 settings phase gate asks the backend, not the env — fixed@4df58e1 (`core.backends.can_write_settings`, AutoBackend implements it; advisory: SubprocessBackend/GioBackend used bare in a session-less context now hard-fail per-key instead of skipping gracefully — ~4-line follow-up noted, not required for this wave's scope)
 Agent A2 owns settings_backend.py, gvariant.py, baseline.py, restorepoints.py, core tests:
-- [ ] H7 never-written dconf path = writable unset, not missing — pending
-- [ ] L2 GioBackend.reset read-back verify — pending
-- [ ] H1(baseline) record_file/record_setting I/O failures → TransactionError — pending
-- [ ] H10 v1 importer: symlink → {"link": target}; missing blob → omit dest (synthetic v1 fixture test) — pending
-- [ ] M14 manual capture unions ledger-claimed keys — pending
-- [ ] L1(core) RestoreResult carries rolled_back — pending
-- [ ] L18(core) Baseline.wipe deleted — pending
-- [ ] M18 restore-failure test made real (fail after something landed; no tautology) — pending
-- [ ] M19 rescue failure-path tests (exit 1 preserves records; LockBusy) — pending
+- [x] H7 never-written dconf path = writable unset, not missing — fixed@bb8de6a (new `BackendErrorKind.UNSET`; backend + baseline + restorepoints sides), confirmed by A1's transaction-side mapping in 4df58e1 (shared contract, both halves verified together)
+- [x] L2 GioBackend.reset read-back verify — fixed@bb8de6a (SubprocessBackend.reset deliberately left without read-back — no reliable way to distinguish "no user value" from "effective default" for that backend; noted as a known parity gap, not a miss)
+- [x] H1(baseline) record_file/record_setting I/O failures → TransactionError — fixed@bb8de6a (new `BaselineError`, deliberately not an `OSError` subclass — flagged to Wave B: `except OSError` in apply_ops (M3) will NOT catch it, must reach A1's rollback handler)
+- [x] H10 v1 importer: symlink → {"link": target}; missing blob → omit dest (synthetic v1 fixture test) — fixed@bb8de6a (importer half), fixed@14247f8 (review-fix: sibling bug in `restorepoints.capture()` closed — copy2/readlink failure on a file that DOES exist was still recording `None` → `FileRemove`, i.e. Undo would delete a file that failed to copy rather than leaving it alone; same warn-and-omit shape now used on both sides)
+- [x] M14 manual capture unions ledger-claimed keys — fixed@bb8de6a
+- [x] L1(core) RestoreResult carries rolled_back — fixed@bb8de6a (UI branch is Wave B3's L1(ui), unaffected)
+- [x] L18(core) Baseline.wipe deleted — fixed@bb8de6a (verified zero callers repo-wide before deleting; UI half L18(ui) remains Wave B4's)
+- [x] M18 restore-failure test made real (fail after something landed; no tautology) — fixed@bb8de6a (mutation-checked: reverting `_roll_back`'s settings leg to a no-op turns the rewritten test red)
+- [x] M19 rescue failure-path tests (exit 1 preserves records; LockBusy) — fixed@bb8de6a (mutation-checked: hoisting `write_ledger({})` above the `if stuck:` guard in rescue.py turns the new test red)
+
+**Not fully closed — do not re-tick without doing the remaining work:** L8 (UI half, looks.py), X1 (Wave C real installer wiring). Everything else above is fully fixed and gate-verified.
+
+**Re-baselined verify numbers (measured this session at HEAD `14247f8`):** `--collect-only`: 2047/2075 collected (28 deselected); `verify.sh`: 2045 passed · 2 skipped · 28 deselected · ruff clean · `verify.sh: OK`. Delta from the prior baseline (1960 collected / 1958 passed): +115 collected total across the wave — A2's bb8de6a (+26), A1's 4df58e1 (+42 net: two new regression files, test_look_write_policy.py=29 + test_apply_contract.py=13), review-fix 14247f8 (+13: 6 C1 symlink cases, 5+4 H4 Ptyxis-key cases, 3 H10 capture-omission cases — some overlap between A1's declared 42 and the review-fix's 13 additive cases, both verified independently against a before/after diff in this session). No skip/deselect count moved (2 skipped, 28 deselected, unchanged from the prior baseline), so no harness/marker change occurred this wave. No existing test was weakened to get green — every changed (not just added) test in this wave is argued in-place by its author and independently spot-checked by the reviewer's before/after diff runs (see `.audit/review-report.md` Wave A section).
 
 ## Wave B — UI truth & safety (parallel by file, then serial consolidator)
 B1 rows.py, panels/widgets.py, colors/icons/fonts/wallpaper write paths, _style_common:
