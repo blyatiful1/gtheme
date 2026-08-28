@@ -4,28 +4,31 @@ Branch `audit-fixes`, worktree `/home/crocco/gtheme-fixwork`, base `b9e60c9`.
 Specs: `.audit/review-report.md` (C/H/M/L IDs) and `.audit/persona-report.md` (§2.1–§2.10 = U1–U10). X-IDs below are §3 items promoted by the plan-critic.
 Rule: every ID ends `fixed@<sha>` or `deferred: <reason>`. Agents commit their OWN files (flock `/tmp/gtheme-commit.lock`, `git commit -- <owned files>`, IDs in message). FIXLOG statuses updated + committed by each wave's integrator.
 
-**Verify baseline (update whenever the harness legitimately changes it):** 1967 collected · 1895 passed · 2 skipped · 70 deselected · ruff clean · `verify.sh: OK` (worktree venv, 2026-08-28).
+**Verify baseline (update whenever the harness legitimately changes it):** 1960 collected · 1958 passed · 2 skipped · 28 deselected · ruff clean · `verify.sh: OK` (worktree venv, 2026-08-28, measured at HEAD b2dbf81 after Wave 0 close). Prior baseline 1967/1895/2/70; delta is Wave 0's own (M20 moved 42 dconf tests out of the `sandbox` marker into the default run; +21 new collected items — 20 from tests/unit/test_docs_commands.py, 1 from the L10 dependency guard). Full repo with no marker filter: 1988 items total.
 Gate rule: `./verify.sh` green AND collected ≥ baseline AND deselected/skipped changes only when a harness change (M16/M20) declares them — then re-baseline here.
 
 **Resume protocol (if a session died):** read this file + `git -C /home/crocco/gtheme-fixwork log --oneline` + `git status`. If the tree is DIRTY: diff it against the pending IDs, run `./verify.sh`, commit what is sound before continuing — do not redo work already on disk. Continue at the first wave with pending IDs. Never push to origin; never touch `/home/crocco/gtheme` (live tool); never launch the gtheme app (tests only — conftest's live-state canary fails the suite if live state changes).
 Budget gate: the orchestrator checks remaining session tokens between waves; below ~2M it commits, updates this file, and hands off instead of starting another wave.
 
-## Wave 0 — docs, install, packaging, test harness (text/shell/infra; cheapest criticals first)
-- [ ] U1 install.sh GNOME/libadwaita ≥1.9 gate + README "no command line" honesty + start-here contradiction — pending
-- [ ] M22 install.sh validates pre-existing venv (python version + import gi probe in venv) — pending
-- [ ] M23 PKGBUILD-git variant for checkout builds; README Arch route corrected (tag cut = deferred) — pending
-- [ ] M21 uninstall guard reads ownership ledger too (note: complete only with H3 in Wave B) — pending
-- [ ] M16 verify.sh/CI/PKGBUILD check() wrapped in dbus-run-session (AS5 backend-ask half → Wave A) — pending
-- [ ] M20 sandbox tier split: write-parity + dconf round-trip runnable in CI under private dbus — pending
-- [ ] L9 PR template index command corrected — pending
-- [ ] L10 jinja2 dep dropped (pyproject + PKGBUILD + packaging test) — pending
-- [ ] L11 version single-source (__init__ ↔ PKGBUILD ↔ metainfo) — pending
-- [ ] L12 verify.sh preflight checks ruff too — pending
-- [ ] L13 SECURITY.md op-count claim corrected to the stronger true claim — pending
-- [ ] M24 README removal instructions name --uninstall + full leftover list — pending
-- [ ] U9 English-only stated honestly + localized .desktop Name/Comment/Keywords + xml:lang metainfo (full gettext = deferred) — pending
-- [ ] X5 install.sh venv failure branch gives per-distro commands — pending
-- [ ] DOCS §3.4: bug_report.yml `gtheme restore`→`rescue`; theme_submission.yml `gtheme publish` removed; README:303/322 overclaims; README:380/414 + GLOSSARY:86 "Before gtheme" promise made conditional-truthful (re-worded again by U3); SECURITY.md locations table completed — pending
+## Wave 0 — docs, install, packaging, test harness (text/shell/infra; cheapest criticals first)  — CLOSED 2026-08-28
+Wave commits: `465cdcd` (packaging), `4f9f9d0` (docs), `ca88c0e` + `f6486ff` (harness), `b2dbf81` (review-fix, all agents). Gate green at `b2dbf81`: see baseline line above.
+- [x] U1 install.sh GNOME/libadwaita ≥1.9 gate + README "no command line" honesty + start-here contradiction — fixed@465cdcd (install.sh gate),4f9f9d0 (README/start-here/GLOSSARY)
+- [x] M22 install.sh validates pre-existing venv (python version + import gi probe in venv) — fixed@465cdcd
+- [x] M23 PKGBUILD-git variant for checkout builds; README Arch route corrected (tag cut = deferred) — fixed@465cdcd (PKGBUILD-git); README Arch route text is 4f9f9d0 but packaging flagged it may be stale — re-check `makepkg -p PKGBUILD-git -si` / `pacman -R gtheme-git` wording against README before merge
+- [x] M21 uninstall guard reads ownership ledger too (note: complete only with H3 in Wave B) — partial: fixed@465cdcd for install.sh (guard now also refuses on a non-empty ownership.json ledger, with a NOTE comment saying so); remains incomplete until Wave B's H3 makes per-page edits actually write that ledger — today a desktop changed only via the per-thing pages still reads as clean to this guard
+- [x] M16 verify.sh/CI/PKGBUILD check() wrapped in dbus-run-session (AS5 backend-ask half → Wave A) — fixed@ca88c0e,f6486ff (verify.sh + both CI jobs + release.yml), fixed@b2dbf81 (PKGBUILD + PKGBUILD-git check() wrapped, checkdepends+=dbus — this closed a must-fix from review that found both packaged checks still ran pytest bare against the new dconf tier). AS5 (settings phase asks the backend, not the env) is out of Wave 0 scope by design, deferred to Wave A.
+- [x] M20 sandbox tier split: write-parity + dconf round-trip runnable in CI under private dbus — fixed@ca88c0e (new `dconf` marker, `SandboxSession.start_bus_only()`; 42 tests moved out of `sandbox` into the default/CI run; 28 headless-gnome-shell tests remain `sandbox`-only)
+- [x] L9 PR template index command corrected — fixed@4f9f9d0
+- [x] L10 jinja2 dep dropped (pyproject + PKGBUILD + packaging test) — fixed@465cdcd (PKGBUILD depends),ca88c0e (pyproject + stronger dependency-guard test); bin/gtheme:10 still names jinja2 in a comment only, not a dependency — left as-is, noted by harness agent
+- [x] L11 version single-source (__init__ ↔ PKGBUILD ↔ metainfo) — fixed@465cdcd (all three now 2.0.0, each with a comment naming the other two pending the v2.0.0 tag)
+- [x] L12 verify.sh preflight checks ruff too — fixed@ca88c0e
+- [x] L13 SECURITY.md op-count claim corrected to the stronger true claim — fixed@4f9f9d0
+- [x] M24 README removal instructions name --uninstall + full leftover list — fixed@4f9f9d0
+- [x] U9 English-only stated honestly + localized .desktop Name/Comment/Keywords + xml:lang metainfo (full gettext = deferred) — fixed@465cdcd (data files: de/pt_BR/es/fr GenericName/Comment/Keywords + xml:lang metainfo entries; Name[xx] deliberately omitted, "Gtheme" is a proper noun, noted in a .desktop comment), fixed@b2dbf81 (README's English-only row corrected after review found it contradicted the localized search words the same wave shipped — now scoped to interface text only, launcher/store listing named as already searchable in 4 languages). Full gettext/i18n of the app UI remains deferred per the original scope and the Deferred section below.
+- [x] X5 install.sh venv failure branch gives per-distro commands — fixed@465cdcd
+- [x] DOCS §3.4: bug_report.yml `gtheme restore`→`rescue`; theme_submission.yml `gtheme publish` removed; README:303/322 overclaims; README:380/414 + GLOSSARY:86 "Before gtheme" promise made conditional-truthful (re-worded again by U3); SECURITY.md locations table completed — fixed@4f9f9d0, with one instance corrected again at b2dbf81 (see H6 note below)
+
+Review found one item that had drifted worse than "pending" during Wave 0 itself and is tracked under its real ID, not a Wave-0 one: **H6** (Wave C, add-on install overclaim) — the docs pass's SECURITY.md rewrite at 4f9f9d0 introduced a *new* instance of the H6 overclaim ("Add-ons are installed there by GNOME's own installer, never by gtheme directly" — false, `gnome-extensions install` is called directly from the Look path). Fixed for SECURITY.md at `b2dbf81`. H6 is **not** closed: SECURITY.md:64-66, README:323-324 and docs/preset-format.md:249 still carry the original instances and remain Wave C's to fix — do not re-check H6's box in Wave C from this note alone.
 
 ## Wave A — core engine (core/, preset/ only; UI halves of these IDs live in Wave B)
 Agent A1 owns transaction.py, preset/compile.py, preset/model.py, preset/placeholders glue:
