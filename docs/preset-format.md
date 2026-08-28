@@ -248,8 +248,13 @@ uuid = "my-private-thing@example.local"
 source = "local-only"        # never offered for download; may not be bundled
 ```
 
-- `source = "ego"` — gtheme offers to fetch it from extensions.gnome.org
-  through the desktop's own installer, with the desktop's own confirmation box.
+- `source = "ego"` — gtheme offers to fetch it from extensions.gnome.org, and
+  from nowhere else. Accepting that offer is an explicit button in the Look's
+  preview; nothing is downloaded before it is pressed. The download is gtheme's
+  own — the zip is handed to the desktop's `gnome-extensions install` tool, so
+  the add-on's settings descriptions are compiled properly, but **no** GNOME
+  confirmation box appears on this path. (Adding a single add-on from the
+  Add-ons page does go through that box; these are two different paths.)
 - `source = "local-only"` — a private add-on. If it is not already installed,
   the Look is applied without it and the user is told, in plain words, which
   part will therefore not work. **A Look must never ship add-on code.** That is
