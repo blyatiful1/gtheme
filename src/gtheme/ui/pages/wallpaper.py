@@ -60,6 +60,12 @@ from ...system.wallpapers import (  # noqa: E402
     parse_slideshow,
     scan_wallpaper_catalogue,
 )
+from ...ui.widgets.recording import (  # noqa: E402
+    NOT_CHANGED,
+    WriteRefused,
+    reason_for,
+    recording,
+)
 from ...ui.widgets.rows import key_for  # noqa: E402
 from ._style_common import get_probe  # noqa: E402
 
@@ -296,9 +302,14 @@ def _build_picture_group(
         if value is None:
             return
         try:
-            backend.set(key_for(row), GLib.Variant("s", value).print_(True))
-        except BackendError:
-            window.toast("That picture couldn't be set.")
+            recording(backend, component=row.id).set(
+                key_for(row), GLib.Variant("s", value).print_(True)
+            )
+        except (BackendError, WriteRefused) as exc:
+            # Back to whichever picture is really on the desktop, and a sentence
+            # saying why this one is not (review-report M7).
+            refresh()
+            window.toast(NOT_CHANGED.format(why=reason_for(exc)))
             return
         refresh()
 
@@ -379,9 +390,11 @@ def _install_custom_wallpaper(
         return
 
     try:
-        backend.set(key_for(row), GLib.Variant("s", dest.as_uri()).print_(True))
-    except BackendError:
-        window.toast("That couldn't be set as your background picture.")
+        recording(backend, component=row.id).set(
+            key_for(row), GLib.Variant("s", dest.as_uri()).print_(True)
+        )
+    except (BackendError, WriteRefused) as exc:
+        window.toast(NOT_CHANGED.format(why=reason_for(exc)))
         return
 
     on_done()

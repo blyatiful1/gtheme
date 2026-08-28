@@ -48,7 +48,15 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
 
 from ..core.settings_backend import BackendError, SettingsBackend  # noqa: E402
-from ..ui.widgets.rows import RowBuildError, key_for, register_kind, set_plain_text  # noqa: E402
+from ..ui.widgets.recording import WriteRefused, reason_for, recording  # noqa: E402
+from ..ui.widgets.rows import (  # noqa: E402
+    RowBuildError,
+    key_for,
+    register_kind,
+    report_refusal,
+    set_plain_text,
+    write_value,
+)
 from ..ui.widgets.rows import build_row as build_base_row  # noqa: E402
 from .descriptor import Row, WidgetKind  # noqa: E402
 from .schema_probe import Availability, SchemaProbe, resolve_row  # noqa: E402
@@ -364,7 +372,7 @@ def _build_dict_slider(
             updated = dict_with_number(backend.get(key), row.dict_key or "", value)
         except (KeyError, RowBuildError, BackendError):
             return
-        backend.set(key, updated)
+        write_value(backend, key, updated, widget=widget, refresh=refresh, component=row.id)
 
     refresh()
     widget.connect("notify::value", on_changed)
@@ -435,15 +443,24 @@ def build_effect_picker(
         if index == Gtk.INVALID_LIST_POSITION or index >= len(options):
             return
         chosen = options[index][0]
+        recorder = recording(backend, component=row.id)
         for name, _label, _sub in options:
             if name is None:
                 continue
             try:
-                backend.set(key_of(name), "true" if name == chosen else "false")
+                recorder.set(key_of(name), "true" if name == chosen else "false")
             except BackendError:
                 # An effect this version of the add-on does not have is not a
                 # reason to abandon the rest of the change.
                 continue
+            except WriteRefused as exc:
+                # This one is not per-effect: the lock is held by an apply, or
+                # nothing can be written down first. It is true of all
+                # twenty-six keys, so it is said once and the row goes back to
+                # showing what is really playing (review-report M7).
+                refresh()
+                report_refusal(widget, reason_for(exc))
+                return
 
     refresh()
     widget.connect("notify::selected", on_selected)
@@ -535,10 +552,14 @@ def build_effect_speed(
         if guard["busy"] or state["key"] is None:
             return
         value = int(min(max(widget.get_value(), row.clamp_min), row.clamp_max))
-        try:
-            backend.set(state["key"], str(value))
-        except BackendError:
-            return
+        write_value(
+            backend,
+            state["key"],
+            str(value),
+            widget=widget,
+            refresh=refresh,
+            component=row.id,
+        )
 
     refresh()
     widget.connect("notify::value", on_changed)
@@ -614,8 +635,14 @@ def _build_shortcut(
 
     def store(accelerator: str) -> None:
         try:
-            backend.set(key_for(row), encode_accelerator(type_string, accelerator))
-        except (BackendError, RowBuildError):
+            encoded = encode_accelerator(type_string, accelerator)
+        except RowBuildError:
+            # A key combination this setting cannot hold. Nothing was written,
+            # and the label still shows what really is set.
+            return
+        if not write_value(
+            backend, key_for(row), encoded, widget=widget, refresh=refresh, component=row.id
+        ):
             return
         refresh()
 

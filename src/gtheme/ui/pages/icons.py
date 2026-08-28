@@ -26,7 +26,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gdk, Gtk, Pango  # noqa: E402
 
-from ...core.settings_backend import BackendError, SettingsBackend  # noqa: E402
+from ...core.settings_backend import SettingsBackend  # noqa: E402
 from ...panels.descriptor import Row  # noqa: E402
 from ...system.iconscan import (  # noqa: E402
     IconThemeEntry,
@@ -34,7 +34,7 @@ from ...system.iconscan import (  # noqa: E402
     default_icon_roots,
     scan_icon_themes,
 )
-from ..widgets.rows import attach_reset, key_for  # noqa: E402
+from ..widgets.rows import attach_reset, key_for, write_value  # noqa: E402
 from ._style_common import PageShell, quote, unquote, value_or_none  # noqa: E402
 
 __all__ = [
@@ -197,9 +197,9 @@ def icon_grid(
     def choose(name: str) -> None:
         if guard["busy"]:
             return
-        try:
-            backend.set(key, quote(name))
-        except BackendError:
+        if not write_value(
+            backend, key, quote(name), widget=grid, refresh=refresh, component=row.id
+        ):
             return
         refresh()
 

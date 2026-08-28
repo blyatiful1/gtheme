@@ -25,7 +25,11 @@ from gtheme.prefs import Prefs  # noqa: E402
 from gtheme.ui import registry  # noqa: E402
 from gtheme.ui.pages import _style_common as common  # noqa: E402
 from gtheme.ui.rowindex import RowIndex  # noqa: E402
-from gtheme.ui.widgets.rows import key_for  # noqa: E402
+from gtheme.ui.widgets.rows import (  # noqa: E402
+    PUT_BACK_DEFAULT,
+    PUT_BACK_RECORDED,
+    key_for,
+)
 
 pytestmark = pytest.mark.gtk
 
@@ -169,8 +173,11 @@ def test_picker_carries_the_put_this_back_button(memory_settings):
     row = _picker_row_descriptor()
     widget, _refresh = common.picker_row(memory_settings, row, [("adw-gtk3", "adw-gtk3")])
     buttons = [w for w in _walk(widget) if isinstance(w, Gtk.Button)]
+    # Either wording is the reset button; which one it says depends on whether
+    # gtheme has a pristine value recorded for this setting yet, and a picker
+    # built against a store nobody has touched has none (review-report H3).
     assert any(
-        b.get_tooltip_text() == "Put this back the way it was" for b in buttons
+        b.get_tooltip_text() in (PUT_BACK_RECORDED, PUT_BACK_DEFAULT) for b in buttons
     ), "a hand-built picker must get the same reset button every other row gets"
 
 

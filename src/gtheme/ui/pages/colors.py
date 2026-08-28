@@ -32,7 +32,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gdk, Gtk  # noqa: E402
 
-from ...core.settings_backend import BackendError, SettingsBackend  # noqa: E402
+from ...core.settings_backend import SettingsBackend  # noqa: E402
 from ...core.transaction import Op, SettingWrite  # noqa: E402
 from ...panels.descriptor import Row  # noqa: E402
 from ...system.themescan import (  # noqa: E402
@@ -43,6 +43,7 @@ from ...system.themescan import (  # noqa: E402
     scan_themes,
     shell_themes,
 )
+from ..widgets.rows import write_value  # noqa: E402
 from ._style_common import (  # noqa: E402
     PageShell,
     apply_ops,
@@ -345,9 +346,12 @@ def _accent_row(backend: SettingsBackend, row: Row) -> tuple[Adw.PreferencesRow,
     def choose(name: str) -> None:
         if guard["busy"]:
             return
-        try:
-            backend.set(key, quote(name))
-        except BackendError:
+        # Recorded like every other write: the highlight colour is a page row
+        # *and* a setting three shipped Looks write, so an unrecorded edit here
+        # is exactly how "before gtheme" ends up wrong for good (H3).
+        if not write_value(
+            backend, key, quote(name), widget=widget, refresh=refresh, component=row.id
+        ):
             return
         refresh()
 

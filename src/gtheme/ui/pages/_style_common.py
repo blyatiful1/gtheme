@@ -46,7 +46,7 @@ from ...panels.loader import load_corpus, load_dispositions  # noqa: E402
 from ...panels.loader import surfaced_ids as loader_surfaced_ids  # noqa: E402
 from ...panels.schema_probe import Availability, SchemaProbe, probe_rows_idle  # noqa: E402
 from ...panels.widgets import build_row  # noqa: E402
-from ..widgets.rows import RowBuildError, attach_reset, key_for  # noqa: E402
+from ..widgets.rows import RowBuildError, attach_reset, key_for, write_value  # noqa: E402
 
 __all__ = [
     "ADVANCED_SUBTITLE",
@@ -206,6 +206,20 @@ def apply_ops(window: Any, ops: Iterable[Op], *, done: str) -> bool:
     except TransactionError as exc:
         rolled = "" if exc.rolled_back else " Some of it may have been changed anyway."
         toast(window, f"That change could not be made.{rolled}")
+        return False
+    except OSError as exc:
+        # Not every way an apply can fail is a TransactionError. The lock file
+        # is opened, and the state directory is created, *before* the
+        # transaction's own guarded section — so a full or read-only
+        # ~/.local/state raised PermissionError straight out of a GTK signal
+        # handler: no message, no error, and the switch left showing a change
+        # that never happened (review-report M3). The desktop is untouched at
+        # that point, which is why this branch says so.
+        toast(
+            window,
+            f"That change could not be made: {exc.strerror or exc}. "
+            "Your desktop is exactly as it was.",
+        )
         return False
     toast(window, done)
     return True
@@ -551,9 +565,17 @@ def picker_row(
         index = widget.get_selected()
         if index == Gtk.INVALID_LIST_POSITION or index >= len(values):
             return
-        try:
-            backend.set(key_for(row), quote(values[index]))
-        except BackendError:
+        # Recorded like every other write, and honest when it does not happen:
+        # a picker that silently swallowed a refusal left the row showing a
+        # theme the desktop is not using (review-report M7).
+        if not write_value(
+            backend,
+            key_for(row),
+            quote(values[index]),
+            widget=widget,
+            refresh=lambda: current[0](),
+            component=row.id,
+        ):
             return
         current[0]()
 
