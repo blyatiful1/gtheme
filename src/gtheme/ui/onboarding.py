@@ -37,6 +37,7 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk  # noqa: E402
 
 from ..core.settings_backend import SettingsBackend  # noqa: E402
+from .applyrunner import ApplyRunner  # noqa: E402
 from .pages import restore as restore_page  # noqa: E402
 
 __all__ = [
@@ -253,16 +254,50 @@ class OnboardingDialog(Adw.Dialog):
     # -- the real action ---------------------------------------------------
 
     def save_first_restore_point(self) -> Any:
-        """Slide four's button: really save how the desktop looks now."""
-        try:
-            saved = (
-                self._on_save()
-                if self._on_save is not None
-                else restore_page.create_restore_point(backend=self.backend, root=self.root)
-            )
-        except Exception:  # noqa: BLE001 - the introduction must never end in a traceback
-            self.save_status.set_label(SAVE_FAILED_LABEL)
-            return None
+        """Slide four's button: really save how the desktop looks now.
+
+        On the shared runner when there is one. Saving a moment reads every
+        setting gtheme knows about — around five hundred of them — and copies
+        every file the ownership ledger claims, and doing that in the click
+        handler froze the introduction on its last slide, which is the first
+        thing this app ever does in front of a new user (review-report M10).
+        The same button on the Home page and on the Undo page has the same
+        treatment.
+
+        Returns:
+            The saved moment when the work ran here, and None when it was
+            handed to the runner (it lands in :attr:`saved` a moment later) or
+            could not be done at all.
+        """
+        runner = self._runner()
+        if runner is None:
+            try:
+                return self._saved_now(self._save())
+            except Exception:  # noqa: BLE001 - the introduction must never end in a traceback
+                self.save_status.set_label(SAVE_FAILED_LABEL)
+                return None
+        runner.run(
+            lambda _narrate: self._save(),
+            heading=restore_page.COPY["save-title"],
+            starting=restore_page.COPY["save-subtitle"],
+            on_done=self._saved_now,
+            on_failed=lambda _error: self.save_status.set_label(SAVE_FAILED_LABEL),
+        )
+        return None
+
+    def _runner(self) -> ApplyRunner | None:
+        """The window's runner, or None when there is no window to have one."""
+        runner = getattr(self.window, "runner", None)
+        return runner if isinstance(runner, ApplyRunner) else None
+
+    def _save(self) -> Any:
+        """The engine half of slide four. No widgets, no thread."""
+        if self._on_save is not None:
+            return self._on_save()
+        return restore_page.create_restore_point(backend=self.backend, root=self.root)
+
+    def _saved_now(self, saved: Any) -> Any:
+        """Back on the main loop: the moment is saved, so say so."""
         self.saved = saved
         self.save_button.set_sensitive(False)
         self.save_status.set_label(SAVED_LABEL)

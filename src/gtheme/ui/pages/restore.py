@@ -53,12 +53,16 @@ __all__ = [
     "RestorePage",
     "absence_sentence",
     "build",
+    "claimed_dests",
     "create_restore_point",
     "default_label",
     "coverage_keys",
     "descriptor_keys",
     "describe_point",
+    "failure_sentence",
+    "point_title",
     "preview_lines",
+    "save_failed_sentence",
     "undo_last_change",
 ]
 
@@ -94,6 +98,7 @@ COPY: dict[str, str] = {
     "apply-button": "Go back to this",
     "forget-button": "Forget this one",
     "confirm-heading": "Go back to this moment?",
+    "confirm-named": "Going back to “{label}”.",
     "confirm-body": "Here is what will change on your desktop:",
     "confirm-cancel": "Keep things as they are",
     "confirm-accept": "Go back",
@@ -101,7 +106,16 @@ COPY: dict[str, str] = {
     "working": "Going back to how it was…",
     "done": "Your desktop is back the way it was.",
     "saved": "Saved how your desktop looks right now. You can come back to it any time.",
+    "save-failed": "Could not save how your desktop looks.",
     "failed": "Nothing was changed. Your desktop is exactly as it was.",
+    # The other half of "it did not work", and the reason both sentences are
+    # written out here: an app that says "Nothing was changed" over a desktop
+    # that was half put back has told the person the one lie this page exists
+    # to prevent (review-report H2). "Some of it may have been changed anyway."
+    # is the same clause the compound page writes, word for word.
+    # Two sentences, not three: this is a toast, and the list of saved moments
+    # to try again from is already on screen behind it.
+    "failed-half": "Going back did not finish. Some of it may have been changed anyway.",
     "gone": "That saved moment is no longer there.",
 }
 
@@ -169,6 +183,84 @@ def coverage_keys(directory: Path | str | None = None) -> list[str]:
     return captured_keys(directory)
 
 
+def claimed_dests(path: str | Path | None = None) -> list[str]:
+    """Every file the ownership ledger currently claims, as absolute paths.
+
+    A hand-saved moment used to record no files at all, because nothing passed
+    ``dests`` to :func:`gtheme.core.restorepoints.capture` — so "how my whole
+    desktop looked" covered the settings and none of the files, and going back
+    to it left every file a Look had installed exactly as the Look wrote it
+    (review-report H11). The four shipped Looks write between 15 and 20 files
+    each, one of them the user's own ``starship.toml``.
+
+    The ledger is the honest answer to "which files could differ between now
+    and the moment being restored?": it is written before every change, it is
+    keyed by owner rather than by anything a corpus knows, and the user's own
+    page edits are in it too under ``MANUAL_OWNER``. It is read through the
+    ledger module's own API, never by parsing its file here — the same rule
+    :func:`gtheme.core.restorepoints._claimed_settings` follows for keys.
+
+    A claimed destination that is not there right now is not skipped: "there
+    was nothing here" is a state, and recording it is what lets going back
+    remove a file that was installed over nothing.
+    """
+    from ...core.ledger import read_ledger
+
+    dests: list[str] = []
+    for owned in read_ledger(path).values():
+        if not isinstance(owned, dict):
+            continue
+        dests.extend(dest for dest in owned.get("files", []) if isinstance(dest, str))
+    return sorted(set(dests))
+
+
+def point_title(point: RestorePoint) -> str:
+    """What a saved moment is called on screen.
+
+    "Before gtheme" is a title this page gives, not a label the engine stores,
+    so every surface that names a moment — the list, the confirmation, the
+    header button's dialog — has to give the pristine one the same name or two
+    parts of the app end up calling one thing two things.
+    """
+    return COPY["pristine-title"] if point.kind == "pristine" else point.label
+
+
+def failure_sentence(reason: str, *, rolled_back: bool) -> str:
+    """What to say when going back did not happen: why, and where that leaves it.
+
+    Two outcomes, two different things to say, and only one of them is
+    reassuring. Rolled back means the desktop really is exactly as it was. Not
+    rolled back means part of the moment was written and part was not, and
+    saying "Nothing was changed" over that is the failure this page exists to
+    prevent (review-report H2/L1).
+    """
+    state = COPY["failed"] if rolled_back else COPY["failed-half"]
+    said = _sentence(reason)
+    return f"{said} {state}" if said else state
+
+
+def save_failed_sentence(error: BaseException) -> str:
+    """What to say when a moment could not be saved, wherever it was asked for.
+
+    The Home page has the same button and used to compose its own version of
+    this sentence two words differently. One wording, one place, both buttons.
+    """
+    detail = _sentence(str(getattr(error, "strerror", None) or error))
+    return f"{COPY['save-failed']} {detail}" if detail else COPY["save-failed"]
+
+
+def _sentence(text: str) -> str:
+    """A fragment written somewhere else, said as a sentence.
+
+    Engine warnings are phrases meant to be dropped into somebody else's
+    sentence ("that saved moment is no longer there"). A toast is not somebody
+    else's sentence, so they get a capital and a full stop rather than being
+    shown as the fragment they are.
+    """
+    said = (text or "").strip().rstrip(".")
+    return f"{said[0].upper()}{said[1:]}." if said else ""
+
+
 def default_label(when: datetime | None = None) -> str:
     """"My desktop, 25 August" — what a saved moment is called by default."""
     moment = when or datetime.now()
@@ -182,6 +274,7 @@ def create_restore_point(
     root: str | Path | None = None,
     corpus: Any | None = None,
     keys: Sequence[str] | None = None,
+    dests: Sequence[str] | None = None,
 ) -> RestorePoint:
     """Save how the desktop looks right now, and return the saved moment.
 
@@ -192,10 +285,17 @@ def create_restore_point(
         corpus: the descriptor corpus, when it has already been loaded.
         keys: the exact keys to record. Overrides ``corpus``; used by tests
             that do not want to read the whole shipped corpus.
+        dests: the exact files to copy. Defaults to :func:`claimed_dests` —
+            everything the ownership ledger says gtheme is responsible for
+            right now, which is the set that can differ between now and the
+            moment being restored. Passing nothing at all here is what made a
+            hand-saved moment cover no files (review-report H11).
     """
     covered = list(keys) if keys is not None else descriptor_keys(corpus)
+    files = list(dests) if dests is not None else claimed_dests()
     return restorepoints.capture(
         covered,
+        files,
         label=label or default_label(),
         kind="manual",
         backend=backend if backend is not None else get_backend(),
@@ -424,7 +524,7 @@ class RestorePage(Adw.Bin):
 
     def _point_row(self, point: RestorePoint) -> Adw.ActionRow:
         pristine = point.kind == "pristine"
-        title = COPY["pristine-title"] if pristine else point.label
+        title = point_title(point)
         subtitle = self._pristine_subtitle() if pristine else describe_point(point)
         absence = absence_sentence(point)
         if absence:
@@ -465,15 +565,44 @@ class RestorePage(Adw.Bin):
             toast(text)
 
     def _on_save(self) -> None:
-        try:
-            create_restore_point(
-                backend=self.backend, root=self.root, corpus=self.corpus, keys=self.keys
-            )
-        except OSError as exc:
-            self._toast(f"Could not save how your desktop looks: {exc.strerror or exc}")
+        """"Save how it looks now", on the shared runner.
+
+        Saving a moment reads every setting gtheme knows about — some five
+        hundred of them — and copies every file the ledger claims. Doing that
+        in the click handler froze the window for the whole of it, two lines
+        above an Undo button that had already been fixed to use the runner and
+        says in its own docstring why (review-report M10). The same button on
+        the Home page has always done it this way.
+        """
+        runner = self._runner()
+        if runner is None:
+            try:
+                saved = self._save_now()
+            except Exception as error:  # noqa: BLE001 - reported, never a traceback
+                self._save_failed(error)
+                return
+            self._save_finished(saved)
             return
+        runner.run(
+            lambda _narrate: self._save_now(),
+            heading=COPY["save-title"],
+            starting=COPY["save-subtitle"],
+            on_done=self._save_finished,
+            on_failed=self._save_failed,
+        )
+
+    def _save_now(self) -> RestorePoint:
+        """The engine half of "save how it looks now". No widgets, no thread."""
+        return create_restore_point(
+            backend=self.backend, root=self.root, corpus=self.corpus, keys=self.keys
+        )
+
+    def _save_finished(self, _point: RestorePoint | None = None) -> None:
         self._changed()
         self._toast(COPY["saved"])
+
+    def _save_failed(self, error: BaseException) -> None:
+        self._toast(save_failed_sentence(error))
 
     def _on_undo(self) -> None:
         """"Undo the last change", on the shared runner.
@@ -493,7 +622,7 @@ class RestorePage(Adw.Bin):
             heading=COPY["working-heading"],
             starting=COPY["working"],
             on_done=self._undo_finished,
-            on_failed=lambda _error: self._toast(COPY["failed"]),
+            on_failed=self._failed,
         )
 
     def _undo_now(self) -> tuple[RestorePoint | None, restorepoints.RestoreResult | None]:
@@ -518,14 +647,28 @@ class RestorePage(Adw.Bin):
         restorepoints.delete(point.id, root=self.root)
         self.refresh()
 
-    def confirm_apply(self, point: RestorePoint) -> Adw.AlertDialog:
+    def confirm_apply(
+        self, point: RestorePoint, *, parent: Any | None = None
+    ) -> Adw.AlertDialog:
         """Ask before going back, showing what would change. Returns the dialog.
 
         Returned rather than merely presented so a test can drive the response
         without a pointer, and so the caller can keep it alive.
+
+        Args:
+            point: the moment to go back to. It is named in the dialog: a
+                confirmation that says "this moment" without saying which one
+                is not a confirmation, and the header button and Ctrl+Z can
+                both land here without the list on screen.
+            parent: what to present on. Defaults to this page's window, which
+                is the right answer whenever the page is the one asking; the
+                header button passes the window itself, because the page it
+                asks through may have been built a moment ago and not yet be
+                anywhere on screen.
         """
         lines = preview_lines(point, backend=self.backend, dest_root=self.dest_root)
-        body = COPY["confirm-body"] + "\n\n" + (
+        named = COPY["confirm-named"].format(label=point_title(point))
+        body = f"{named}\n\n{COPY['confirm-body']}" + "\n\n" + (
             "\n".join(f"• {line}" for line in lines)
             if lines
             else "• Everything this moment covers goes back to how it was."
@@ -540,10 +683,32 @@ class RestorePage(Adw.Bin):
         dialog.set_default_response("cancel")
         dialog.set_close_response("cancel")
         dialog.connect("response", lambda _d, response: self._on_response(response, point))
-        root = self.window if isinstance(self.window, Gtk.Widget) else self.get_root()
+        root = parent if isinstance(parent, Gtk.Widget) else None
+        if root is None:
+            root = self.window if isinstance(self.window, Gtk.Widget) else self.get_root()
         if root is not None:
             dialog.present(root)
         return dialog
+
+    def confirm_undo_last(self, parent_window: Any | None = None) -> Adw.AlertDialog | None:
+        """Ask before undoing the last change — the one path for every caller.
+
+        The header bar's Undo button and Ctrl+Z used to apply the newest saved
+        moment with no confirmation and no preview, while pressing "Go back to
+        this" on the very same moment one page over showed the full plan first
+        (persona-report §2.8). The dialog already existed; nothing routed the
+        two fast paths through it. This is that route, and it names the moment
+        so the answer to "go back to what?" is on screen before anything moves.
+
+        Returns the dialog, or None when there is no saved moment to go back to
+        — which is the honest answer on a desktop nobody has changed, and is
+        said in a toast rather than in an empty confirmation.
+        """
+        points = [p for p in restorepoints.list_restore_points(self.root) if p.kind != "pristine"]
+        if not points:
+            self._toast(COPY["undo-nothing"])
+            return None
+        return self.confirm_apply(points[0], parent=parent_window)
 
     def _on_response(self, response: str, point: RestorePoint) -> None:
         if response != "apply":
@@ -562,14 +727,19 @@ class RestorePage(Adw.Bin):
         """
         runner = self._runner()
         if runner is None:
-            self._finish_apply(self.apply_point(point))
+            # ``report=False`` for the same reason the threaded branch passes
+            # it: ``apply_point`` reports for itself, so letting it report and
+            # then reporting again raised two toasts and sent two
+            # ``after_change()`` cascades through every page in the window
+            # (review-report L7).
+            self._finish_apply(self.apply_point(point, report=False))
             return
         runner.run(
             lambda _narrate: self.apply_point(point, report=False),
             heading=COPY["working-heading"],
             starting=COPY["working"],
             on_done=self._finish_apply,
-            on_failed=lambda _error: self._toast(COPY["failed"]),
+            on_failed=self._failed,
         )
 
     def apply_point(
@@ -624,9 +794,30 @@ class RestorePage(Adw.Bin):
             self._toast(COPY["undo-nothing"])
             return
         if result.warnings and result.transaction is None:
-            self._toast(result.warnings[0] or COPY["failed"])
+            # Going back did not happen. Whether the desktop came back with it
+            # is the engine's answer to give, and it now gives it
+            # (review-report L1) — a half-written undo is the one place in this
+            # app where "Nothing was changed" would be the most damaging thing
+            # it could say.
+            self._toast(failure_sentence(result.warnings[0], rolled_back=result.rolled_back))
             return
         self._toast(COPY["done"])
+
+    def _failed(self, error: BaseException) -> None:
+        """What to say when going back raised instead of reporting.
+
+        Everything the engine refuses in an orderly way comes back as a
+        :class:`~gtheme.core.restorepoints.RestoreResult` with warnings, so an
+        exception that reaches here is by definition the *un*orderly kind and
+        nothing knows what state the desktop is in — unless the error itself
+        says, which is exactly what ``TransactionError.rolled_back`` is for.
+        Assuming the reassuring answer here is how an app comes to say "Nothing
+        was changed" over a half-restored desktop (review-report H2), so the
+        assumption runs the other way.
+        """
+        self._toast(
+            failure_sentence(str(error), rolled_back=bool(getattr(error, "rolled_back", False)))
+        )
 
 
 def _narrate(dialog: Adw.AlertDialog, text: str) -> bool:

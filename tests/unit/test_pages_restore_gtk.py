@@ -277,7 +277,13 @@ def test_undo_the_last_change_goes_through_the_shared_runner(window, backend, tm
 
     page._on_undo()
 
-    assert window.runner.headings == [restore.COPY["working-heading"]]
+    # Two headings, not one: "Save how it looks now" goes through the runner
+    # too now (review-report M10), and this test's save is what set the moment
+    # up. The undo is the second, and it is the one being pinned here.
+    assert window.runner.headings == [
+        restore.COPY["save-title"],
+        restore.COPY["working-heading"],
+    ]
     assert backend.get(ACCENT) == "'green'"
     assert window.toasts[-1] == restore.COPY["done"]
 

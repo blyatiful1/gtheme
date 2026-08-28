@@ -565,8 +565,7 @@ class HomePage(Adw.Bin):
         return point
 
     def _save_failed(self, error: Exception) -> None:
-        detail = getattr(error, "strerror", None) or error
-        self._toast(f"Could not save how your desktop looks: {detail}")
+        self._toast(restore_page.save_failed_sentence(error))
 
     def undo_last_change(self) -> Any:
         """Go back to the most recent saved moment. Backs the header button."""
@@ -578,9 +577,24 @@ class HomePage(Adw.Bin):
             heading=restore_page.COPY["working-heading"],
             starting=restore_page.COPY["working"],
             on_done=self._undo_finished,
-            on_failed=lambda _error: self._toast(restore_page.COPY["failed"]),
+            on_failed=self._undo_failed,
         )
         return None
+
+    def _undo_failed(self, error: BaseException) -> None:
+        """Say which of the two very different failures just happened.
+
+        This handler used to throw the error away and toast "Nothing was
+        changed. Your desktop is exactly as it was." — the one sentence that
+        must never be said over a desktop nobody can vouch for. An unknown
+        failure is an unknown desktop unless the error itself says otherwise
+        (review-report H2), which is what ``rolled_back`` is for.
+        """
+        self._toast(
+            restore_page.failure_sentence(
+                str(error), rolled_back=bool(getattr(error, "rolled_back", False))
+            )
+        )
 
     def _undo(self, narrate: Any = None) -> Any:
         """The engine half of going back. Runs off the main loop, or inline."""
@@ -600,7 +614,15 @@ class HomePage(Adw.Bin):
             self._toast(restore_page.COPY["undo-nothing"])
             return None
         if result is not None and result.warnings and result.transaction is None:
-            self._toast(result.warnings[0] or restore_page.COPY["failed"])
+            # Whether the desktop came back with the failed undo is the
+            # engine's answer to give, and the result carries it now
+            # (review-report L1). The Undo page says the same two sentences
+            # through the same function.
+            self._toast(
+                restore_page.failure_sentence(
+                    result.warnings[0], rolled_back=result.rolled_back
+                )
+            )
             return result
         self._toast(restore_page.COPY["done"])
         self._changed()

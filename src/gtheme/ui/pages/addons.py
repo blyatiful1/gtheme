@@ -745,7 +745,14 @@ class AddonsPage(Adw.Bin):
         return row
 
     def _on_switch_toggled(self, row: Adw.SwitchRow, _param: Any, uuid: str) -> None:
-        if uuid in self._suppress or self.shell is None:
+        # A switch the page moved itself is not a request. The claim is taken
+        # here rather than lifted by whoever made it, because the notification
+        # does not always arrive while they are still running — see
+        # :meth:`_set_switch`.
+        if uuid in self._suppress:
+            self._suppress.discard(uuid)
+            return
+        if self.shell is None:
             return
         if row.get_active():
             other = self._conflicting_enabled(uuid)
@@ -760,21 +767,48 @@ class AddonsPage(Adw.Bin):
                 self._toast(COPY["turn-off-failed"])
 
     def _turn_on(self, uuid: str) -> None:
+        """Switch an add-on on, and leave the switch showing what happened.
+
+        The desktop can refuse. When it does, ``turn_on`` says so in a toast
+        and returns — and the switch was left reading ON over an add-on that
+        is off, with no ``ExtensionStateChanged`` signal coming to correct it,
+        because nothing changed (review-report M5). A switch is a statement
+        about the desktop, so it is moved back to what the desktop actually
+        did.
+
+        ``NEEDS_RELOGIN`` is the one failure-looking outcome where ON is
+        honest: the add-on *is* enabled, and starts doing its job at the next
+        log-in. Turning the switch off there would be the lie in the other
+        direction.
+        """
         if self.installer is None:
             return
         report = self.installer.turn_on(uuid)
         self._toast(report.message)
+        self._set_switch(
+            uuid, report.outcome in (InstallOutcome.ACTIVE, InstallOutcome.NEEDS_RELOGIN)
+        )
 
     def _set_switch(self, uuid: str, active: bool) -> None:
-        """Move a switch without pretending the user did it."""
+        """Move a switch without pretending the user did it.
+
+        The claim is left standing for ``notify::active`` to take, rather than
+        lifted in a ``finally`` here, because the notification does not always
+        arrive inside this call: moving a switch from *inside* another
+        ``notify::active`` handler — which is exactly what putting a refused
+        switch back does — queues the new notification until the outer one has
+        finished. Lifting the claim here left nothing to suppress by then, so
+        the page read its own correction as the user switching the add-on off
+        and asked the desktop to disable it again, with a toast saying so.
+
+        The value is compared first, so a claim is only ever made when a
+        notification is really coming.
+        """
         row = self._installed_rows.get(uuid)
         if row is None or row.get_active() == active:
             return
         self._suppress.add(uuid)
-        try:
-            row.set_active(active)
-        finally:
-            self._suppress.discard(uuid)
+        row.set_active(active)
 
     # -- conflicts and hazards --------------------------------------------
 
@@ -811,8 +845,10 @@ class AddonsPage(Adw.Bin):
             if response == "replace" and self.shell is not None:
                 self.shell.disable(other)
                 self._set_switch(other, False)
+            # The switch comes back on inside ``_turn_on``, and only if the
+            # desktop really did switch the add-on on. Setting it here as well
+            # is what used to put it back on over a refusal.
             self._turn_on(uuid)
-            self._set_switch(uuid, True)
 
         dialog.connect("response", _answered)
         self._present(dialog)

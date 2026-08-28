@@ -103,9 +103,25 @@ def build(window) -> Gtk.Widget:
     backend = get_backend()
     probe = get_probe(window)
     all_domains, problems = load_domains()
-    if problems:
-        raise RuntimeError("the descriptor corpus did not load: " + "; ".join(problems))
     domains = {domain.id: domain for domain in all_domains if domain.id in _DOMAIN_IDS}
+    # One malformed file in ``data/domains/`` used to take this page down even
+    # when the page never renders it — a version-skewed ``peripherals.toml``
+    # and the top bar refused to open, while the other thirteen pages degraded
+    # gracefully (review-report M30). Problems are the loader's, one per file;
+    # only the ones naming a file this page draws from are this page's, and
+    # each problem is prefixed with its file name, whose stem is the domain id.
+    mine = [
+        problem
+        for problem in problems
+        if problem.split(":", 1)[0].removesuffix(".toml") in _DOMAIN_IDS
+    ]
+    if not domains:
+        # Nothing at all to draw. An empty page would be a lie of omission, so
+        # this is the one case that still refuses — and it says which file.
+        raise RuntimeError(
+            "the descriptor corpus did not load: "
+            + ("; ".join(mine or problems) or "no descriptor files were found")
+        )
 
     page = Adw.PreferencesPage()
     if "topbar" in domains:
