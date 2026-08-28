@@ -17,14 +17,26 @@ need the Look's own metadata:
   skip warning in the user's words, not an error and not a silent nothing.
 * **Which alternate satisfies a requirement.** ding and gtk4-ding do the same
   job; if the Look asks for one and the machine has the other, the other wins.
+
+Two boundaries are also checked here, because this is the first place that sees
+a Look's own folder and its declared destinations together: where each file may
+come from (``core.confine.confine_src``) and what a Look is allowed to write at
+all (``core.policy``). Neither is enforced *only* here — the transaction refuses
+the same things on its own, and has to, because a hand-built transaction never
+passes through this module. What this module adds is the sentence: a person
+sees "this Look asked to write ~/.config/autostart/x.desktop" before anything
+happens, rather than a refusal with no story attached.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Collection
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ..core.confine import ConfinementError, confine_src
+from ..core.policy import file_verdict, setting_verdict
 from ..core.transaction import (
     ExtensionEnable,
     ExtensionInstall,
@@ -33,9 +45,9 @@ from ..core.transaction import (
     SettingWrite,
     Transaction,
 )
-from .model import Component, ExtensionSetting, Preset
+from .model import Component, ExtensionSetting, Meta, Preset
 
-__all__ = ["CompileResult", "compile_preset", "extension_setting_key"]
+__all__ = ["CompileResult", "compile_preset", "extension_setting_key", "shell_warning"]
 
 
 def extension_setting_key(setting: ExtensionSetting) -> str:
@@ -57,14 +69,52 @@ class CompileResult:
         transaction: what to do, in the order the engine will do it.
         warnings: things this Look asked for that will not happen, each phrased
             as a sentence a first-time user can act on.
+        refusals: things this Look asked for that gtheme will not let any Look
+            do (``core.policy``'s refused tier). Every one of these is also in
+            :attr:`warnings`, named, because they are the most important
+            sentences the dialog can show — but they are carried separately as
+            well, because their consequence is different from a missing file's:
+            a Look with one of these does not apply at all, and the transaction
+            refuses it whether or not anything read this list.
     """
 
     transaction: Transaction
     warnings: list[str] = field(default_factory=list)
+    refusals: list[str] = field(default_factory=list)
 
     @property
     def ops(self) -> tuple[Op, ...]:
         return tuple(self.transaction.ops)
+
+    @property
+    def refused(self) -> bool:
+        """Will this Look be refused rather than applied?"""
+        return bool(self.refusals)
+
+
+def shell_warning(meta: Meta, shell_version: str | None) -> str | None:
+    """The ``min_shell`` sentence, or None when there is nothing to say.
+
+    ``docs/preset-format.md`` has always said this field produces a warning and
+    never blocks. Nothing read it (review-report L8): a Look declaring
+    ``min_shell = "50"`` applied in complete silence on GNOME 49, and
+    ``index.json`` publishes the field, so it looks live from outside.
+
+    It never blocks, and it never guesses. If the desktop's version cannot be
+    read — which happens exactly when the desktop is not answering — this says
+    nothing rather than accusing a Look of being too new for a version nobody
+    measured.
+    """
+    if not meta.min_shell or not shell_version:
+        return None
+    wanted = re.match(r"\d+", str(meta.min_shell).strip())
+    have = re.match(r"\d+", str(shell_version).strip())
+    if not wanted or not have or int(have.group()) >= int(wanted.group()):
+        return None
+    return (
+        f"this Look was made for a newer version of GNOME ({wanted.group()}; this "
+        f"computer has {have.group()}) — parts of it may not apply"
+    )
 
 
 def _resolve_uuid(uuid: str, alternates: list[str], installed: Collection[str]) -> str | None:
@@ -81,6 +131,7 @@ def compile_preset(
     *,
     dest_root: str | None = None,
     installed_extensions: Collection[str] | None = None,
+    shell_version: str | None = None,
 ) -> CompileResult:
     """Compile a Look into a :class:`~gtheme.core.transaction.Transaction`.
 
@@ -95,18 +146,44 @@ def compile_preset(
             "not known" — no install offers are made and no absence is warned
             about, which is the right behaviour for a preview computed before
             the add-on list has been read.
+        shell_version: the GNOME version this desktop is running, when the
+            caller knows it. Used for the ``min_shell`` warning and nothing
+            else; ``None`` means "not measured", and nothing is claimed.
 
     Returns:
-        The transaction and the list of things that will not apply.
+        The transaction, the list of things that will not apply, and the list
+        of things gtheme refuses to let a Look do at all.
     """
     base = Path(directory)
     warnings: list[str] = []
+    refusals: list[str] = []
     files: list[Op] = []
     settings: list[Op] = []
     extensions: list[Op] = []
 
+    too_new = shell_warning(preset.meta, shell_version)
+    if too_new:
+        warnings.append(too_new)
+
     for entry in preset.files:
-        source = base / entry.src
+        # Where the file may come from. ``confine_src`` has implemented this
+        # rule since the beginning and had exactly one caller — the download
+        # staging path — so the apply path never asked (review-report H5): a
+        # Look could ship ``files/wallpaper.png`` as a shortcut to a private
+        # key and have its contents copied out at a readable permission. A
+        # refusal reads like the missing-source case because it has the same
+        # consequence for the person: that part of the Look does not happen.
+        # The *resolved* location is what the op carries, so the transaction
+        # reads a real file inside the Look's folder and never a shortcut to
+        # somewhere else.
+        try:
+            source = confine_src(entry.src, base)
+        except ConfinementError:
+            warnings.append(
+                f"{entry.src!r} comes from outside this Look's own folder, so "
+                f"{entry.dest} will not be written"
+            )
+            continue
         # A Look that names a file it does not ship still applies, minus that
         # file. The loader has always promised exactly this ("… is missing, so
         # <dest> will not be written"), but compiling the write anyway made the
@@ -123,6 +200,16 @@ def compile_preset(
             )
             warnings.append(f"{entry.src!r} {reason}, so {entry.dest} will not be written")
             continue
+        # Where the file may go, beyond staying inside the home folder. A
+        # refused destination is *not* dropped: the op stays, so the engine's
+        # own preflight refuses the whole Look with the same verdict, and this
+        # sentence is what says why in words (review-report C1).
+        verdict = file_verdict(entry.dest, root=dest_root)
+        if verdict.refused:
+            refusals.append(
+                f"this Look asked to write {entry.dest} — {verdict.reason}, so gtheme "
+                "will not apply it"
+            )
         files.append(
             FileWrite(
                 src=str(source),
@@ -134,6 +221,14 @@ def compile_preset(
         )
 
     for setting in preset.settings:
+        # The same two-tier question for settings: a Look may change how the
+        # desktop looks, and may not change what it *runs* (review-report H4).
+        verdict = setting_verdict(setting.key)
+        if verdict.refused:
+            refusals.append(
+                f"this Look asked to change a setting gtheme will not let a Look change "
+                f"— {verdict.reason}"
+            )
         settings.append(
             SettingWrite(
                 key=setting.key,
@@ -178,9 +273,16 @@ def compile_preset(
     for setting in preset.extensions.settings:
         if known_installed is not None and setting.uuid not in enabled_uuids:
             continue
+        key = extension_setting_key(setting)
+        verdict = setting_verdict(key)
+        if verdict.refused:
+            refusals.append(
+                f"this Look asked to change a setting gtheme will not let a Look change "
+                f"— {verdict.reason}"
+            )
         settings.append(
             SettingWrite(
-                key=extension_setting_key(setting),
+                key=key,
                 value=setting.value,
                 merge="none",
                 component=str(Component.ADDONS),
@@ -195,4 +297,11 @@ def compile_preset(
         # the folder, which is what a lookup matches on. Both are recorded.
         look=preset.meta.name,
     )
-    return CompileResult(transaction=transaction, warnings=warnings)
+    return CompileResult(
+        transaction=transaction,
+        # The refusals are said out loud in the ordinary warning list too: they
+        # are the sentences that matter most, and a caller that only renders
+        # warnings must not be the reason a person never sees them.
+        warnings=[*warnings, *refusals],
+        refusals=refusals,
+    )

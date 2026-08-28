@@ -32,6 +32,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ..core.policy import setting_verdict
 from ..core.settings_backend import BackendError, BackendErrorKind, SettingsBackend
 from .emit import dumps_preset
 from .model import Component, ExtensionsBlock, FileEntry, Meta, Preset, SettingEntry
@@ -106,11 +107,24 @@ def capture_settings(
     still a perfectly good restore point for everything else, and refusing to
     take one at all would leave the user with no undo precisely when the
     desktop is in an unusual state.
+
+    A setting no Look may write is skipped for a different reason and reported
+    as its own sentence: what comes out of here becomes a Look, and a Look
+    carrying one of those does not apply at all (``core.policy``). "Which
+    program opens a command window" is the live example — gtheme describes that
+    setting on its own page, so it is in the corpus this reads, and capturing
+    it would produce a saved desktop that could never be put back on. The
+    header written into a saved Look says "it changes settings only; it cannot
+    run programs", and this is part of what makes that true.
     """
     lookup = components or {}
     entries: list[SettingEntry] = []
     skipped: list[tuple[str, str]] = []
     for key in keys:
+        verdict = setting_verdict(key)
+        if verdict.refused:
+            skipped.append((key, "a Look is not allowed to change this"))
+            continue
         try:
             value = backend.get(key)
         except BackendError as exc:

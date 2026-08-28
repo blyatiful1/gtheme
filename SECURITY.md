@@ -34,8 +34,8 @@ cannot.
 ## What a Look can still do, and what stops it going further
 
 A Look can copy files into your home folder and change your desktop's
-settings. Two boundaries constrain that, and both are checked before the first
-byte is written, not as it goes:
+settings. Three boundaries constrain that, and all of them are checked before
+the first byte is written, not as it goes:
 
 **Where files may land.** Every destination is resolved — following `..` and
 following symbolic links — and must come out below your home folder. A Look
@@ -46,6 +46,25 @@ anything has happened, rather than partway through.
 **Where files may come from.** Sources are resolved the same way and must stay
 inside the Look's own folder, so a Look cannot use a symbolic link as a siphon
 to copy your private keys out into somewhere it can publish them.
+
+**What may be written, not only where.** Inside your home folder there are
+places where putting a file *is* arranging for a program to run, and settings
+that decide what your desktop runs. A Look may not touch either: the autostart,
+background-service and command folders, the start-up files of a command window,
+anything named `.desktop` or `.service`, the command behind a keyboard
+shortcut, which program opens when your desktop needs one, and any raw settings
+location outside the add-on areas a decorative Look legitimately reaches into.
+A Look asking for one of these does not apply at all — not "minus that part" —
+and the reason is named before anything happens. The list is one documented
+file, `src/gtheme/core/policy.py`, so it can be read and argued with.
+
+The same list has a second half, for a case where refusing would be wrong: a
+Look may theme your command window by writing that program's own settings file,
+and some of those formats can also name a command for that program to run —
+`~/.config/starship.toml` is the example, and three of the four Looks shipped
+with gtheme write it. Those are allowed and are **named one by one** in the
+preview, never folded into "23 files". Being able to see them is what makes
+allowing them reasonable.
 
 **Everything is recorded first.** Before gtheme changes anything, it records
 what was there. Any Look can be completely undone, including one that turns out

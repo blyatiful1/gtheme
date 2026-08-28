@@ -42,14 +42,15 @@ from typing import Literal
 
 from . import ledger as ledger_store
 from . import placeholders
+from . import policy as look_policy
 from .atomic import atomic_write_bytes
-from .backends import get_backend, has_session_bus, is_missing
-from .baseline import Baseline
+from .backends import can_write_settings, get_backend, is_missing
+from .baseline import Baseline, BaselineError
 from .confine import ConfinementError, confine_dest
 from .gvariant import format_string_list, merge_string_lists, parse_string_list, values_equal
 from .lock import LockBusy, process_lock
 from .paths import dest_root, xdg_data_home
-from .settings_backend import BackendError, SettingsBackend
+from .settings_backend import BackendError, BackendErrorKind, SettingsBackend
 
 __all__ = [
     "Diff",
@@ -287,6 +288,15 @@ _COMPONENT_PHRASES: dict[str, tuple[str, str]] = {
     "privacy": ("Privacy", "Privacy"),
     "accessibility": ("Ease of use", "Ease of use"),
     "files": ("1 file", "{count} files"),
+    # Files a Look may write and that must never be counted. See
+    # ``core.policy``: these are a program's own settings file, in a format
+    # that can also name a command for that program to run. "23 files" over
+    # the sentence "they can't run programs on your computer" is exactly the
+    # collapse review-report C1 was about, so each of these is named.
+    "consequential-files": (
+        "1 file that can start programs",
+        "{count} files that can start programs",
+    ),
     "other": ("Other settings", "Other settings"),
     # Undo's two phrases. They are not components of a Look — nothing writes
     # them into a theme.toml — but they are what the preview has to say when
@@ -302,6 +312,12 @@ _COMPONENT_PHRASES: dict[str, tuple[str, str]] = {
 #: "Remove 1 file" tells a person nothing they can act on; "Remove
 #: nightbloom.conf" tells them exactly what is about to disappear.
 _NAMED_WHEN_SINGLE: frozenset[str] = frozenset({"removed-files"})
+
+#: Components whose entries are listed one by one however many there are. A
+#: count is the right summary for twenty wallpaper files and the wrong one for
+#: two files that can start a program: the whole point of allowing those is
+#: that the person is told, by name, which ones they are (review-report C1).
+_ALWAYS_NAMED: frozenset[str] = frozenset({"consequential-files"})
 
 _COMPONENT_ORDER: tuple[str, ...] = tuple(_COMPONENT_PHRASES)
 
@@ -449,36 +465,64 @@ class Diff:
         Components appear in a fixed order — the order the desktop reads in,
         roughly top to bottom — so the same Look always describes itself the
         same way rather than in whatever order its author happened to write.
+
+        Two kinds of entry are named instead of counted: the ones that name a
+        file being deleted, and the ones a Look may write but that can start a
+        program (``core.policy``'s consequential tier). "23 files" printed over
+        "they can't run programs on your computer" is the collapse that made
+        review-report C1 possible; a count is never used where the identity of
+        the file is the whole point.
         """
         counted: dict[str, int] = {}
         only: dict[str, DiffEntry] = {}
+        listed: dict[str, list[DiffEntry]] = {}
         for entry in self.changes:
             counted[entry.component] = counted.get(entry.component, 0) + 1
             only[entry.component] = entry
+            if entry.component in _ALWAYS_NAMED:
+                listed.setdefault(entry.component, []).append(entry)
 
-        def phrase(component: str, count: int) -> str:
+        def phrases(component: str, count: int) -> list[str]:
+            if component in _ALWAYS_NAMED:
+                return [entry.summary for entry in listed.get(component, [])]
             if count == 1 and component in _NAMED_WHEN_SINGLE:
-                return only[component].summary
-            return _novice_phrase(component, count)
+                return [only[component].summary]
+            return [_novice_phrase(component, count)]
 
         lines: list[str] = []
         for component in _COMPONENT_ORDER:
             count = counted.pop(component, 0)
             if count:
-                lines.append(phrase(component, count))
+                lines.extend(phrases(component, count))
         for component in sorted(counted):
-            lines.append(phrase(component, counted[component]))
+            lines.extend(phrases(component, counted[component]))
         return lines
 
 
 @dataclass
 class TransactionResult:
-    """The outcome of an applied transaction."""
+    """The outcome of an applied transaction.
+
+    The last three describe the tidy-up that runs before a Look switch, which
+    is a real change to the desktop that this transaction's own diff says
+    nothing about. They were computed and thrown away (review-report M1), so an
+    apply that could not put part of the previous Look back reported plain
+    success and told the user nothing.
+    """
 
     diff: Diff
     applied: list[Op] = field(default_factory=list)
     skipped: list[tuple[Op, str]] = field(default_factory=list)
     restore_point: str | None = None
+    #: Sentences about the previous Look that could not be changed back.
+    cleanup_warnings: list[str] = field(default_factory=list)
+    #: How many of the previous Look's things are still on the desktop and
+    #: still recoverable from the Undo page.
+    cleanup_kept: int = 0
+    #: How many can never be changed back — the saved copy is gone. Counted
+    #: apart from :attr:`cleanup_kept` because telling somebody "Undo can still
+    #: recover them" about these would be untrue.
+    cleanup_dead: int = 0
 
 
 class Transaction:
@@ -523,7 +567,17 @@ class Transaction:
 
     @property
     def _backend(self) -> SettingsBackend:
-        """The settings backend. Overridable per instance, mostly for tests."""
+        """The settings backend. Overridable per instance, mostly for tests.
+
+        There is a second per-instance seam beside this one, set the same way
+        and deliberately absent from the frozen constructor: ``installer``, a
+        callable taking an :class:`ExtensionInstall` and returning whether the
+        add-on is now on the machine. Set it and :meth:`_install_extensions`
+        fetches missing add-ons before the settings phase; leave it alone — the
+        default — and a missing add-on is a named skip, as it always was.
+        Downloading needs the network and a person's consent, so the decision
+        belongs to the caller, but the *ordering* belongs here (X1).
+        """
         override = getattr(self, "backend", None)
         return override if override is not None else get_backend()
 
@@ -572,20 +626,92 @@ class Transaction:
                 raise TransactionError(str(exc), op=op) from exc
         return resolved
 
+    def _policy_preflight(self, context: dict[str, str] | None = None) -> None:
+        """Refuse a Look that asks for something no Look may have (C1, H4).
+
+        Runs with the confinement preflight, before the first byte, and for the
+        same reason: a Look whose fourth entry is a login script must not have
+        had its first three applied. The refusal is whole-Look on purpose — a
+        Look that needs to write a program entry is not a decorative Look, and
+        applying "the rest of it" would be applying something its author never
+        designed.
+
+        Only for a Look. A saved moment being put back describes *this*
+        machine as it already was — refusing to restore a file that was there
+        before gtheme ever ran would break the promise the app is built on — so
+        the question is asked only when ``look`` says a Look is being applied.
+        See ``core.policy`` for the tiers and why each entry is in one.
+
+        Raises:
+            TransactionError: an operation falls in the refused tier.
+        """
+        if not self.look:
+            return
+        for op in (*self._file_ops(), *self._remove_ops(), *self._link_ops()):
+            verdict = look_policy.file_verdict(op.dest, root=self._root)
+            if verdict.refused:
+                raise TransactionError(
+                    f"this look asked to write {op.dest}, which gtheme will not do: "
+                    f"{verdict.reason}",
+                    op=op,
+                )
+        for op in (*self._setting_ops(), *self._reset_ops()):
+            # Both the key as written and the key with its ``{{ }}`` tokens
+            # filled in: the written form is what the Look is judged on, and
+            # the filled-in form is what would actually be written.
+            forms = {op.key}
+            if context is not None:
+                forms.add(placeholders.resolve(op.key, context))
+            for key in forms:
+                verdict = look_policy.setting_verdict(key)
+                if verdict.refused:
+                    raise TransactionError(
+                        "this look asked to change something gtheme will not let a look "
+                        f"change: {verdict.reason}",
+                        op=op,
+                    )
+
+    def _file_line(self, op: FileWrite) -> tuple[str, str]:
+        """``(component, summary)`` for one file being written.
+
+        Ordinary files are counted ("23 files"). A file in the consequential
+        tier — a program's own settings file, in a format that can also name a
+        command for that program to run — is named instead, every time, because
+        the identity of the file *is* what the person needs to see (C1).
+        """
+        verdict = look_policy.file_verdict(op.dest, root=self._root)
+        if verdict.named:
+            return "consequential-files", f"{verdict.what} — {verdict.reason}"
+        return "files", _novice_phrase("files", 1)
+
     def _rendered(self, op: FileWrite, context: dict[str, str]) -> bytes:
         """The exact bytes ``op`` would write.
 
         Raises:
-            TransactionError: the source is missing, unreadable, or is being
-                templated while not being text. That last one is not fussiness:
-                templating a binary file used to truncate the destination to
-                nothing.
+            TransactionError: the source is missing, unreadable, is a shortcut
+                to somewhere else, or is being templated while not being text.
+                That last one is not fussiness: templating a binary file used
+                to truncate the destination to nothing.
         """
         source = Path(op.src)
         if not source.is_absolute():
             raise TransactionError(
                 f"this look's file {op.src!r} was not resolved to a full location before "
                 "the change was prepared",
+                op=op,
+            )
+        if source.is_symlink():
+            # H5, the second half. ``preset.compile`` resolves every source
+            # through ``confine_src`` and stores the resolved location, so by
+            # the time an op exists its source is a real file inside the Look's
+            # own folder. A source that is a shortcut at *this* moment is
+            # therefore either something that swapped underneath the plan or an
+            # op built by hand, and following it would read whatever it points
+            # at — which is exactly the private key the confinement rule exists
+            # to keep out of a Look.
+            raise TransactionError(
+                f"this look's file {op.src} is a shortcut to somewhere else, so it was "
+                "not copied",
                 op=op,
             )
         if not source.is_file():
@@ -645,25 +771,44 @@ class Transaction:
             return None
 
     def _current_setting(self, key: str) -> tuple[str | None, BackendError | None]:
-        """``(value, failure)``. A missing schema is a value of None, not a raise."""
+        """``(value, failure)``. A missing schema is a value of None, not a raise.
+
+        A location that is *unset* is not a failure at all and comes back as
+        ``(None, None)``: a settings location nothing has ever written to is
+        somewhere a value can be put, with no current value — which is a real
+        change, not an absent add-on. Reading the two as the same thing is what
+        made a never-written location impossible to set for good, because the
+        skip preserved the very emptiness it keyed on (review-report H7).
+        """
         try:
             return self._backend.get(key), None
         except BackendError as exc:
+            if exc.kind is BackendErrorKind.UNSET:
+                return None, None
             return None, exc
 
     def _planned_setting(
         self, op: SettingWrite, context: dict[str, str]
     ) -> tuple[str, str, str | None]:
-        """``(key, value, skip_reason)`` for one setting, tokens resolved."""
+        """``(key, value, skip_reason)`` for one setting, tokens resolved.
+
+        A token that did not resolve skips the op wherever it stood. The value
+        half was missed: ``key_ok`` only ever looked at the key, so a typo in a
+        Look's ``{{ home }}`` inside a *value* was written through literally
+        and the desktop was pointed at a file called ``{{ hoem }}``
+        (review-report M12). ``docs/preset-format.md`` promises the opposite —
+        "never written half-resolved" — for both halves.
+        """
         key = placeholders.resolve(op.key, context)
         value = placeholders.resolve(op.value, context)
+        missing = placeholders.unresolved_tokens(key)
+        missing += [name for name in placeholders.unresolved_tokens(value) if name not in missing]
+        if missing:
+            return key, value, (
+                "this needs something that is not set up on this computer yet "
+                f"({', '.join(missing)})"
+            )
         if not placeholders.key_ok(key):
-            missing = placeholders.unresolved_tokens(op.key) + placeholders.unresolved_tokens(op.value)
-            if missing:
-                return key, value, (
-                    "this needs something that is not set up on this computer yet "
-                    f"({', '.join(missing)})"
-                )
             return key, value, "this setting's location came out incomplete on this computer"
         return key, value, None
 
@@ -684,9 +829,10 @@ class Transaction:
         Raises:
             TransactionError: the transaction cannot be applied at all.
         """
-        dests = self._preflight()
         backend = self._backend
         context = placeholders.runtime_context(backend)
+        dests = self._preflight()
+        self._policy_preflight(context)
         diff = Diff()
 
         for op in self._file_ops():
@@ -700,11 +846,12 @@ class Transaction:
                     before = _digest(dest.read_bytes())
                 except OSError:
                     before = None
+            component, summary = self._file_line(op)
             diff.entries.append(
                 DiffEntry(
                     op=op,
-                    component="files",
-                    summary=_novice_phrase("files", 1),
+                    component=component,
+                    summary=summary,
                     before=before,
                     after=after,
                     no_op=before == after,
@@ -830,11 +977,13 @@ class Transaction:
                         summary=_novice_phrase("addons", 1),
                         before="present" if op.uuid in present else None,
                         after="present",
-                        # Downloading an add-on is not something this layer can
-                        # do — it needs the network and a consent dialog. The
-                        # Add-ons page installs first and then applies, so by
-                        # the time a transaction runs, an add-on is either here
-                        # or it is a named skip. Never a promise it cannot keep.
+                        # Downloading an add-on needs the network and a consent
+                        # dialog, neither of which a plan may assume. A caller
+                        # that has both can hand the transaction an
+                        # ``installer`` and the apply will fetch it; a plan
+                        # never promises that, because a preview that says "and
+                        # then it will be downloaded" is a promise the person
+                        # reading it has not agreed to yet.
                         no_op=True,
                     )
                 )
@@ -884,6 +1033,7 @@ class Transaction:
         backend = self._backend
         context = placeholders.runtime_context(backend)
         dests = self._preflight()
+        self._policy_preflight(context)
         result = TransactionResult(diff=diff)
 
         baseline = Baseline(backend=backend).load()
@@ -908,10 +1058,18 @@ class Transaction:
         remove_ops = self._remove_ops()
         enables = self._enable_ops()
 
-        # AS5. With no session to write into, every settings write fails the
-        # same way. Reporting that forty times is noise; skipping the phase
-        # with one sentence is the useful answer.
-        no_session = bool(setting_ops or reset_ops or enables) and not has_session_bus()
+        # AS5. With nowhere to write settings into, every write fails the same
+        # way. Reporting that forty times is noise; skipping the phase with one
+        # sentence is the useful answer.
+        #
+        # The question is put to the *backend*, not to the environment. Reading
+        # DBUS_SESSION_BUS_ADDRESS directly meant an environment variable could
+        # switch off a backend that never needed a bus — the in-memory test
+        # seam, whose whole point is to write nowhere real — so the suite's
+        # verdict depended on the shell it was launched from (review-report
+        # M16). A backend that needs a session says so; one that does not is
+        # writable wherever it runs.
+        no_session = bool(setting_ops or reset_ops or enables) and not can_write_settings(backend)
         if no_session:
             result.skipped.extend(
                 (op, "your desktop session wasn't running, so this was left alone")
@@ -980,6 +1138,17 @@ class Transaction:
             cleanup_changed = bool(cleanup.notes)
             for note in cleanup.notes:
                 report(Progress.SNAPSHOTTING, note)
+            # What the tidy-up could *not* do. ``ledger`` builds these
+            # sentences and nothing read them, so an apply that left part of
+            # the previous Look on the desktop reported plain success and the
+            # user was told nothing (review-report M1). They travel on the
+            # result as well as through the progress callback, because the
+            # callback is fire-and-forget and the summary is read afterwards.
+            result.cleanup_warnings = list(cleanup.warnings)
+            result.cleanup_kept = cleanup.kept
+            result.cleanup_dead = cleanup.dead
+            for warning in cleanup.warnings:
+                report(Progress.SNAPSHOTTING, warning)
 
         # R4. The claim goes down before the change it describes. A crash
         # between the two leaves a ledger that claims too much, which costs one
@@ -1002,6 +1171,16 @@ class Transaction:
             self._write_links(
                 self._link_ops(), dests, baseline, journal, fresh_files, result, report
             )
+            # Add-ons that have to arrive before the settings phase, not after
+            # it. An add-on's settings only exist once the add-on does, so a
+            # Look that configures one it also installs had every one of those
+            # settings skipped as "not installed here" — and the skip was
+            # invisible, so the tuning simply never happened and would have
+            # worked on a second apply nothing suggested (X1). Installing needs
+            # no session either, which is why it also runs when the settings
+            # phase is being skipped: a missing add-on is reported rather than
+            # silently swallowed with the rest (review-report L4).
+            self._install_extensions(result, report)
             if not no_session:
                 self._write_settings(
                     setting_ops, context, backend, baseline, journal, fresh_settings, result, report
@@ -1013,22 +1192,56 @@ class Transaction:
                     enables, backend, baseline, journal, fresh_settings, result, report
                 )
         except TransactionError as exc:
-            baseline.save()
-            rolled_back = self._roll_back(journal, baseline, fresh_files, fresh_settings, report)
-            # R4 again, from the failure side. Withdrawing the claim is right
-            # only when the change it describes really did come back off the
-            # desktop. After a rollback that could not finish, the leftover
-            # change is still there — and a ledger that no longer claims it is
-            # a change nothing will ever tidy up. Over-claiming costs one
-            # redundant restore; this costs the item forever.
-            if rolled_back:
-                self._restore_ledger(owner, prior_files, prior_settings, previous_current)
-            shutil.rmtree(journal_dir, ignore_errors=True)
-            raise TransactionError(str(exc), op=exc.op, rolled_back=rolled_back) from exc
+            raise self._failed(
+                exc,
+                baseline=baseline,
+                journal=journal,
+                journal_dir=journal_dir,
+                fresh_files=fresh_files,
+                fresh_settings=fresh_settings,
+                cleanup_changed=cleanup_changed,
+                owner=owner,
+                prior_files=prior_files,
+                prior_settings=prior_settings,
+                previous_current=previous_current,
+                report=report,
+            ) from exc
+        except Exception as exc:
+            # Everything else that can come out of the ops: an unreadable
+            # snapshot, a settings failure that is not "not installed here", a
+            # malformed key. Only ``TransactionError`` used to reach the
+            # rollback, so all of these skipped it, deleted the journal, and
+            # left the ledger claiming a Look that was half on the desktop —
+            # which the app then reported as "Nothing was changed. Your desktop
+            # is exactly as it was." (review-report H1). An unexpected failure
+            # is still a failure of *this* transaction and unwinds like one.
+            raise self._failed(
+                TransactionError(str(exc) or exc.__class__.__name__),
+                baseline=baseline,
+                journal=journal,
+                journal_dir=journal_dir,
+                fresh_files=fresh_files,
+                fresh_settings=fresh_settings,
+                cleanup_changed=cleanup_changed,
+                owner=owner,
+                prior_files=prior_files,
+                prior_settings=prior_settings,
+                previous_current=previous_current,
+                report=report,
+            ) from exc
         except BaseException:
-            # A crash, an interrupt, anything. The recording persisted itself
-            # record by record, so it already describes exactly what had been
-            # touched; flushing the indexes keeps it readable.
+            # An interrupt, or the process being taken down. This arm re-raises
+            # after the attempt and does nothing else, which is deliberate and
+            # is *not* the H1 hole: the hole was that ordinary failures landed
+            # here. A stop is a different thing from a failure. It stands in
+            # for the case where no Python runs at all — a SIGKILL, a power cut
+            # — and the guarantee for that case is the recording, not a
+            # rollback: at every instant it describes exactly what has been
+            # changed by then, and the claim written before the change is
+            # deliberately too large rather than too small, so ``gtheme
+            # rescue`` in a later process can still put everything back. Doing
+            # a rollback here would forget the records that make that true.
+            # ``tests/regression/test_crash_mid_apply.py`` is the argument.
             baseline.save()
             shutil.rmtree(journal_dir, ignore_errors=True)
             raise
@@ -1040,7 +1253,16 @@ class Transaction:
         # happened did not apply anything, and recording it as the current Look
         # would be a lie the Undo page then has to live with.
         if not result.applied and result.skipped:
-            self._restore_ledger(owner, prior_files, prior_settings, previous_current)
+            # Withdraw this transaction's claim — and, when the tidy-up already
+            # stripped the outgoing Look, do not put the desktop's name back to
+            # that Look. It is not on the desktop any more; saying it is would
+            # send the Undo page looking for files the cleanup deleted (H9).
+            self._restore_ledger(
+                owner,
+                prior_files,
+                prior_settings,
+                None if cleanup_changed else previous_current,
+            )
             if cleanup_changed:
                 # The switch cleanup ran before the ops and really did revert
                 # the outgoing Look. Saying "nothing was changed" about a
@@ -1082,6 +1304,64 @@ class Transaction:
 
         report(Progress.DONE, "Done")
         return result
+
+    def _failed(
+        self,
+        exc: TransactionError,
+        *,
+        baseline: Baseline,
+        journal: Baseline,
+        journal_dir: Path,
+        fresh_files: list[str],
+        fresh_settings: list[str],
+        cleanup_changed: bool,
+        owner: str,
+        prior_files: set[str],
+        prior_settings: set[str],
+        previous_current: dict | None,
+        report: Callable[[Progress, str], None],
+    ) -> TransactionError:
+        """Unwind a failed apply and build the error the caller will see.
+
+        One path for every kind of failure, which is the point: the rollback
+        used to be reachable only from ``TransactionError`` while three other
+        exception types could come out of the same block (review-report H1).
+
+        ``rolled_back`` is the honest answer to "is the desktop as it was?",
+        and it is two questions, not one. The journal says whether this
+        transaction's own operations came back. The switch cleanup ran *before*
+        them, outside the journal, and a cleanup that really reverted the
+        outgoing Look is a change nothing here can undo — so a clean unwind of
+        this transaction is still not "nothing was changed" (H9).
+        """
+        baseline.save()
+        unwound = self._roll_back(journal, baseline, fresh_files, fresh_settings, report)
+        # R4 from the failure side. Withdrawing the claim is right only when
+        # the change it describes really did come back off the desktop. After a
+        # rollback that could not finish, the leftover change is still there —
+        # and a ledger that no longer claims it is a change nothing will ever
+        # tidy up. Over-claiming costs one redundant restore; this costs the
+        # item forever.
+        if unwound:
+            self._restore_ledger(
+                owner,
+                prior_files,
+                prior_settings,
+                # Never point the desktop back at a Look the tidy-up already
+                # stripped off it: its files are gone, and naming it would send
+                # the Undo page after something that is not there (H9).
+                None if cleanup_changed else previous_current,
+            )
+        if cleanup_changed:
+            report(
+                Progress.ROLLED_BACK,
+                "Everything this look had changed was put back, but the previous look was "
+                "tidied up first — use Undo to put that back",
+            )
+        shutil.rmtree(journal_dir, ignore_errors=True)
+        return TransactionError(
+            str(exc), op=exc.op, rolled_back=unwound and not cleanup_changed
+        )
 
     def _applied_setting_keys(
         self,
@@ -1155,6 +1435,66 @@ class Transaction:
             return None
         return point.id if point is not None else None
 
+    def _snapshot_file(
+        self,
+        op: Op,
+        dest: Path,
+        component: str,
+        baseline: Baseline,
+        journal: Baseline,
+    ) -> bool:
+        """Record what is at ``dest`` before changing it. Returns False for F1.
+
+        The R4 rule says this happens before the change, and P5 says it happens
+        *inside the same guard* as the change. It did not: every write was
+        wrapped in a ``try`` and the recording that must precede it was not, so
+        a full disk or an unreadable file at a destination raised an ``OSError``
+        straight past the rollback (review-report H1/P5). A recording that
+        cannot be made is a reason not to make the change, and it is this
+        transaction's failure like any other.
+
+        Returns:
+            False when something that is not an ordinary file is already at the
+            destination (F1) — it cannot be copied, so it cannot be put back,
+            so it is not touched.
+
+        Raises:
+            TransactionError: the old state could not be saved.
+        """
+        try:
+            if not baseline.record_file(dest, component, self.label or ""):
+                return False
+            journal.record_file(dest, component, self.label or "")
+        except (BaselineError, OSError) as exc:
+            raise TransactionError(
+                f"could not save the old value of {dest} before changing it: {exc}", op=op
+            ) from exc
+        return True
+
+    def _snapshot_setting(
+        self,
+        op: Op,
+        key: str,
+        component: str,
+        baseline: Baseline,
+        journal: Baseline,
+    ) -> None:
+        """Record a setting's old value before changing it. See P5 above.
+
+        Raises:
+            TransactionError: the old value could not be read or saved — a
+                malformed key, a settings service that is not answering, a
+                recording directory that cannot be written.
+        """
+        try:
+            baseline.record_setting(key, component, self.label or "")
+            if key not in journal.settings:
+                journal.record_setting(key, component, self.label or "")
+        except (BackendError, BaselineError, OSError) as exc:
+            raise TransactionError(
+                f"could not save the old value of {key} before changing it: {exc}", op=op
+            ) from exc
+
     def _write_files(
         self,
         dests: dict[str, Path],
@@ -1176,7 +1516,7 @@ class Transaction:
             data = self._rendered(op, context)
             key = str(dest)
             newly = key not in baseline.files
-            if not baseline.record_file(dest, "files", self.label or ""):
+            if not self._snapshot_file(op, dest, "files", baseline, journal):
                 # F1. There is a pipe, socket or device node where this file
                 # should go. It cannot be copied, so it cannot be put back, so
                 # it is not overwritten.
@@ -1186,7 +1526,6 @@ class Transaction:
                 continue
             if newly:
                 fresh_files.append(key)
-            journal.record_file(dest, "files", self.label or "")
             try:
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 if dest.is_dir() and not dest.is_symlink():
@@ -1225,7 +1564,7 @@ class Transaction:
                 continue
             key = str(dest)
             newly = key not in baseline.files
-            if not baseline.record_file(dest, op.component or "files", self.label or ""):
+            if not self._snapshot_file(op, dest, op.component or "files", baseline, journal):
                 # F1 again, from the other side: something that is not an
                 # ordinary file cannot be copied, so it cannot be put back, so
                 # it does not get deleted.
@@ -1235,7 +1574,6 @@ class Transaction:
                 continue
             if newly:
                 fresh_files.append(key)
-            journal.record_file(dest, op.component or "files", self.label or "")
             try:
                 dest.unlink()
             except OSError as exc:
@@ -1269,14 +1607,13 @@ class Transaction:
                 continue
             key = str(dest)
             newly = key not in baseline.files
-            if not baseline.record_file(dest, op.component or "files", self.label or ""):
+            if not self._snapshot_file(op, dest, op.component or "files", baseline, journal):
                 result.skipped.append(
                     (op, f"something that is not an ordinary file is at {dest}, so it was left alone")
                 )
                 continue
             if newly:
                 fresh_files.append(key)
-            journal.record_file(dest, op.component or "files", self.label or "")
             try:
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 if dest.is_symlink() or dest.exists():
@@ -1321,9 +1658,7 @@ class Transaction:
                 result.skipped.append((op, "that part of your desktop isn't installed here"))
                 continue
             newly = key not in baseline.settings
-            baseline.record_setting(key, op.component or "other", self.label or "")
-            if key not in journal.settings:
-                journal.record_setting(key, op.component or "other", self.label or "")
+            self._snapshot_setting(op, key, op.component or "other", baseline, journal)
             try:
                 backend.reset(key)
             except BackendError as exc:
@@ -1371,9 +1706,7 @@ class Transaction:
                 result.applied.append(op)
                 continue
             newly = key not in baseline.settings
-            baseline.record_setting(key, op.component or "other", self.label or "")
-            if key not in journal.settings:
-                journal.record_setting(key, op.component or "other", self.label or "")
+            self._snapshot_setting(op, key, op.component or "other", baseline, journal)
             try:
                 backend.set(key, wanted)
             except BackendError as exc:
@@ -1388,6 +1721,65 @@ class Transaction:
             if newly:
                 fresh_settings.append(key)
             result.applied.append(op)
+
+    def _install_extensions(
+        self,
+        result: TransactionResult,
+        report: Callable[[Progress, str], None],
+    ) -> None:
+        """Get the add-ons this transaction needs, *before* the settings phase.
+
+        Order is the whole fix. An add-on's settings do not exist until the
+        add-on does, so a Look that installs an add-on and then configures it
+        had every one of those settings answered with "that part of your
+        desktop isn't installed here" — a skip nobody rendered, on a phase that
+        ran before the add-on arrived. The tuning silently never happened, and
+        would have worked on a second apply nothing suggested (X1).
+
+        Downloading is still not something this layer does by itself: it needs
+        the network and a person's consent, both of which belong to the caller.
+        A caller that has them hands the transaction an ``installer`` — the
+        same per-instance seam ``backend`` uses — and it runs here. With no
+        installer, a missing add-on is a named skip, exactly as before, and the
+        skip is now reported whether or not there is a desktop session to write
+        settings into, because listing what is installed is a directory listing
+        and needs neither (review-report L4).
+
+        Nothing here is rolled back: gtheme cannot un-install an add-on, and an
+        installed add-on that is never turned on changes nothing about the
+        desktop. What *does* change the desktop — the enabled list — is written
+        in the settings phase and rolls back with it.
+        """
+        ops = self._install_ops()
+        if not ops:
+            return
+        present = installed_extension_uuids()
+        pending = [op for op in ops if op.uuid not in present]
+        if not pending:
+            return
+        installer: Callable[[ExtensionInstall], bool] | None = getattr(self, "installer", None)
+        if installer is not None:
+            report(Progress.EXTENSIONS, f"Getting {len(pending)} add-on(s)")
+        for op in pending:
+            if installer is not None and op.source != "local-only":
+                try:
+                    landed = bool(installer(op))
+                except Exception as exc:  # noqa: BLE001 - a download is allowed to fail
+                    landed = False
+                    report(Progress.EXTENSIONS, f"could not get an add-on: {exc}")
+                if landed and op.uuid in installed_extension_uuids():
+                    result.applied.append(op)
+                    continue
+                result.skipped.append((op, "this add-on could not be downloaded"))
+                continue
+            if op.source == "local-only":
+                result.skipped.append(
+                    (op, "this look uses a private add-on that isn't on this computer")
+                )
+            else:
+                result.skipped.append(
+                    (op, "this add-on isn't installed yet — install it from the Add-ons page first")
+                )
 
     def _write_extensions(
         self,
@@ -1406,19 +1798,11 @@ class Transaction:
         so the Look's members are added to theirs and the recording keeps the
         exact value from before, so undo restores their list rather than a
         computed difference.
-        """
-        for op in self._install_ops():
-            if op.uuid in installed_extension_uuids():
-                continue
-            if op.source == "local-only":
-                result.skipped.append(
-                    (op, "this look uses a private add-on that isn't on this computer")
-                )
-            else:
-                result.skipped.append(
-                    (op, "this add-on isn't installed yet — install it from the Add-ons page first")
-                )
 
+        Getting add-ons that are not here yet happens earlier, in
+        :meth:`_install_extensions`, so their settings exist by the time the
+        settings phase runs.
+        """
         if not ops:
             return
         present = installed_extension_uuids()
@@ -1452,9 +1836,7 @@ class Transaction:
             result.applied.extend(resolved_ops)
             return
         newly = key not in baseline.settings
-        baseline.record_setting(key, "addons", self.label or "")
-        if key not in journal.settings:
-            journal.record_setting(key, "addons", self.label or "")
+        self._snapshot_setting(resolved_ops[0], key, "addons", baseline, journal)
         try:
             backend.set(key, merged)
         except BackendError as exc:

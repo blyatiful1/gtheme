@@ -201,8 +201,11 @@ component = "terminal"
 
 If a token cannot be resolved on the machine applying the Look, that one
 operation is **skipped with a sentence explaining why** — never written
-half-resolved, and never a crash. A path with an empty component
-(`/Profiles//palette`) is exactly the kind of damage the check exists to stop.
+half-resolved, and never a crash. That holds for a token in the `value` just as
+much as one in the `key`: a mistyped `{{ hoem }}` in a wallpaper location skips
+the setting rather than pointing the desktop at a file with braces in its name.
+A path with an empty component (`/Profiles//palette`) is exactly the kind of
+damage the check exists to stop.
 
 Templating a file that is not text is an error rather than a mangled write.
 Leave `template` off for pictures.
@@ -297,7 +300,28 @@ Nothing is dropped silently.
   and through symbolic links — and refused if it escapes, before anything is
   written.
 - Read outside its own folder. Sources are resolved the same way, so a symbolic
-  link cannot be used as a siphon.
+  link cannot be used as a siphon — checked when the Look is compiled *and*
+  again before the bytes are read.
+- Write somewhere that arranging a file *is* arranging for a program to run.
+  The list lives in `src/gtheme/core/policy.py` and is refused outright:
+  `~/.config/autostart`, `~/.config/systemd`, `~/.config/environment.d`,
+  `~/.local/bin`, `~/bin`, `~/.local/share/gnome-shell/extensions`, the shell
+  start-up files (`.bashrc`, `.zshrc`, `.profile`, `config.fish`, fish's
+  `conf.d`), and anything ending `.desktop` or `.service` anywhere.
+- Change a setting that decides what the desktop *runs*: a custom shortcut's
+  `command` or `binding`, `org.gnome.desktop.default-applications.*.exec`,
+  `org.gnome.desktop.session session-name`, a `keyfile:` key (which would name
+  the file to write into), or a `dconf:` location outside the add-on trees —
+  `/org/gnome/shell/extensions/`, `/org/gnome/Ptyxis/` and
+  `/io/github/jeffshee/hanabi-extension/`.
+
+  A Look asking for any of these does not apply at all — not "minus that
+  entry". Each one is named in the preview before anything happens.
+- Hide a file that can start a program inside a count. A Look **may** write a
+  program's own settings file whose format can also name a command —
+  `~/.config/starship.toml` is the shipped example, and three of the four
+  bundled Looks write it — but every such destination is listed by name in the
+  preview instead of being folded into "23 files".
 - Give itself privileges. A `mode` is honoured with the setuid, setgid and
   sticky bits masked off.
 - Be applied without a record being taken first, or survive its own failure —
@@ -343,7 +367,7 @@ see rather than a line that is quietly ignored.
 | `description` | string | yes | One or two sentences; shown on the tile. |
 | `author` | string | yes | |
 | `version` | string | yes | Your own versioning; gtheme only compares it for updates. |
-| `min_shell` | string or absent | no (default absent) | Lowest GNOME major version this was built against, as a string (`"49"`). Compared numerically. It never *blocks* — gtheme warns that parts may not apply. |
+| `min_shell` | string or absent | no (default absent) | Lowest GNOME major version this was built against, as a string (`"49"`). Compared numerically against the version this desktop reports. It never *blocks*: the Look is compiled with the warning "this Look was made for a newer version of GNOME … parts of it may not apply" alongside its other warnings. On a desktop whose version cannot be read, nothing is claimed either way. |
 | `screenshots` | array of strings | no (default empty) | Paths relative to the Look's folder. Empty is allowed here and refused at publish time. |
 
 ### `[[files]]`
