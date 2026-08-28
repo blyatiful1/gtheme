@@ -109,10 +109,17 @@ outside your home folder.
 | `~/.cache/gtheme/ego/` | the last few answers from extensions.gnome.org, so the Add-ons page does not re-ask for the same list. Deleting it costs nothing |
 | `~/.local/share/gnome-shell/extension-updates/` | GNOME's own folder for an add-on update waiting to be moved into place at your next login. gtheme writes an update there rather than over a running add-on |
 
-Two more places belong to somebody else and gtheme only reads them:
+Two more places belong to somebody else:
 `~/.local/share/gnome-shell/extensions/` and `/usr/share/gnome-shell/extensions/`,
-where the add-ons on this computer live. Add-ons are installed there by GNOME's
-own installer, never by gtheme directly.
+where the add-ons on this computer live. gtheme reads them, and it also puts
+add-ons into the first one — by handing the downloaded package to GNOME's own
+`gnome-extensions install` command rather than unpacking files there itself.
+Whether you are shown GNOME's own confirmation box first depends on the route:
+the **Add-ons** page asks the desktop to install, so the desktop shows you its
+dialog; the add-ons a **Look** fetches when you press its "Get the missing
+ones" button are installed from the package without that dialog. Nothing in
+`/usr/share/gnome-shell/extensions/` is ever written — that one is read-only to
+gtheme, and would need administrator rights it never asks for.
 
 Files a Look writes are a separate matter: those go where the Look says, which
 may be anywhere below your home folder (`~/.config/alacritty/alacritty.toml`,

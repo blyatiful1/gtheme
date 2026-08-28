@@ -86,7 +86,7 @@ the app itself will not open. And nothing here can be broken so badly that the
 | **libadwaita 1.9 or newer** | One of the building blocks GNOME itself is made of. GNOME 49 and 50 both include it; there is nothing separate to install. On an older GNOME the window will not open, and gtheme tells you that instead of misbehaving. |
 | **Python 3.11 or newer** | Already on every desktop Linux system in use today. |
 | **About 60 MB of disk space** | Three quarters of that is the pictures the four built-in Looks use. |
-| **English** | gtheme is English only today — every word in the app, every explanation and every search word. It has no translation machinery in it yet: no language files, nothing for a translator to fill in. That is a plain statement of what it is, not a hint that other languages are coming next month. If you would like it in yours, [say so in an issue](https://github.com/blyatiful1/gtheme/issues) — translations are welcome, and knowing somebody is waiting is what decides when the groundwork gets built. |
+| **English** | Everything *inside* the window is English only today — every label, every explanation, every warning — and there is no translation machinery behind it yet: no language files, nothing for a translator to fill in. The one part that is already translated is how you find the app: the launcher entry and the software-store listing carry German, Brazilian Portuguese, Spanish and French names, descriptions and search words, so typing "Thema", "aparência", "fondo de pantalla" or "apparence" turns gtheme up in your applications list. That is a plain statement of what it is, not a hint that the app itself is coming in your language next month. If you would like it in yours, [say so in an issue](https://github.com/blyatiful1/gtheme/issues) — translations are welcome, and knowing somebody is waiting is what decides when the groundwork gets built. |
 
 gtheme does **not** need an internet connection to change anything on your
 computer. It only goes online if you ask it to look for new add-ons or new
@@ -425,10 +425,16 @@ Not permanently, and it is designed so that it cannot.
 - **Changes are all-or-nothing.** If any step of applying a Look fails, the
   whole thing is rolled back. gtheme never leaves you with a half-changed
   desktop.
-- **The first record is never overwritten.** The first time gtheme touches
+- **The first record is never overwritten.** The first time a Look changes
   anything it writes down what was there and never writes over that note,
   however many Looks you try afterwards — so `gtheme rescue` a year later still
-  puts back what was on this computer before gtheme first changed it.
+  puts back what this computer looked like before the first Look was applied.
+  Single settings you change by hand on one of the individual pages
+  (Background, Fonts, Terminal and the rest) do not go into that first record
+  yet, so `gtheme rescue` cannot put those back. A restore point does cover
+  them: **Undo & Restore Points** saves every setting gtheme knows how to
+  change, so a moment saved before an afternoon of tweaking takes you back to
+  it.
 - **Looks cannot run programs.** See [SECURITY.md](SECURITY.md).
 
 The honest limits: a badly-behaved *add-on* — third-party code, published by
@@ -443,11 +449,15 @@ desktop's help.
 Yes. Do it in this order — the first step is the one that matters.
 
 **1. Put your desktop back first.** Open **Undo & Restore Points** and go back
-to the moment you want, or run `gtheme rescue` in a terminal. `gtheme rescue`
-is the complete route on any install: it returns every setting and file gtheme
-ever touched to how it was when gtheme first touched it, and switches off every
-add-on gtheme switched on. Do this *before* removing anything, because removing
-the app takes away the only thing that can read those records.
+to the moment you want — that is the thorough route, because a saved moment
+covers every setting gtheme knows how to change, including ones you changed by
+hand on an individual page. `gtheme rescue` in a terminal is the route that
+needs no window: it returns everything *a Look* applied — settings and files
+alike — to how it was before the first Look touched it, and switches off every
+add-on gtheme switched on. Page-by-page edits are not in that record yet, so
+finish with a restore point if you made any. Do this *before* removing
+anything, because removing the app takes away the only thing that can read
+those records.
 
 **2. Then remove it.**
 

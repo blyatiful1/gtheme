@@ -36,7 +36,10 @@ optdepends=(
   'gnome-backgrounds: more wallpapers to choose from'
 )
 makedepends=('python-build' 'python-installer' 'python-wheel' 'python-hatchling')
-checkdepends=('python-pytest')
+# dbus supplies dbus-run-session, which check() wraps the suite in; dconf and
+# glib2 are already runtime depends and provide the dconf/gsettings/
+# glib-compile-schemas binaries the dconf tier needs.
+checkdepends=('python-pytest' 'dbus')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('SKIP')  # run updpkgsums when the tag exists
 
@@ -50,7 +53,12 @@ check() {
   # The tiers that need a real desktop session are never run here: the
   # graphical tier needs a display and the sandbox tier boots its own copy of
   # GNOME. Both are local-only (docs/testing.md).
-  python -m pytest -q -m "not gtk and not sandbox"
+  #
+  # dbus-run-session is not optional. A clean build chroot has no
+  # DBUS_SESSION_BUS_ADDRESS, and the `dconf` tier that this selection includes
+  # needs a session bus to activate dconf-service; without one those tests skip
+  # themselves and the check proves nothing.
+  dbus-run-session -- python -m pytest -q -m "not gtk and not sandbox"
 }
 
 package() {

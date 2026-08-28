@@ -36,8 +36,10 @@ it deselects those 28 tests rather than trying to boot a desktop, and selects
 everything else.
 
 Every tier except `sandbox` is run under `dbus-run-session`, by `verify.sh`, by
-both CI jobs and by the Arch package's `check()`. That is not decoration: the
-settings phase decides whether to run from `DBUS_SESSION_BUS_ADDRESS`, so
+both CI jobs and by the Arch package's `check()` (`PKGBUILD` and `PKGBUILD-git`
+both wrap the run and both carry `dbus` in `checkdepends`). That is not
+decoration: the settings phase decides whether to run from
+`DBUS_SESSION_BUS_ADDRESS`, so
 without a bus those tests error out (a clean `makepkg` chroot has none), and
 with the *live* bus they are one mistake away from the real desktop. A private
 bus makes the verdict the same everywhere. The `sandbox` tier is deliberately
