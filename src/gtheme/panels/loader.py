@@ -17,6 +17,18 @@ it anywhere ``XDG_DATA_DIRS`` names. Searching only the last of those meant an
 ordinary non-editable install found no corpus at all and rendered thirteen of
 fifteen pages blank without saying why.
 
+Existing is not the same as being a corpus, and the difference is the whole
+point of searching more than one place. ``~/.local/share/gtheme`` is a
+directory other things live in — a gtheme v1 left one behind holding nothing
+but ``assets/`` and ``themes/`` — so accepting it because it is a directory
+shadowed the distribution's own copy at ``/usr/share/gtheme`` and produced
+exactly the same thirteen blank pages, with ``problems`` empty and nothing said
+about why. A candidate therefore has to hold ``panels/`` or ``domains/`` before
+it is taken. The two candidates somebody named on purpose — the argument and
+``GTHEME_DATA_DIR`` — are the exception and are taken as given: an override
+quietly passed over in favour of some directory further down the list is worse
+than the empty corpus it was pointed at.
+
 The corpus and the coverage manifest are read once per data directory and kept
 (see :func:`reload`). They are read-only files describing the shipped data, and
 re-parsing forty-four of them on every page build put twenty milliseconds of
@@ -60,6 +72,7 @@ __all__ = [
     "data_dir",
     "data_dir_candidates",
     "floor_ids",
+    "holds_corpus",
     "load_corpus",
     "load_dispositions",
     "load_domains",
@@ -80,18 +93,30 @@ DATA_DIR_ENV = "GTHEME_DATA_DIR"
 _CHECKOUT_DATA_DIR: Path = Path(__file__).resolve().parents[3] / "data"
 
 
+def _named_data_dirs(explicit: Path | str | None = None) -> list[Path]:
+    """The candidates somebody named on purpose, in order.
+
+    Kept apart from the rest because they are the ones :func:`data_dir` takes
+    on trust: a person who says where the corpus is has said it, and being
+    quietly overruled by a directory further down the list would leave them
+    reading the wrong data with nothing to see it by.
+    """
+    named: list[Path] = []
+    if explicit is not None:
+        named.append(Path(explicit))
+    from_env = os.environ.get(DATA_DIR_ENV)
+    if from_env:
+        named.append(Path(from_env))
+    return named
+
+
 def data_dir_candidates(explicit: Path | str | None = None) -> list[Path]:
     """Every place the corpus could be, in the order they are tried.
 
     Separate from :func:`data_dir` so the search order is a thing that can be
     read and asserted on, rather than a loop nobody can inspect from outside.
     """
-    candidates: list[Path] = []
-    if explicit is not None:
-        candidates.append(Path(explicit))
-    from_env = os.environ.get(DATA_DIR_ENV)
-    if from_env:
-        candidates.append(Path(from_env))
+    candidates: list[Path] = _named_data_dirs(explicit)
     candidates.append(_CHECKOUT_DATA_DIR)
     # The prefix this interpreter is running out of. A plain `pip install .`
     # into the virtual environment CONTRIBUTING tells you to make lands the
@@ -107,10 +132,32 @@ def data_dir_candidates(explicit: Path | str | None = None) -> list[Path]:
     return candidates
 
 
+def holds_corpus(candidate: Path) -> bool:
+    """Whether a directory is a corpus rather than merely a directory.
+
+    One of ``panels/`` or ``domains/``, not both: a corpus with only one half
+    installed is a packaging fault worth finding, and finding it means loading
+    the half that is there and reporting the rest — not walking past the
+    directory and blaming whatever comes next in the search order.
+    """
+    return (candidate / "panels").is_dir() or (candidate / "domains").is_dir()
+
+
 def data_dir(explicit: Path | str | None = None) -> Path | None:
-    """Where ``panels/`` and ``domains/`` live, or None if nowhere does."""
-    for candidate in data_dir_candidates(explicit):
-        if candidate.is_dir():
+    """Where ``panels/`` and ``domains/`` live, or None if nowhere does.
+
+    A candidate has to hold one of those two directories to be taken, because
+    the places searched are shared ones that other things also keep files in;
+    see the module docstring for the leftover that made this necessary. The
+    candidates somebody named — the argument and ``GTHEME_DATA_DIR`` — are
+    taken on trust, whatever is in them.
+    """
+    candidates = data_dir_candidates(explicit)
+    named = len(_named_data_dirs(explicit))
+    for position, candidate in enumerate(candidates):
+        if not candidate.is_dir():
+            continue
+        if position < named or holds_corpus(candidate):
             return candidate
     return None
 

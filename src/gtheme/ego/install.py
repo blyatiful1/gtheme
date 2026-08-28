@@ -64,6 +64,7 @@ from .models import ExtensionRecord
 from .shelldbus import (
     EnableResult,
     ExtensionState,
+    InstalledExtension,
     ShellError,
     ShellErrorKind,
     ShellExtensions,
@@ -414,6 +415,43 @@ class ExtensionInstaller:
         self.client = client
         self.runner = runner or SubprocessRunner()
 
+    # -- asking the desktop --------------------------------------------
+    #
+    # Every question this module puts to the desktop goes through the two
+    # methods below, and the reason is where the questions are asked from.
+    # Most of them are asked inside a callback — the download callback of the
+    # package path, the reply callback of the live path — and a callback is
+    # dispatched by the main loop, which catches nothing: an exception escaping
+    # one prints a traceback and the loop carries on. The batch's "this one
+    # landed" callback then never fires, and the progress dialog waits out its
+    # whole three-minute timeout before saying something that names nothing.
+    # That is the same hang a missing `gnome-extensions` used to cause, and it
+    # is closed the same way: a desktop that will not answer produces a report,
+    # never an exception.
+
+    def _known(self, uuid: str) -> InstalledExtension | None:
+        """What the desktop knows about one add-on, or None when it cannot say.
+
+        A desktop that is not there is deliberately indistinguishable here from
+        a desktop that has never heard of the add-on, because the two call for
+        the same sentence: nothing in this session can make it start, and the
+        honest words are "after you log out and back in". Guessing higher would
+        be promising something no longer askable.
+        """
+        if self.shell is None:
+            return None
+        try:
+            return self.shell.get(uuid)
+        except ShellError:
+            return None
+
+    def _enable(self, uuid: str) -> EnableResult:
+        """Switch an add-on on, treating an unreachable desktop as "not now"."""
+        try:
+            return self.shell.enable(uuid)
+        except ShellError:
+            return EnableResult.NEEDS_RELOGIN
+
     # -- the live path -------------------------------------------------
 
     def install_live(
@@ -451,7 +489,7 @@ class ExtensionInstaller:
             )
             return None
 
-        existing = self.shell.get(uuid)
+        existing = self._known(uuid)
         if existing is not None and existing.state is ExtensionState.ACTIVE:
             callback(
                 InstallReport(uuid, InstallOutcome.ACTIVE, COPY["already-on"], via="desktop")
@@ -524,7 +562,7 @@ class ExtensionInstaller:
         )
 
     def _is_active(self, uuid: str) -> bool:
-        found = self.shell.get(uuid)
+        found = self._known(uuid)
         return found is not None and found.state is ExtensionState.ACTIVE
 
     def _gate_on_desktop(self, uuid: str, *, via: str) -> InstallReport:
@@ -536,15 +574,19 @@ class ExtensionInstaller:
         * known but not running — switching it on works, so do that and say so;
         * unknown — the desktop never scanned it, and nothing in this session
           will change that. The next log-in will.
+
+        A desktop that cannot be asked at all answers as "unknown"; see
+        :meth:`_known`. This method runs inside the download callback, where an
+        exception is a hang rather than an error message.
         """
-        found = self.shell.get(uuid)
+        found = self._known(uuid)
         if found is None:
             return InstallReport(
                 uuid, InstallOutcome.NEEDS_RELOGIN, COPY[InstallOutcome.NEEDS_RELOGIN], via=via
             )
         if found.state is ExtensionState.ACTIVE:
             return InstallReport(uuid, InstallOutcome.ACTIVE, COPY[InstallOutcome.ACTIVE], via=via)
-        enabled = self.shell.enable(uuid)
+        enabled = self._enable(uuid)
         if enabled is EnableResult.ENABLED_NOW:
             return InstallReport(uuid, InstallOutcome.ACTIVE, COPY[InstallOutcome.ACTIVE], via=via)
         if enabled is EnableResult.NEEDS_RELOGIN:
@@ -601,9 +643,14 @@ class ExtensionInstaller:
         Args:
             brief: what this add-on is called, worked out before the download
                 started. Carried through onto every report so a caller can name
-                what failed rather than counting failures.
+                what failed rather than counting failures. A caller that has
+                not worked one out gets the add-on's own file name, read off
+                the uuid: this method runs from inside a download callback, on
+                the thread that draws the window, and asking the desktop for
+                the title of an add-on it is about to be *given* is a blocking
+                round trip for an answer that is empty by construction.
         """
-        described = brief or self.brief_for(uuid)
+        described = brief if brief is not None else AddonBrief(uuid=uuid)
         if self.client is None:
             callback(
                 InstallReport(
@@ -704,9 +751,12 @@ class ExtensionInstaller:
         Uses the desktop's own title when the add-on is already here, and a
         readable form of its file name when it is not. Always returns
         something showable, because a list of add-ons a person is being asked
-        to approve may not depend on a request that can fail.
+        to approve may not depend on a request that can fail — and because
+        :meth:`install_package` calls this from inside a download callback,
+        where a raised error is not an error message but a batch that never
+        finishes. A desktop that will not answer costs a title, never a name.
         """
-        known = self.shell.get(uuid) if self.shell is not None else None
+        known = self._known(uuid)
         title = known.name if known is not None else ""
         return AddonBrief(uuid=uuid, source=source, title=title)
 

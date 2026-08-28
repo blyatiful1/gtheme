@@ -33,7 +33,7 @@ from gtheme.ego.install import (
     describe_addons,
     readable_name,
 )
-from gtheme.ego.shelldbus import ShellExtensions
+from gtheme.ego.shelldbus import ShellError, ShellErrorKind, ShellExtensions
 from gtheme.ui import jargon
 
 ZIP = b"PK\x03\x04a-real-looking-package"
@@ -216,3 +216,109 @@ def test_the_words_gtheme_supplies_around_the_name_are_plain():
 )
 def test_a_readable_name_is_worked_out_from_the_file_name(uuid, expected):
     assert readable_name(uuid) == expected
+
+
+# -- H6: the desktop going away must not hang the batch --------------------
+
+
+class DesktopGoesAway(FakeShellProxy):
+    """A desktop that answers, and then is not there any more.
+
+    The shape of the real failure: the Look's add-on list is planned while the
+    session bus is up, and by the time the download callback lands the desktop
+    has gone (a shell restart, a crash, a bus that stopped answering). Every
+    call after :attr:`alive` is cleared raises, exactly as
+    ``ShellProxy._call`` does when GLib hands it an error.
+    """
+
+    def __init__(self, extensions=None):
+        super().__init__(extensions or {})
+        self.alive = True
+
+    def _gone(self):
+        return ShellError(ShellErrorKind.UNAVAILABLE, "the desktop is not there")
+
+    def get_extension_info(self, uuid):
+        if not self.alive:
+            raise self._gone()
+        return super().get_extension_info(uuid)
+
+    def list_extensions(self):
+        if not self.alive:
+            raise self._gone()
+        return super().list_extensions()
+
+    def enable_extension(self, uuid):
+        if not self.alive:
+            raise self._gone()
+        return super().enable_extension(uuid)
+
+
+def _installer_on(proxy, *, routes, runner=None):
+    shell = ShellExtensions(proxy)
+    shell.load()
+    transport = RecordedTransport(routes)
+    return ExtensionInstaller(shell, EgoClient(transport, "50.4"), runner=runner or FakeRunner())
+
+
+def test_a_desktop_that_went_away_is_a_report_and_not_a_batch_that_never_ends():
+    """The whole install path, with the desktop gone before the download lands.
+
+    An exception here does not reach anybody: it is raised inside the library's
+    download callback, which the main loop dispatched and whose traceback the
+    main loop prints. The batch's "this one landed" callback never fires and
+    the progress dialog waits out its full three-minute timeout before saying
+    something that names nothing.
+    """
+    proxy = DesktopGoesAway()
+    installer = _installer_on(proxy, routes={"/download-extension/": ZIP})
+    _transaction, missing = installer.plan_for_look([(BLUR, "ego", ())])
+    assert [report.uuid for report in missing] == [BLUR], "planned while the desktop was up"
+
+    proxy.alive = False
+    box: list = []
+    installer.install_package(BLUR, 69740, box.append)
+
+    assert len(box) == 1, "the caller is told exactly once, so the batch moves on"
+    report = box[0]
+    assert report.outcome is InstallOutcome.NEEDS_RELOGIN
+    assert report.transaction is not None, "the enable step is still planned"
+    assert report.display_title == "Blur my shell", "named without asking the desktop"
+
+
+def test_naming_an_add_on_never_raises_when_the_desktop_is_gone():
+    """`brief_for` runs inside the library's own callback too, via describe_batch."""
+    proxy = DesktopGoesAway()
+    entry = library_entry(BLUR, "Blur", "au")
+    installer = _installer_on(proxy, routes={"/extension-info/": entry})
+    proxy.alive = False
+
+    assert installer.brief_for(BLUR).display_title == "Blur my shell"
+
+    seen: list = []
+    installer.describe_batch([(BLUR, "local-only", ())], seen.extend)
+    assert [brief.display_title for brief in seen] == ["Blur my shell"]
+
+
+def test_the_desktop_is_not_asked_to_name_what_it_is_about_to_be_given():
+    """The naming lookup is a blocking bus call on the thread that draws.
+
+    An add-on reaching the package path is one the desktop does not have, so
+    the round trip buys an empty answer at the price of a UI-thread stall of up
+    to the D-Bus default timeout, per add-on, inside a download callback.
+
+    One lookup is still made and has to be: after the unpack, what the desktop
+    knows is what decides between "it's on now" and "after you log out". It is
+    the *second* one — asking for a title before the download — that is gone.
+    """
+    proxy = FakeShellProxy({})
+    installer = _installer_on(proxy, routes={"/download-extension/": ZIP})
+    asked: list = []
+    proxy.get_extension_info = lambda uuid: (asked.append(uuid), {})[1]
+
+    box: list = []
+    installer.install_package(BLUR, 69740, box.append)
+
+    assert len(box) == 1
+    assert asked == [BLUR], "one lookup, the one that decides what to promise"
+    assert box[0].display_title == "Blur my shell"

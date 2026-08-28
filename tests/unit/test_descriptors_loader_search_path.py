@@ -109,3 +109,80 @@ def test_the_override_is_tried_before_anything_that_is_installed(
 
     assert order[0] == tmp_path
     assert Path(sys.prefix) / "share" / "gtheme" in order
+
+
+# -- existing is not the same as being a corpus ----------------------------
+
+
+def test_a_directory_that_is_not_a_corpus_does_not_shadow_the_one_that_is(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """The bug the per-user candidate introduced, on a real machine's shape.
+
+    ``~/.local/share/gtheme`` is a name other things use: a gtheme v1 left one
+    behind holding ``assets/`` and ``themes/`` and no descriptors at all.
+    Taking it because it was a directory shadowed the distribution's copy and
+    rendered thirteen of fifteen pages blank with nothing in ``problems``.
+    """
+    home = tmp_path / "userdata"
+    leftover = home / "gtheme"
+    (leftover / "assets").mkdir(parents=True)
+    (leftover / "themes").mkdir()
+    system = tmp_path / "usr" / "share"
+    installed = _corpus_at(system / "gtheme")
+    monkeypatch.setattr(loader, "_CHECKOUT_DATA_DIR", tmp_path / "not-a-checkout")
+    monkeypatch.setattr(sys, "prefix", str(tmp_path / "empty-prefix"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(home))
+    monkeypatch.setenv("XDG_DATA_DIRS", str(system))
+
+    assert loader.data_dir() == installed
+
+
+def test_half_a_corpus_is_still_a_corpus(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """One of the two directories is enough, deliberately.
+
+    An install that shipped ``domains/`` and lost ``panels/`` is a packaging
+    fault worth seeing. It is seen by loading the half that is there and
+    reporting nothing for the rest — not by walking past the directory.
+    """
+    home = tmp_path / "userdata"
+    (home / "gtheme" / "domains").mkdir(parents=True)
+    monkeypatch.setattr(loader, "_CHECKOUT_DATA_DIR", tmp_path / "not-a-checkout")
+    monkeypatch.setattr(sys, "prefix", str(tmp_path / "empty-prefix"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(home))
+    monkeypatch.setenv("XDG_DATA_DIRS", str(tmp_path / "empty-system"))
+
+    assert loader.data_dir() == home / "gtheme"
+
+
+def test_nowhere_holding_a_corpus_is_nowhere(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Directories that exist and hold no descriptors are not an answer."""
+    home = tmp_path / "userdata"
+    (home / "gtheme" / "themes").mkdir(parents=True)
+    (tmp_path / "usr" / "share" / "gtheme").mkdir(parents=True)
+    monkeypatch.setattr(loader, "_CHECKOUT_DATA_DIR", tmp_path / "not-a-checkout")
+    monkeypatch.setattr(sys, "prefix", str(tmp_path / "empty-prefix"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(home))
+    monkeypatch.setenv("XDG_DATA_DIRS", str(tmp_path / "usr" / "share"))
+
+    assert loader.data_dir() is None
+
+
+def test_a_directory_somebody_named_is_taken_as_given(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """The override is not second-guessed, even when it holds no corpus.
+
+    Being quietly passed over in favour of the checkout further down the list
+    would have the person reading data they did not ask for, with nothing on
+    screen to tell them so. An empty corpus is the honest answer to an empty
+    directory.
+    """
+    empty = tmp_path / "pointed-at"
+    empty.mkdir()
+    _corpus_at(tmp_path / "usr" / "share" / "gtheme")
+    monkeypatch.setenv(loader.DATA_DIR_ENV, str(empty))
+    monkeypatch.setenv("XDG_DATA_DIRS", str(tmp_path / "usr" / "share"))
+
+    assert loader.data_dir() == empty
+    assert loader.data_dir(tmp_path / "asked-for-and-absent") == empty
