@@ -282,7 +282,19 @@ def test_a_typed_name_becomes_a_folder_name_a_look_can_have():
     assert looks.slugify("") == ""
 
 
-def test_capture_covers_every_setting_the_app_can_describe():
+def test_capture_covers_every_setting_the_app_can_describe(tmp_path):
+    """A link row holds no value, so it produces no key.
+
+    ``directory`` is now passed as well as ``corpus``. This test hands
+    ``capture_keys`` a two-row synthetic corpus and asserts on the whole
+    answer, and the answer has a second source in it since review-report H13 —
+    the coverage manifest, which is where light-or-dark lives and which the
+    Looks-side capture never read. Pointing the manifest at an empty directory
+    is what keeps the assertion about *this* corpus rather than about the 341
+    shipped keys as well; that the manifest half really does arrive is asserted
+    in ``tests/unit/test_looks_capture_mirrors_moments.py``, which is where the
+    gap this argument is about actually lives.
+    """
     corpus = Corpus(
         domains=[
             DomainDescriptor(
@@ -306,7 +318,7 @@ def test_capture_covers_every_setting_the_app_can_describe():
             )
         ]
     )
-    keys = looks.capture_keys(corpus)
+    keys = looks.capture_keys(corpus, directory=tmp_path)
     assert keys == ["gsettings:org.gnome.desktop.background picture-uri"]
 
 

@@ -43,11 +43,10 @@ from ...core import restorepoints  # noqa: E402
 from ...core.backends import get_backend  # noqa: E402
 from ...core.restorepoints import RestorePoint  # noqa: E402
 from ...core.settings_backend import SettingsBackend  # noqa: E402
-from ...panels.loader import load_corpus  # noqa: E402
+from ...panels import keyset  # noqa: E402
 from ..applyrunner import ApplyRunner  # noqa: E402
 from ..widgets.actions import action_row  # noqa: E402
 from ..widgets.explainer import first_visit_banner  # noqa: E402
-from ..widgets.rows import key_for  # noqa: E402
 
 __all__ = [
     "BANNER_ID",
@@ -139,41 +138,13 @@ LIST_LIMIT = 12
 # --------------------------------------------------------------------------
 
 
-def descriptor_keys(corpus: Any | None = None) -> list[str]:
-    """Every setting gtheme knows how to change, as backend key strings.
-
-    What is not captured cannot be put back, so the list that is saved and the
-    list of settings the app can change are deliberately the same list. That is
-    two sources, not one, and missing either leaves a hole a person would only
-    find by pressing Undo and watching it not work:
-
-    * the **descriptor corpus** — every hand-written row, including the add-on
-      panels, whose values may live in a relocatable place or in the add-on's
-      own settings file rather than under a plain schema;
-    * the **coverage manifest** — the settings that have no row of their own but
-      that the app still changes: the ``compound`` keys written two at a time by
-      one control (light-or-dark writes two; switching an add-on on merges into
-      a list), and the ``floor`` keys the More Settings page renders from the
-      system's own descriptions.
-
-    Only ``excluded`` and ``delegated`` keys are left out, which is exactly the
-    set gtheme never writes.
-    """
-    loaded = corpus if corpus is not None else load_corpus()
-    keys: list[str] = []
-    seen: set[str] = set()
-    for row in loaded.rows:
-        if not row.key:
-            continue
-        key = key_for(row)
-        if key not in seen:
-            seen.add(key)
-            keys.append(key)
-    for key in coverage_keys():
-        if key not in seen:
-            seen.add(key)
-            keys.append(key)
-    return keys
+#: Every setting a saved moment records, as backend key strings. What is not
+#: captured cannot be put back, so this list and the Looks page's own capture
+#: list are now one derivation with one named difference —
+#: :mod:`gtheme.panels.keyset` holds it, and holds the reasoning. Two loops
+#: over the same data disagreed by 174 keys, ``color-scheme`` among them
+#: (review-report H13).
+descriptor_keys = keyset.moment_keys
 
 
 def coverage_keys(directory: Path | str | None = None) -> list[str]:

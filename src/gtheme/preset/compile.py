@@ -36,6 +36,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..core.confine import ConfinementError, confine_src
+from ..core.gvariant import unquote
 from ..core.policy import file_verdict, setting_verdict
 from ..core.transaction import (
     ExtensionEnable,
@@ -45,9 +46,23 @@ from ..core.transaction import (
     SettingWrite,
     Transaction,
 )
+
+# The only thing this module borrows from ``system``: the parser that splits a
+# font description into a family and a size. A Look asks for "Adwaita Sans 11";
+# whether that font is here is a question about "Adwaita Sans", and re-writing
+# that split here would be the second copy of a parser that already has tests.
+from ..system.fontscan import parse_font_description
 from .model import Component, ExtensionSetting, Meta, Preset
 
-__all__ = ["CompileResult", "compile_preset", "extension_setting_key", "shell_warning"]
+__all__ = [
+    "PACKAGE_HINTS",
+    "Available",
+    "CompileResult",
+    "compile_preset",
+    "extension_setting_key",
+    "shell_warning",
+    "value_warnings",
+]
 
 
 def extension_setting_key(setting: ExtensionSetting) -> str:
@@ -117,6 +132,181 @@ def shell_warning(meta: Meta, shell_version: str | None) -> str | None:
     )
 
 
+#: What each setting a Look can get *wrong* is called in the user's words, and
+#: what stays as it is when the value names something this computer does not
+#: have. Keyed by the schema-and-key half of a setting key, so both the plain
+#: and the relocatable spellings of the same setting land on one entry.
+_CHECKED_VALUES: dict[str, tuple[str, str]] = {
+    "org.gnome.desktop.interface icon-theme": ("an icon set", "your icons will stay as they are"),
+    "org.gnome.desktop.interface cursor-theme": (
+        "a mouse pointer style",
+        "your mouse pointer will stay as it is",
+    ),
+    "org.gnome.desktop.interface gtk-theme": (
+        "an app style",
+        "your apps will look the way they do now",
+    ),
+    "org.gnome.desktop.interface font-name": ("a text style", "your text will stay as it is"),
+    "org.gnome.desktop.interface document-font-name": (
+        "a text style for documents",
+        "the text in your documents will stay as it is",
+    ),
+    "org.gnome.desktop.interface monospace-font-name": (
+        "a text style for the terminal",
+        "the text in your terminal will stay as it is",
+    ),
+}
+
+#: Which list on :class:`Available` answers for each checked setting.
+_CHECKED_AGAINST: dict[str, str] = {
+    "org.gnome.desktop.interface icon-theme": "icon_themes",
+    "org.gnome.desktop.interface cursor-theme": "cursor_themes",
+    "org.gnome.desktop.interface gtk-theme": "app_styles",
+    "org.gnome.desktop.interface font-name": "fonts",
+    "org.gnome.desktop.interface document-font-name": "fonts",
+    "org.gnome.desktop.interface monospace-font-name": "fonts",
+}
+
+#: What to install to get the things the Looks in this repository ask for.
+#:
+#: Deliberately short and deliberately named after the thing rather than after
+#: a distribution: every entry here is something one of gtheme's own Looks
+#: wants, so "this Look needs Papirus" is answered with the name a person can
+#: type into their software manager instead of with a shrug. A name that is not
+#: in this table is still *reported* — it is only the last clause of the
+#: sentence that goes missing, and inventing a package name for a font nobody
+#: here has heard of would be worse than leaving it out.
+PACKAGE_HINTS: dict[str, str] = {
+    "papirus": "papirus-icon-theme",
+    "papirus-dark": "papirus-icon-theme",
+    "papirus-light": "papirus-icon-theme",
+    "adw-gtk3": "adw-gtk-theme",
+    "adw-gtk3-dark": "adw-gtk-theme",
+    "meslolgs nerd font": "ttf-meslo-nerd",
+    "meslolgs nerd font mono": "ttf-meslo-nerd",
+    "iosevka nerd font": "ttf-iosevka-nerd",
+    "iosevka nerd font mono": "ttf-iosevka-nerd",
+    "monaspace neon": "ttf-monaspace",
+    "rajdhani": "ttf-rajdhani",
+}
+
+
+@dataclass(frozen=True)
+class Available:
+    """What this computer actually has, for a Look's values to be checked against.
+
+    Every one of the four Looks gtheme shipped first asks for ``Papirus-Dark``
+    icons and none of them ships an icon set; three ask for ``adw-gtk3-dark``.
+    The write always succeeds — the setting exists, the *value* is simply a
+    name of something that is not installed — so the desktop falls back, the
+    Home page reads the name back cheerfully, and nobody is ever told that the
+    icons they were promised are not there (persona-report §2.6).
+
+    This is deliberately **data, not a scan**. The compiler judges; the caller
+    measures. That keeps this module free of the filesystem and of Pango, and
+    it is the same rule ``installed_extensions`` follows: an empty
+    :class:`Available` means "nothing was measured", and nothing is claimed.
+
+    Args:
+        icon_themes: the folder names of the icon sets on this computer.
+        cursor_themes: the same, for the ones that hold a mouse pointer.
+        app_styles: the names of the installed app styles.
+        fonts: the installed font family names.
+    """
+
+    icon_themes: frozenset[str] = frozenset()
+    cursor_themes: frozenset[str] = frozenset()
+    app_styles: frozenset[str] = frozenset()
+    fonts: frozenset[str] = frozenset()
+
+    @property
+    def measured(self) -> bool:
+        """True when anything at all was read off this computer."""
+        return bool(self.icon_themes or self.cursor_themes or self.app_styles or self.fonts)
+
+
+def _package_clause(wanted: str) -> str:
+    """" — the X package adds it", when there is a package worth naming."""
+    package = PACKAGE_HINTS.get(wanted.strip().casefold())
+    return f" — the {package} package adds it" if package else ""
+
+
+def _font_is_here(wanted: str, families: Collection[str]) -> bool:
+    """Is a font description's family one of the families installed here?
+
+    A description carries style words the family name does not — "Rajdhani
+    Medium" is the family "Rajdhani" — and Pango needs a weight/style/stretch
+    table to split those correctly. So the test is the other way round: a
+    family that is installed and that the description *starts with* is a match.
+    Erring towards silence is the point. Telling somebody a font is missing
+    when it is there is worse than saying nothing, because the sentence is
+    supposed to be the reason their text will look wrong.
+    """
+    spec = parse_font_description(wanted).family_and_style.casefold()
+    if not spec:
+        return True
+    return any(
+        spec == family.casefold() or spec.startswith(family.casefold() + " ")
+        for family in families
+    )
+
+
+def value_warnings(preset: Preset, available: Available | None) -> list[str]:
+    """The sentences for everything this Look asks for that is not installed.
+
+    A Look names an icon set, a mouse pointer, an app style and a text style
+    by name, and every one of those names is a thing that has to *be* on the
+    computer for the setting to mean anything. Nothing checked them: the
+    transaction's skip fires on a missing settings group, and
+    ``org.gnome.desktop.interface`` is always there, so the write succeeded and
+    the desktop quietly fell back to what it had (persona-report §2.6).
+
+    Args:
+        preset: the Look.
+        available: what this computer has. ``None``, or an empty one, means
+            nothing was measured and nothing is said — a preview that accuses
+            a Look of asking for a missing font on a machine where no font was
+            ever counted would be a guess.
+
+    Returns:
+        One sentence per value that names something absent, in the order the
+        Look wrote them, naming the package to install where one is known.
+    """
+    if available is None or not available.measured:
+        return []
+    said: set[tuple[str, str]] = set()
+    warnings: list[str] = []
+    for setting in preset.settings:
+        body = setting.key.split(":", 1)[-1]
+        checked = _CHECKED_VALUES.get(body)
+        if checked is None:
+            continue
+        against = getattr(available, _CHECKED_AGAINST[body])
+        if not against:
+            continue  # that kind of thing was not counted on this computer
+        wanted = unquote(setting.value).strip()
+        if not wanted:
+            continue
+        if _CHECKED_AGAINST[body] == "fonts":
+            # The size is part of the value and no part of the question: what
+            # has to be installed is the family, so that is what is checked and
+            # what the sentence names.
+            named = parse_font_description(wanted).family_and_style or wanted
+            here = _font_is_here(wanted, against)
+        else:
+            named = wanted
+            here = wanted in against
+        if here or (body, named) in said:
+            continue
+        said.add((body, named))
+        kind, stays = checked
+        warnings.append(
+            f"this Look asks for {kind} that is not on this computer ({named}), so "
+            f"{stays}{_package_clause(named)}"
+        )
+    return warnings
+
+
 def _resolve_uuid(uuid: str, alternates: list[str], installed: Collection[str]) -> str | None:
     """The first of ``uuid`` and its alternates that is actually installed."""
     for candidate in (uuid, *alternates):
@@ -132,6 +322,7 @@ def compile_preset(
     dest_root: str | None = None,
     installed_extensions: Collection[str] | None = None,
     shell_version: str | None = None,
+    available: Available | None = None,
 ) -> CompileResult:
     """Compile a Look into a :class:`~gtheme.core.transaction.Transaction`.
 
@@ -149,6 +340,9 @@ def compile_preset(
         shell_version: the GNOME version this desktop is running, when the
             caller knows it. Used for the ``min_shell`` warning and nothing
             else; ``None`` means "not measured", and nothing is claimed.
+        available: the icon sets, mouse pointers, app styles and fonts this
+            computer has, for :func:`value_warnings`. ``None`` means "not
+            measured", and no value is accused of being missing.
 
     Returns:
         The transaction, the list of things that will not apply, and the list
@@ -164,6 +358,11 @@ def compile_preset(
     too_new = shell_warning(preset.meta, shell_version)
     if too_new:
         warnings.append(too_new)
+    # Said before the file and add-on notes because it is the one class of
+    # warning about something the Look will *appear* to have done: the write
+    # lands, the desktop falls back, and the only sign is that the icons never
+    # changed (persona-report §2.6).
+    warnings.extend(value_warnings(preset, available))
 
     for entry in preset.files:
         # Where the file may come from. ``confine_src`` has implemented this

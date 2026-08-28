@@ -314,18 +314,21 @@ and **Updates**.
   get an honest generic panel labelled "these settings come from the add-on
   author".
 - Add-ons that fight each other (two docks, two clipboard managers) are offered
-  as either/or on this page, with an offer to switch the other one off. That
-  check runs on the switches here; applying a whole Look does not run it yet,
-  so a Look that brings a dock can leave you with the one your distro
-  preinstalled as well.
+  as either/or on this page, with an offer to switch the other one off. The
+  same check runs before a whole Look is applied: a Look that brings a dock you
+  already have says so in its preview, by name, rather than leaving you with
+  two of them.
 - Combinations known to break things carry a warning that says what will
   happen to you, not what will happen internally.
 - Adding an add-on **from this page** goes through GNOME's own confirmation
   box: the desktop shows it, naming the add-on, and gtheme cannot install one
   behind it. Adding the add-ons a whole Look asks for is the other path —
   there gtheme downloads them itself from extensions.gnome.org after you press
-  the button that says so, and no GNOME box appears. See
-  [SECURITY.md](SECURITY.md) for what that means.
+  the button that says so, and no GNOME box appears. On that path the Look's
+  own preview names each one — what it is called, who wrote it and where it
+  comes from — before anything is fetched, so the list you press the button
+  under is the list you get. See [SECURITY.md](SECURITY.md) for what that
+  means.
 
 #### Terminal
 

@@ -94,9 +94,10 @@ What gtheme does about it:
   between. On that path the button you press is the confirmation: nothing is
   fetched until you press it, extensions.gnome.org is the only address gtheme
   ever downloads an add-on from, and a Look can therefore only ask for add-ons
-  that are already published there. What that button cannot yet do is name the
-  add-ons it is about to fetch — it says how many; naming them is being fixed,
-  and until it is, the Add-ons page is where you can look each one up first.
+  that are already published there. The button is also pressed under a list:
+  the preview names every add-on it would fetch — what it is called, who wrote
+  it and where it comes from — before a single byte is downloaded, so the thing
+  you are agreeing to is those add-ons and not a number.
 - **A Look never carries add-on code.** It can name an add-on it would like,
   and gtheme offers to fetch that add-on from extensions.gnome.org — the same
   place GNOME's own website installs from. A Look that names a private add-on
