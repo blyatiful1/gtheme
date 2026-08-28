@@ -134,14 +134,17 @@ def test_the_shipped_looks_are_still_published_as_gthemes_own(repo_root: Path):
 
 
 def test_the_published_index_offers_nothing_new_and_says_so(repo_root: Path):
-    """The audit's finding, pinned: today's registry is four Looks you have.
+    """The audit's finding, pinned: today's registry is the Looks you have.
 
     An empty grid is the truth here, and the truth invites somebody to publish
-    the first one. Four tiles badged "Already on this computer" invite nothing.
+    the first one. Tiles badged "Already on this computer" invite nothing.
     """
+    shipped = {"daybreak", "hearth", "hyperclass", "magma", "netrunner", "nightbloom"}
     entries = parse_index((repo_root / "themes" / "index.json").read_text(encoding="utf-8"))
-    assert len(entries) == 4, "the committed index changed; this test needs re-reading"
-    assert browsable(entries, shipped={"magma", "netrunner", "hyperclass", "nightbloom"}) == []
+    assert {e.name for e in entries} == shipped, (
+        "the committed index changed; this test needs re-reading"
+    )
+    assert browsable(entries, shipped=shipped) == []
 
 
 def test_a_look_somebody_else_published_is_offered():

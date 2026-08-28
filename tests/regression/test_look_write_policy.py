@@ -333,13 +333,14 @@ def test_a_desktop_saved_as_a_look_never_carries_something_it_may_not_write(
 def test_every_shipped_look_stays_applicable(repo_root, tmp_dest_root, memory_settings):
     """The policy is judged against the product it has to keep working.
 
-    All four bundled Looks write a terminal prompt file and a terminal's own
-    settings file. If a tier ever grows an entry that refuses one of them, this
-    is the test that says so before a person finds out by pressing "Use this
-    look".
+    Four of the six bundled Looks write a terminal prompt file and a terminal's
+    own settings file; the other two — ``daybreak`` and ``hearth`` — write one
+    picture and nothing else, and are here so that the plain case is covered
+    too. If a tier ever grows an entry that refuses one of them, this is the
+    test that says so before a person finds out by pressing "Use this look".
     """
     del memory_settings  # requested for the isolation seam
-    for name in ("magma", "netrunner", "hyperclass", "nightbloom"):
+    for name in ("daybreak", "hearth", "magma", "netrunner", "hyperclass", "nightbloom"):
         directory = repo_root / "themes" / name
         compiled = compile_preset(
             load_preset_dir(directory), directory, dest_root=str(tmp_dest_root)
