@@ -210,13 +210,18 @@ def test_R1_a_failed_restore_keeps_its_recovery_state(engine, tmp_path):
     baseline.record_file(dest)
     dest.write_text("changed", encoding="utf-8")
 
-    # Make the revert fail: the parent becomes read-only, so the copy back
-    # cannot replace the file.
-    os.chmod(dest.parent, 0o500)
-    try:
-        outcome = baseline.restore_files()
-    finally:
-        os.chmod(dest.parent, 0o700)
+    # Make the revert fail, and fail for every user. This used to chmod the
+    # parent read-only, which is not a refusal at all when the suite runs as
+    # root — root ignores permission bits, the restore succeeded, and the test
+    # failed in the CI container for the container rather than for the code.
+    # A folder standing where the recorded file was is the same refusal from
+    # the same line (``dest.unlink()`` raises EISDIR before the copy back), it
+    # is a real thing that happens to a person's config path, and no uid is
+    # allowed to unlink a directory.
+    dest.unlink()
+    dest.mkdir()
+
+    outcome = baseline.restore_files()
 
     assert outcome.done == []
     assert outcome.dead == []

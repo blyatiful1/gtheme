@@ -386,14 +386,19 @@ def test_switch_cleanup_keeps_the_entry_for_what_it_could_not_revert(
     # One record whose stored copy is gone for good...
     for blob in (baseline.files_dir / baseline.files[str(lost)]["backup"],):
         blob.unlink()
-    # ... and one that merely cannot be written today.
-    guarded.write_text("what the look put there", encoding="utf-8")
-    guarded.parent.chmod(0o500)
-    try:
-        ledger_store.write_entry("OUTGOING", [str(guarded), str(lost)], [])
-        report = ledger_store.switch_cleanup("INCOMING", set(), set(), baseline)
-    finally:
-        guarded.parent.chmod(0o700)
+    # ... and one that merely cannot be written today. The refusal used to be a
+    # read-only parent directory, which refuses nobody when the suite runs as
+    # root: the restore then succeeded, ``kept`` was 0 and the test failed in
+    # the CI container for the container rather than for the code. A folder
+    # standing where the recorded file was is the same refusal from the same
+    # line — ``dest.unlink()`` raises EISDIR before the copy back — it is a
+    # real thing that happens to a person's config path, and it is still the
+    # retryable kind of failure this test is about, because tomorrow the folder
+    # may be gone. No uid may unlink a directory, so it refuses root too.
+    guarded.unlink()
+    guarded.mkdir()
+    ledger_store.write_entry("OUTGOING", [str(guarded), str(lost)], [])
+    report = ledger_store.switch_cleanup("INCOMING", set(), set(), baseline)
 
     entry = ledger_store.read_ledger().get("OUTGOING")
     assert entry is not None, "an item that failed to revert keeps its owner"

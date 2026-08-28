@@ -126,6 +126,26 @@ class _Counting:
         return terminal_model.TerminalWrites()
 
 
+@pytest.fixture
+def one_terminal_is_here(monkeypatch: pytest.MonkeyPatch) -> _Counting:
+    """Exactly one restylable terminal is on this machine, whatever it is.
+
+    The page builds its Apply group only when at least one adapter reports
+    itself installed, and ``installed()`` decides that by walking ``PATH`` and
+    reading each program's own config file. A test that wants to say something
+    about the Apply button and does not state this is really asserting that
+    whoever ran the suite has a terminal gtheme can restyle: true on the
+    machine this was written on, false in the CI container, where the page has
+    no Apply group at all and the assertion reads ``assert []``. One stub
+    adapter makes the precondition explicit and the same everywhere.
+    """
+    import gtheme.terminal as terminal_package
+
+    adapter = _Counting()
+    monkeypatch.setattr(terminal_package, "adapters", lambda _backend=None: [adapter])
+    return adapter
+
+
 # -- M11: a Look whose palette is not all colours --------------------------
 
 
@@ -152,7 +172,9 @@ def test_one_unusable_ansi_colour_does_not_cost_the_look_its_background():
     assert built.background == "#101010"
 
 
-def test_the_page_still_opens_under_such_a_look(window, backend, probe, monkeypatch):
+def test_the_page_still_opens_under_such_a_look(
+    window, backend, probe, monkeypatch, one_terminal_is_here
+):
     """It used to raise, and the window cached the error page it raised into."""
     monkeypatch.setattr(
         terminal, "applied_look", lambda *a, **k: _Look({"bg": "black", "fg": "#ffffff"})

@@ -95,6 +95,23 @@ jobs:
       # (org.gnome.shell, org.gnome.mutter, the settings-daemon plugins), the
       # GnomeDesktop-4.0 typelib the thumbnailer needs, and the wallpaper
       # catalogue under /usr/share/gnome-background-properties.
+      #
+      # WHAT NO PACKAGE CAN PUT HERE, so no test may quietly assume it. This is
+      # a GNOME 50 *userspace*, never a GNOME *session*, and it is root in an
+      # unprivileged container. Four differences bit once each; every one is
+      # now stated by the test that needs it, not bought with another package:
+      #   * XDG_CURRENT_DESKTOP is unset, so the desktop-conditional half of
+      #     Arch's 00_org.gnome.shell.gschema.override ([org.gnome.mutter:GNOME])
+      #     does not apply and mutter's own schema defaults win;
+      #   * no third-party shell extensions exist under either extensions
+      #     directory — they are not pacman packages — so a plan that turns
+      #     add-ons on plans nothing;
+      #   * no terminal gtheme can restyle is installed, and $HOME has none of
+      #     their config files, so the Terminal page builds no Apply group;
+      #   * bwrap cannot create a user namespace, so the thumbnailer's helper
+      #     cannot be spawned at all (the two tests that need one probe for it
+      #     and skip with that reason).
+      # Keep this list in step with .github/workflows/release.yml.
       - name: Install system packages
         run: |
           pacman -Syu --noconfirm \

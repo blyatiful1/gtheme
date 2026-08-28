@@ -307,6 +307,36 @@ def test_a_bundled_look_is_a_valid_document_on_its_own(look):
 # is running on. plan() reports only what would *change*, so on a machine that
 # already has these Looks' add-ons switched on the add-ons line is empty and
 # the assertions below would pass by describing nothing.
+#
+# The *store* was seamed; the add-on folders were not. ``plan()`` asks
+# :func:`gtheme.core.transaction.installed_extension_uuids` which add-ons are
+# on the machine and reports an add-on it cannot find as no change at all — so
+# these two tests were quietly measuring the developer's own desktop, and
+# passed only because that one desktop happens to have every add-on all six
+# bundled Looks ask for. On a machine that has none of them the add-ons line is
+# empty and both fail with "declares 6 add-ons and plans 0" (the CI container).
+# ``addons_on_this_machine`` plants the folders, so the assertions describe the
+# planner rather than the box the suite is running on.
+
+
+@pytest.fixture
+def addons_on_this_machine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Put the named add-ons on this machine, wherever this machine is.
+
+    ``installed_extension_uuids`` reads ``$XDG_DATA_HOME/gnome-shell/extensions``
+    and ``/usr/share/gnome-shell/extensions``; only the first is redirectable,
+    and redirecting it is the seam the engine's own tests already use. Returns
+    a callable taking the uuids to install.
+    """
+    root = tmp_path / "xdg-data" / "gnome-shell" / "extensions"
+    root.mkdir(parents=True)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
+
+    def install(uuids) -> None:
+        for uuid in uuids:
+            (root / uuid).mkdir(exist_ok=True)
+
+    return install
 
 
 def _plan_against_nothing(directory: Path, dest_root: Path, backend):
@@ -321,7 +351,7 @@ def preset_of(directory: Path):
 
 
 def test_the_add_ons_line_counts_add_ons_and_nothing_else(
-    look, tmp_dest_root: Path, memory_settings
+    look, tmp_dest_root: Path, memory_settings, addons_on_this_machine
 ):
     """HYPERCLASS previewed as "31 add-ons" on a Look that turns on six.
 
@@ -338,6 +368,7 @@ def test_the_add_ons_line_counts_add_ons_and_nothing_else(
     """
     _name, directory = look
     preset = preset_of(directory)
+    addons_on_this_machine(preset.extensions.enable)
     diff = _plan_against_nothing(directory, tmp_dest_root, memory_settings)
 
     counted = sum(1 for entry in diff.changes if entry.component == "addons")
@@ -357,12 +388,13 @@ def test_the_add_ons_line_counts_add_ons_and_nothing_else(
 
 
 def test_hyperclass_says_six_add_ons_because_it_turns_on_six(
-    repo_root, tmp_dest_root: Path, memory_settings
+    repo_root, tmp_dest_root: Path, memory_settings, addons_on_this_machine
 ):
     """The named case, pinned by number so a regression is unmissable."""
     directory = repo_root / "themes" / "hyperclass"
     assert len(preset_of(directory).extensions.enable) == 6, "the premise changed"
 
+    addons_on_this_machine(preset_of(directory).extensions.enable)
     diff = _plan_against_nothing(directory, tmp_dest_root, memory_settings)
     lines = diff.to_novice_lines()
 

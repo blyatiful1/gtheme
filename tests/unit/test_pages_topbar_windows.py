@@ -119,6 +119,16 @@ def test_button_layout_offers_exactly_the_five_curated_layouts(
 def test_fixed_workspace_count_turns_off_dynamic_workspaces_first(
     window: FakeWindow, backend: MemoryBackend
 ):
+    # The premise is "dynamic workspaces are on", and the test used to get that
+    # for free from the schema default — which is not a constant. Arch's
+    # gnome-shell ships ``00_org.gnome.shell.gschema.override`` with a
+    # ``[org.gnome.mutter:GNOME]`` block turning ``dynamic-workspaces`` on, and
+    # a *desktop-specific* override applies only while XDG_CURRENT_DESKTOP
+    # names GNOME. It does on a real session; it does not in the CI container,
+    # where mutter's own default of ``false`` wins and the premise silently
+    # inverted. So the starting state is stated here instead of assumed, and
+    # the assertion below still checks that building the page left it alone.
+    backend.set("gsettings:org.gnome.mutter dynamic-workspaces", "true")
     with backends.use_backend(backend):
         windows.build(window)
         assert backend.get("gsettings:org.gnome.mutter dynamic-workspaces") == "true"

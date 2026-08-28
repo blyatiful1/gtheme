@@ -26,6 +26,12 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
+      # Byte-for-byte the same package list as the container job in ci.yml, and
+      # it has to stay that way: a tag that ships is a tag the suite passed on
+      # the same machine the pull request passed on. The long note there also
+      # records what this container is *not* — a GNOME session, and an
+      # unprivileged one — which is what the tests state for themselves rather
+      # than assume.
       - name: Install system packages
         run: |
           pacman -Syu --noconfirm \

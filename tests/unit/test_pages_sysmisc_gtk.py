@@ -23,6 +23,7 @@ from gi.repository import Adw, Gtk  # noqa: E402
 from gtheme.core.settings_backend import MemoryBackend  # noqa: E402
 from gtheme.panels.schema_probe import SchemaProbe  # noqa: E402
 from gtheme.prefs import Prefs  # noqa: E402
+from gtheme.terminal import model as terminal_model  # noqa: E402
 from gtheme.ui import search  # noqa: E402
 from gtheme.ui.pages import more, nightlight, power, sound, terminal  # noqa: E402
 from gtheme.ui.rowindex import RowIndex  # noqa: E402
@@ -381,6 +382,45 @@ def test_the_local_filter_hides_what_does_not_match(window, backend, probe):
 # ---------------------------------------------------------------------------
 
 
+class _PresentTerminal:
+    """The smallest adapter that reports itself installed."""
+
+    id = "present"
+    name = "Present"
+    reload_semantics = terminal_model.ReloadSemantics.RESTART
+
+    def detect(self) -> terminal_model.TerminalState:
+        return terminal_model.TerminalState(
+            installed=True, notes=[self.reload_semantics.sentence()]
+        )
+
+    def current(self):
+        return None
+
+    def plan(self, _palette):
+        return terminal_model.TerminalWrites()
+
+
+@pytest.fixture
+def one_terminal_is_here(monkeypatch: pytest.MonkeyPatch) -> _PresentTerminal:
+    """Exactly one restylable terminal is on this machine, whatever it is.
+
+    The page builds its Apply group only when at least one adapter reports
+    itself installed, and ``installed()`` decides that by walking ``PATH`` and
+    reading each program's own config file — under ``tmp_dest_root`` that
+    reading happens inside the throwaway root, so it finds nothing there
+    either. A test about the Apply button that does not say this is really
+    asserting that whoever ran the suite has a terminal gtheme can restyle:
+    true on the machine this was written on, false in the CI container, where
+    there is no Apply group at all and the assertion reads ``assert []``.
+    """
+    import gtheme.terminal as terminal_package
+
+    adapter = _PresentTerminal()
+    monkeypatch.setattr(terminal_package, "adapters", lambda _backend=None: [adapter])
+    return adapter
+
+
 def test_the_terminal_page_shows_a_card_only_for_what_is_installed(
     window, backend, probe, tmp_dest_root, state_dir
 ):
@@ -414,7 +454,7 @@ def test_a_cards_reload_story_is_shown_word_for_word(
 
 
 def test_with_no_look_applied_the_button_is_off_and_says_why(
-    window, backend, probe, tmp_dest_root, state_dir
+    window, backend, probe, tmp_dest_root, state_dir, one_terminal_is_here
 ):
     page = terminal.build(window, backend=backend, probe=probe)
     buttons = [w for w in _widgets(page) if isinstance(w, Adw.ButtonRow)]
