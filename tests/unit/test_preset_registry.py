@@ -107,7 +107,7 @@ def test_a_look_with_add_ons_says_so(tmp_path):
         ),
         extensions=ExtensionsBlock(enable=["x@y"]),
     )
-    assert "addons" in entry_for(preset).components
+    assert "addons" in entry_for(preset, provenance="community").components
 
 
 # ── reading a fetched index ──────────────────────────────────────────────
