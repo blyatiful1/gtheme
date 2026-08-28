@@ -59,7 +59,18 @@ check() {
   # DBUS_SESSION_BUS_ADDRESS, and the `dconf` tier that this selection includes
   # needs a session bus to activate dconf-service; without one those tests skip
   # themselves and the check proves nothing.
-  dbus-run-session -- python -m pytest -q -m "not gtk and not sandbox"
+  #
+  # PYTHONPATH is not optional either, and it is the environment variable and
+  # not pytest's `pythonpath` ini setting on purpose. gtheme is NOT installed
+  # at this point — build() only built a wheel — and nothing else puts `src/`
+  # on the path, so without this every test module dies at collection with
+  # `ModuleNotFoundError: No module named 'gtheme'` and makepkg aborts here.
+  # The ini setting would fix collection only: several tests re-import gtheme
+  # in a *fresh interpreter* (`gtheme.core` must load with no GTK, the ego
+  # client must load with no desktop libraries at all), and a child process
+  # inherits the variable but not pytest's in-process sys.path.
+  PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}" \
+    dbus-run-session -- python -m pytest -q -m "not gtk and not sandbox"
 }
 
 package() {

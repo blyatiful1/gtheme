@@ -93,9 +93,15 @@ tag; nothing from it is lost, and the state it wrote is never touched.
 
 ### Add-ons
 
-- **Search, install, configure and update from inside the app.** Installing
-  goes through GNOME's own confirmation box; gtheme never installs one behind
-  it.
+- **Search, install, configure and update from inside the app.** Two paths, and
+  they differ: adding one **from the Add-ons page** asks the desktop to install
+  it, so GNOME shows its own confirmation box naming the add-on and gtheme
+  cannot install one behind it. The add-ons **a whole Look** asks for are
+  fetched by gtheme itself from extensions.gnome.org and handed to
+  `gnome-extensions install`, with no GNOME box in between — there the button
+  you press is the confirmation, and the Look's preview names every add-on it
+  would fetch, who wrote it and where it comes from, before a byte is
+  downloaded.
 - **Twenty-four hand-written settings panels** for popular add-ons, so their
   options are explained in the same voice as the rest of the app. Everything
   else gets a generic panel, honestly labelled.

@@ -63,8 +63,15 @@ your desktop looked *before* it changes anything.
 - You cannot find where a setting lives. **Ctrl+F** searches every setting in
   the app, in the words you would actually use — try "taskbar" or "dark mode".
 
-**You do not need:** an account, an internet connection (except to browse for new
-add-ons), an administrator password, or any knowledge of Linux or GitHub.
+**You do not need:** an account, an administrator password, or any knowledge of
+Linux or GitHub.
+
+**You do need to be online twice:** while you install it — the installer downloads
+the small piece it needs to set gtheme up, and says so on screen while it does —
+and whenever you go looking for something new online, which means add-ons from
+extensions.gnome.org or Looks other people published. Nothing else needs a
+connection: the six built-in Looks, wallpapers and all, are already in the folder
+you downloaded.
 
 ## What it can change
 
@@ -99,7 +106,12 @@ customisation tool, so it is worth thirty seconds of your time:
 - **"Before gtheme" is kept forever.** The first time you open the app, before you
   have touched a thing, gtheme saves how this computer looks. That record is never
   overwritten and never deleted, however many Looks you try afterwards. A year
-  later, it still means *before gtheme*.
+  later, it still means *before gtheme*. There is one way not to get that row: if
+  something had already changed your desktop before you first opened the window —
+  `gtheme apply` from a terminal — then the moment has passed, and gtheme leaves
+  the record out rather than put that name on the wrong picture. You are still
+  covered — by the first-touch record, which is separate and always written — and
+  the whole rule is spelled out under **Safety** in the tour below.
 - **Nothing happens that you haven't seen.** Applying a Look opens a list of every
   setting it will change as before → after, every file it will write by
   destination, and every add-on by name — before it changes anything.
@@ -169,6 +181,10 @@ private corner of that folder so it cannot disturb anything else, and adds
 **Gtheme** to your list of applications. It prints what it
 is doing as it goes. If something is missing it stops and tells you the exact
 command to install it — it never installs system packages behind your back.
+
+**Be online for this step.** Setting up that private corner downloads one small
+piece from the internet; the installer says so as it happens, and if it cannot
+reach the network it stops and tells you that is the likely reason.
 
 **5. Open it.**
 Press the **Super** key (the one with the Windows logo on most keyboards), type
@@ -430,12 +446,15 @@ what you cannot do and offers the button that fixes it.
 
 ### Windows & Desktops
 
-![The Windows and Desktops page: window button layouts, focus behaviour, desktops, and collapsed groups of keyboard shortcuts](docs/media/screenshots/windows-light.png)
+![The Windows and Desktops page: window button layouts, focus behaviour, desktops, and keyboard shortcuts in named sections you fold open one at a time](docs/media/screenshots/windows-light.png)
 
 Where the close/minimise/maximise buttons go, what double-clicking a window's top
 bar does, how windows take focus, and how many desktops you have. Every keyboard
-shortcut the desktop itself watches for is here too, in two collapsed groups —
-175 of them, which is why they are folded away rather than dumped in a list.
+shortcut the desktop itself watches for is here too — 175 of them, which is far
+too many for one list. They are cut into named sections you fold open one at a
+time — "Desktops and screens", "Moving between windows", "Sound" — and above each
+set of sections there is a box that narrows all of them as you type, plus a line
+reminding you that **Ctrl+F** searches the whole app at once.
 
 ### Add-ons
 
@@ -582,8 +601,8 @@ not have to reinstall anything, and none of them deletes a thing.
 
 Press **Ctrl+Z**, or click **Undo last change** at the top of the window. Or open
 **Undo & Restore Points** in the list on the left and pick the moment you want
-back — including *Before gtheme*, how your desktop looked before this app ever
-changed anything.
+back — including *Before gtheme* if it is there, how your desktop looked before
+this app ever changed anything.
 
 ### 2. The app won't open, but the desktop works
 

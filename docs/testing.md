@@ -26,19 +26,33 @@ the system typelibs and break.
 
 | Tier | Size | Needs | When it runs |
 |---|---|---|---|
-| **unit + regression** | ~1,880 tests | nothing but Python and GLib | always — plain `pytest`, and both CI jobs |
-| **dconf** (`-m dconf`) | 42 tests | a private D-Bus session and the dconf-service it activates — no shell | always — plain `pytest`, and both CI jobs |
-| **gtk** (`-m gtk`) | ~660 tests | GTK 4 and libadwaita 1.9, offscreen is fine | plain `pytest` locally; in CI only inside an Arch container |
+| **unit + regression** | ~1,880 tests | nothing but Python and GLib | always — plain `pytest`, `verify.sh`, the CI container job, the packaged `check()` |
+| **dconf** (`-m dconf`) | 42 tests | a private D-Bus session and the dconf-service it activates — no shell | always — plain `pytest`, `verify.sh`, the CI container job, the packaged `check()` |
+| **gtk** (`-m gtk`) | ~660 tests | GTK 4 and libadwaita 1.9, offscreen is fine | plain `pytest` locally, and `verify.sh`; in CI only inside the Arch container. **Not** in the packaged `check()` |
 | **sandbox** (`-m sandbox`) | 29 tests | a private D-Bus session **and a real headless GNOME Shell** | `./verify.sh --full` only. **Never in CI.** |
 
 `addopts = -m "not sandbox"` in `pyproject.toml` is what a plain `pytest` obeys:
 it deselects those 29 tests rather than trying to boot a desktop, and selects
 everything else.
 
-Every tier except `sandbox` is run under `dbus-run-session`, by `verify.sh`, by
-both CI jobs and by the Arch package's `check()` (`PKGBUILD` and `PKGBUILD-git`
-both wrap the run and both carry `dbus` in `checkdepends`). That is not
-decoration: the settings phase decides whether to run from
+CI is two jobs and they are not two halves of the same run. `lint-and-packaging`
+runs on an Ubuntu runner with no PyGObject and no session bus, and runs exactly
+two things: `ruff`, and three named packaging test files
+(`test_packaging_wheel.py`, `test_packaging_desktop.py`,
+`test_packaging_install.py`) — the only tests that mean anything without a
+desktop. Every tier in the table above is run by the other job, `tests`, in an
+Arch container. Read "CI runs this tier" as "the container job runs it".
+
+The Arch package's `check()` runs `-m "not gtk and not sandbox"`, so it covers
+the unit, regression and `dconf` tiers and deliberately not the `gtk` one: a
+build chroot has no display of any kind, not even a broadway one. It also sets
+`PYTHONPATH` to the tree's `src/`, because gtheme is not installed at that point
+in a `makepkg` run and without it every test module fails to import.
+
+Every tier except `sandbox` is run under `dbus-run-session` — by `verify.sh`, by
+the CI container job and by the Arch package's `check()` (`PKGBUILD` and
+`PKGBUILD-git` both wrap the run and both carry `dbus` in `checkdepends`). That
+is not decoration: the settings phase decides whether to run from
 `DBUS_SESSION_BUS_ADDRESS`, so
 without a bus those tests error out (a clean `makepkg` chroot has none), and
 with the *live* bus they are one mistake away from the real desktop. A private
@@ -79,8 +93,10 @@ Anything that constructs a widget. It needs a real GTK, but not a real screen:
 `gtk4-broadwayd` is an offscreen GDK backend, which means no X server, no
 compositor and no Xvfb.
 
-This tier is why the CI split exists. Ubuntu runners ship libadwaita 1.5 and
-gtheme targets 1.9, so no Adw code may run there at all.
+This tier is why the whole suite runs in an Arch container rather than on the
+Ubuntu runner. Ubuntu runners ship libadwaita 1.5 and gtheme targets 1.9, so no
+Adw code may run there at all — which is why the Ubuntu job kept only the two
+things that need no desktop, the linter and the packaging tests.
 
 ### Tier 3 — dconf
 
@@ -98,8 +114,8 @@ requirement. No shell, no compositor, no seat, seven seconds.
 
 That distinction is the point. Until it was drawn (review-report M20), the only
 assertions that the two backends *write* alike sat behind the `sandbox` marker,
-so every check anyone actually ran — plain `pytest`, both CI jobs, the packaged
-`check()` — proved they agreed on reads and nothing more.
+so every check anyone actually ran — plain `pytest`, CI, the packaged `check()`
+— proved they agreed on reads and nothing more.
 
 ### Tier 4 — sandbox
 
@@ -224,13 +240,16 @@ you that the app starts, that the pages render, that the extension runtime-load
 verdict still holds, or that the screenshots in the README are of anything.
 
 It *can* tell you that a settings round-trip survives a real dconf, and does:
-the `dconf` tier needs a private bus and no shell, so both jobs run it.
+the `dconf` tier needs a private bus and no shell, which is exactly what the
+container job gives it.
 
-**CI's unit job runs on an older desktop stack than users have.** Ubuntu
-runners ship libadwaita 1.5 against gtheme's 1.9 target, so no widget code runs
-in that job at all. The Arch container job exists to close that gap for the
-`gtk` tier, and it is the only place in CI where a libadwaita widget is
-constructed.
+**Only one of the two CI jobs runs the suite at all.** The Ubuntu job installs
+no PyGObject and starts no session bus on purpose; it runs `ruff` and three
+named packaging tests, and nothing else. Everything else — unit, regression,
+`dconf` and `gtk` — runs in the Arch container job, which is therefore the only
+place in CI where a libadwaita widget is constructed. Ubuntu runners ship
+libadwaita 1.5 against gtheme's 1.9 target, which is why the split is that way
+round rather than the other.
 
 **What CI does prove** is worth having and is not nothing: the lint is clean,
 the engine is correct against a memory backend, every one of the version 1

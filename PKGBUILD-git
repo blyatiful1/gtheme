@@ -1,13 +1,16 @@
 # Maintainer: blyatiful1 <https://github.com/blyatiful1>
 #
 # Arch package built from the checkout you are standing in, not from a release
-# tarball. This is the file the README's `git clone …` route means: the plain
-# PKGBUILD beside it downloads $url/archive/refs/tags/v$pkgver.tar.gz and would
-# build that instead of the revision you just cloned and are reading.
+# tarball. This is the second of the README's two Arch recipes: its `git clone
+# … && makepkg -si` route deliberately uses the plain PKGBUILD beside this one,
+# which downloads $url/archive/refs/tags/v$pkgver.tar.gz and builds the
+# released version rather than the revision you just cloned. Name this file
+# instead when the revision in front of you is the point — following the main
+# branch, or testing a change of your own.
 #
-# Use it from inside the clone:
+# Use it from inside the clone, with the same spelling the README gives:
 #
-#   makepkg -p PKGBUILD-git -si
+#   makepkg -si -p PKGBUILD-git
 #
 # `source=()` is deliberate — there is nothing to fetch, so every function
 # works in "$startdir", the clone itself. Everything else follows the plain
@@ -79,7 +82,13 @@ check() {
   # DBUS_SESSION_BUS_ADDRESS, and the `dconf` tier that this selection includes
   # needs a session bus to activate dconf-service; without one those tests skip
   # themselves and the check proves nothing.
-  dbus-run-session -- python -m pytest -q -m "not gtk and not sandbox"
+  #
+  # PYTHONPATH is not optional either, for the reason spelled out in the plain
+  # PKGBUILD: gtheme is not installed at this point, nothing else puts `src/`
+  # on the path, and the tests that re-import it in a fresh interpreter need
+  # the variable rather than pytest's in-process `pythonpath` setting.
+  PYTHONPATH="$startdir/src${PYTHONPATH:+:$PYTHONPATH}" \
+    dbus-run-session -- python -m pytest -q -m "not gtk and not sandbox"
 }
 
 package() {
