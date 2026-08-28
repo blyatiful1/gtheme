@@ -243,3 +243,24 @@ def test_the_page_says_out_loud_what_it_does_not_manage():
 @pytest.mark.parametrize("key", ["colours-none", "apply", "take-over", "undo-take-over"])
 def test_the_load_bearing_sentences_exist(key):
     assert terminal.COPY[key].strip()
+
+
+def test_nothing_this_page_says_out_loud_is_jargon():
+    """Every other page's copy is linted; this one's was not linted anywhere."""
+    from gtheme.ui import jargon
+
+    assert (
+        jargon.check_all([(f"terminal.COPY[{key!r}]", text) for key, text in terminal.COPY.items()])
+        == []
+    )
+
+
+def test_nothing_the_terminal_machinery_says_out_loud_is_jargon():
+    """``apply_all`` reports failures in its own words; they reach a card."""
+    from gtheme import terminal as package
+    from gtheme.ui import jargon
+
+    assert (
+        jargon.check_all([(f"terminal.COPY[{key!r}]", text) for key, text in package.COPY.items()])
+        == []
+    )

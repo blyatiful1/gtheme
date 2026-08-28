@@ -27,8 +27,18 @@ import tomllib
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
-from .fsio import atomic_write_text, config_root, confine
-from .model import Palette, ReloadSemantics, TerminalState, check_colour, read_palette, toml_string
+from .fsio import config_root, confine
+from .model import (
+    FileChange,
+    Palette,
+    ReloadSemantics,
+    TerminalState,
+    TerminalWrites,
+    check_toml_edit,
+    hex6,
+    read_palette,
+    toml_string,
+)
 
 __all__ = [
     "FISH_COLOR_MAP",
@@ -62,16 +72,12 @@ FISH_COLOR_MAP: dict[str, int | None] = {
 def _bare(colour: str) -> str:
     """fish wants ``rrggbb``, with or without the hash. Validate, then strip it.
 
-    The validation is the shared one every adapter uses
-    (:func:`~gtheme.terminal.model.check_colour`) rather than a second opinion
-    kept here; the shortening is fish's own: it takes six digits, so ``#abc``
-    is spelled out and the alpha of an eight-digit colour is dropped.
+    Both halves are the shared ones every adapter uses
+    (:func:`~gtheme.terminal.model.hex6`, which validates through
+    :func:`~gtheme.terminal.model.check_colour`) rather than a second opinion
+    kept here; only the missing hash is fish's own.
     """
-    check_colour(colour, what="that colour")
-    value = colour.lstrip("#").lower()
-    if len(value) == 3:
-        value = "".join(digit * 2 for digit in value)
-    return value[:6]
+    return hex6(colour).lstrip("#")
 
 
 def fish_env() -> dict[str, str]:
@@ -115,6 +121,17 @@ class FishAdapter:
     def __init__(self, runner: Callable[[Sequence[str]], str] | None = None) -> None:
         self._runner = runner or _default_runner
 
+    @property
+    def variables_path(self) -> Path:
+        """Where fish keeps the colours: its own universal-variables file.
+
+        gtheme never writes it — fish does, when the script below runs. It is
+        named here so that what it held *before* can be recorded first, which
+        is the difference between a change ``gtheme rescue`` can put back and
+        one it has never heard of (review-report H8).
+        """
+        return config_root() / "fish" / "fish_variables"
+
     def detect(self) -> TerminalState:
         installed = shutil.which("fish") is not None
         return TerminalState(
@@ -151,15 +168,29 @@ class FishAdapter:
                 found[name] = value.strip()
         return found
 
-    def apply(self, palette: Palette) -> None:
-        """Set every colour in :data:`FISH_COLOR_MAP` in one fish invocation.
+    def plan(self, palette: Palette) -> TerminalWrites:
+        """One fish invocation that sets every colour in :data:`FISH_COLOR_MAP`.
+
+        The one adapter that hands back something to *run* rather than
+        something to write. fish's colours are universal variables: they live
+        in fish's own store, and the supported way to change them is to run
+        fish. There is no file for the engine to write and no setting for it to
+        set — so what the engine can do instead is save what the store held
+        first, which is what ``records`` asks for.
+
+        The script is rendered here, at plan time, so a colour that is not a
+        colour is refused before the batch changes anything at all: these
+        values are interpolated into a shell command, and anything that is not
+        obviously a colour is refused rather than escaped.
 
         Raises:
-            ValueError: a colour was not a plain hex value. Nothing is run —
-                these values are interpolated into a shell command, so anything
-                that is not obviously a colour is refused rather than escaped.
+            ValueError: a colour was not a plain hex value. Nothing is run.
         """
-        self._runner(["fish", "-c", self.script(palette)])
+        script = self.script(palette)
+        return TerminalWrites(
+            runs=(lambda: self._runner(["fish", "-c", script]),),
+            records=(str(self.variables_path),),
+        )
 
     def script(self, palette: Palette) -> str:
         """The fish script :meth:`apply` runs. Separated so it can be read."""
@@ -227,18 +258,27 @@ class StarshipAdapter:
             ansi=ansi if len(ansi) == 16 else (),
         )
 
-    def apply(self, palette: Palette) -> None:
-        """Rewrite gtheme's palette table and select it, keeping the rest."""
+    def plan(self, palette: Palette) -> TerminalWrites:
+        """gtheme's palette table and the line selecting it, keeping the rest.
+
+        Raises:
+            ValueError: the edit would leave a file starship cannot read. It
+                used to be written with no parse validation at all
+                (review-report H8) — over a file that can name a command to run
+                on every prompt, which is the last file in this app that should
+                be rewritten hopefully.
+        """
         path = confine(self.config_path)
-        text = ""
+        original = ""
         if path.is_file():
             try:
-                text = path.read_text(encoding="utf-8")
+                original = path.read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):
-                text = ""
-        text = _replace_table(text, f"palettes.{self.palette_name}", self._table(palette))
+                original = ""
+        text = _replace_table(original, f"palettes.{self.palette_name}", self._table(palette))
         text = _set_root_scalar(text, "palette", f'"{self.palette_name}"')
-        atomic_write_text(path, text)
+        check_toml_edit(original, text, what="Starship prompt")
+        return TerminalWrites(files=(FileChange(str(path), text.encode("utf-8")),))
 
     def _table(self, palette: Palette) -> str:
         """gtheme's palette table, with every value written as a TOML string.

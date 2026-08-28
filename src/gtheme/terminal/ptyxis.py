@@ -21,10 +21,20 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+from gtheme.core.gvariant import quote
 from gtheme.core.settings_backend import BackendError, SettingsBackend
 
-from .fsio import atomic_write_text, confine, data_root
-from .model import Palette, ReloadSemantics, TerminalState, one_line, read_palette
+from .fsio import confine, data_root
+from .model import (
+    FileChange,
+    Palette,
+    ReloadSemantics,
+    SettingChange,
+    TerminalState,
+    TerminalWrites,
+    one_line,
+    read_palette,
+)
 
 __all__ = [
     "PROFILE_PLACEHOLDER",
@@ -186,12 +196,18 @@ class PtyxisAdapter:
                 opacity = 1.0
         return self._read_palette_file(name, opacity)
 
-    def apply(self, palette: Palette) -> None:
-        """Write the palette file, then point the default profile at it.
+    def plan(self, palette: Palette) -> TerminalWrites:
+        """The palette file, and the two settings that select it.
 
-        The file goes down first: selecting a palette that is not on disk yet
-        would leave the terminal briefly asking for something that does not
-        exist.
+        The file is listed first and the transaction writes files before
+        settings, so the terminal is never briefly asked for a palette that is
+        not on disk yet.
+
+        The two settings used to be written straight through the backend, which
+        is why an unwritable key ended a click with a traceback nobody saw and
+        the palette file already on disk (review-report H12). They are ordinary
+        settings, so they now go through the engine like every other setting in
+        the app: recorded, claimed, and undoable.
 
         Raises:
             PermissionError: the default profile could not be determined, so
@@ -205,9 +221,13 @@ class PtyxisAdapter:
             )
         file_name = palette_file_name(palette.name)
         target = confine(self.palettes_dir / f"{file_name}.palette")
-        atomic_write_text(target, render_palette_file(palette))
-        self.backend.set(profile_key(uuid, "palette"), _gvariant_string(file_name))
-        self.backend.set(profile_key(uuid, "opacity"), repr(float(palette.opacity)))
+        return TerminalWrites(
+            files=(FileChange(str(target), render_palette_file(palette).encode("utf-8")),),
+            settings=(
+                SettingChange(profile_key(uuid, "palette"), quote(file_name)),
+                SettingChange(profile_key(uuid, "opacity"), repr(float(palette.opacity))),
+            ),
+        )
 
     # -- helpers -----------------------------------------------------------
 
@@ -256,7 +276,3 @@ def _read_section(text: str, section: str) -> dict[str, str]:
     return values
 
 
-def _gvariant_string(value: str) -> str:
-    """A GVariant string literal. Values cross the backend as GVariant text."""
-    escaped = value.replace("\\", "\\\\").replace("'", "\\'")
-    return f"'{escaped}'"

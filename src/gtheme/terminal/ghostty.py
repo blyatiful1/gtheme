@@ -34,7 +34,15 @@ from pathlib import Path
 
 from .fsio import atomic_write_text, config_root, confine, state_root
 from .kv import KeyValueFile
-from .model import Palette, ReloadSemantics, TerminalState, one_line, read_palette
+from .model import (
+    FileChange,
+    Palette,
+    ReloadSemantics,
+    TerminalState,
+    TerminalWrites,
+    one_line,
+    read_palette,
+)
 
 __all__ = ["GhosttyAdapter", "slugify"]
 
@@ -173,29 +181,37 @@ class GhosttyAdapter:
             )
         return None
 
-    def apply(self, palette: Palette) -> None:
-        """Write a theme file and point the config at it.
+    def plan(self, palette: Palette) -> TerminalWrites:
+        """A theme file, and the config line that points at it.
 
         Everything gtheme does not understand — every comment, every
         ``custom-shader``, every keybind — comes back out of the config
         untouched, because the config is edited line by line rather than
         regenerated.
 
+        The theme file is listed first and the transaction keeps that order:
+        pointing the config at a theme that is not on disk yet would leave the
+        terminal briefly asking for something that does not exist.
+
         Raises:
             PermissionError: the config directory belongs to another tool and
-                :meth:`take_over` has not been called (DESIGN.md F7).
+                :meth:`take_over` has not been called (DESIGN.md F7). The
+                refusal happens here, before the batch writes anything at all.
         """
         self._guard()
         confine(self.config_dir)
 
         slug = slugify(palette.name)
         theme_file = confine(self.themes_dir / slug)
-        atomic_write_text(theme_file, self._render_theme(palette))
-
         config = self._read(self.config_path) or KeyValueFile.parse("")
         config.set("theme", slug)
         config.set("background-opacity", _fmt_float(palette.opacity))
-        atomic_write_text(confine(self.config_path), config.render())
+        return TerminalWrites(
+            files=(
+                FileChange(str(theme_file), self._render_theme(palette).encode("utf-8")),
+                FileChange(str(confine(self.config_path)), config.render().encode("utf-8")),
+            )
+        )
 
     # -- taking the directory over ----------------------------------------
 

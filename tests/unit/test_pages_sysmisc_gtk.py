@@ -392,7 +392,7 @@ def test_the_terminal_page_shows_a_card_only_for_what_is_installed(
         for w in _widgets(page)
         if isinstance(w, Adw.PreferencesGroup) and w.get_title()
     ]
-    for adapter in installed(backend):
+    for adapter, _state in installed(backend):
         assert adapter.name in titles
 
 
@@ -409,7 +409,7 @@ def test_a_cards_reload_story_is_shown_word_for_word(
         if isinstance(w, Adw.PreferencesGroup) and w.get_description()
     ]
     joined = "\n".join(descriptions)
-    for adapter in installed(backend):
+    for adapter, _state in installed(backend):
         assert adapter.reload_semantics.sentence() in joined
 
 
@@ -489,7 +489,7 @@ def test_applying_reports_each_program_separately(
     window, backend, probe, tmp_dest_root, state_dir, monkeypatch
 ):
     """One program refusing must not stop the others, or be called success."""
-    from gtheme.terminal.model import ReloadSemantics
+    from gtheme.terminal.model import FileChange, ReloadSemantics, TerminalState, TerminalWrites
 
     class _Adapter:
         def __init__(self, ident: str, fails: bool) -> None:
@@ -499,19 +499,22 @@ def test_applying_reports_each_program_separately(
             self.fails = fails
 
         def detect(self):
-            from gtheme.terminal.model import TerminalState
-
             return TerminalState(installed=True, notes=[self.reload_semantics.sentence()])
 
         def current(self):
             return None
 
-        def apply(self, _palette):
+        def plan(self, _palette):
             if self.fails:
                 raise PermissionError("Managed by another tool.")
+            return TerminalWrites(
+                files=(FileChange(str(tmp_dest_root / f"{self.id}.conf"), b"colours\n"),)
+            )
 
     good, bad = _Adapter("good", False), _Adapter("bad", True)
-    monkeypatch.setattr(terminal, "installed", lambda _backend: [good, bad])
+    monkeypatch.setattr(
+        terminal, "installed", lambda _backend: [(good, good.detect()), (bad, bad.detect())]
+    )
     monkeypatch.setattr(
         terminal,
         "applied_look",

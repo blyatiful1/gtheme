@@ -21,10 +21,20 @@ import shutil
 import tomllib
 from pathlib import Path
 
-from .fsio import atomic_write_text, config_root, confine
+from .fsio import config_root, confine
 from .ghostty import slugify
 from .kv import IniFile
-from .model import Palette, ReloadSemantics, TerminalState, one_line, read_palette, toml_string
+from .model import (
+    FileChange,
+    Palette,
+    ReloadSemantics,
+    TerminalState,
+    TerminalWrites,
+    check_toml_edit,
+    one_line,
+    read_palette,
+    toml_string,
+)
 
 __all__ = ["AlacrittyAdapter", "render_colors_toml"]
 
@@ -119,13 +129,14 @@ class AlacrittyAdapter:
                     return palette
         return None
 
-    def apply(self, palette: Palette) -> None:
-        """Write the colours file, then make sure the config imports it.
+    def plan(self, palette: Palette) -> TerminalWrites:
+        """The colours file, and the config that imports it.
 
-        The edit to ``alacritty.toml`` is worked out in full *before* anything
-        is written, and refused if it would leave a file Alacritty cannot read
-        — a config that does not parse costs the user their whole terminal
-        setup, which is far worse than a look that did not apply.
+        The edit to ``alacritty.toml`` is worked out in full and refused if it
+        would leave a file Alacritty cannot read — a config that does not parse
+        costs the user their whole terminal setup, which is far worse than a
+        look that did not apply. Nothing is written from here at all now, so
+        that refusal lands before the batch has touched any program.
 
         Raises:
             ValueError: the edit would have broken a config that parsed before.
@@ -143,10 +154,14 @@ class AlacrittyAdapter:
                 "blur": "true" if palette.opacity < 1.0 else "false",
             },
         )
-        _refuse_if_broken(original, text)
+        check_toml_edit(original, text, what="Alacritty")
 
-        atomic_write_text(colours, rendered)
-        atomic_write_text(confine(self.config_path), text)
+        return TerminalWrites(
+            files=(
+                FileChange(str(colours), rendered.encode("utf-8")),
+                FileChange(str(confine(self.config_path)), text.encode("utf-8")),
+            )
+        )
 
     # -- helpers -----------------------------------------------------------
 
@@ -303,31 +318,6 @@ def _set_window(text: str, values: dict[str, str]) -> str:
     for key, value in values.items():
         parsed.set("window", key, value)
     return parsed.render()
-
-
-def _refuse_if_broken(original: str, rendered: str) -> None:
-    """Refuse an edit that would leave a config Alacritty cannot read.
-
-    A config that was already broken is not made gtheme's problem — the edit
-    goes ahead, because refusing would mean a user with one stray line could
-    never apply a look again. What is refused is *breaking* one that worked.
-
-    Raises:
-        ValueError: the file parsed before the edit and does not after.
-    """
-    if _parses(original) and not _parses(rendered):
-        raise ValueError(
-            "gtheme could not change your Alacritty settings without breaking "
-            "them, so it has not changed anything."
-        )
-
-
-def _parses(text: str) -> bool:
-    try:
-        tomllib.loads(text)
-    except tomllib.TOMLDecodeError:
-        return False
-    return True
 
 
 def _as_float(value: object, fallback: float) -> float:

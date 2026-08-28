@@ -174,8 +174,18 @@ def test_rescue_never_needs_gtk():
 
 
 def test_the_terminal_protocol_names_the_four_operations():
-    for name in ("detect", "current", "apply"):
+    """``plan`` where ``apply`` was, and the amendment is argued in the module.
+
+    The one deliberate change to this frozen contract: an adapter works out its
+    writes and the engine makes them, because the frozen version wrote a
+    person's own settings files with no snapshot, no ownership claim, no saved
+    moment and no lock (review-report H8). ``apply`` is gone rather than kept
+    beside ``plan``: two ways to write the same file is how one of them ends up
+    being the one without the recording.
+    """
+    for name in ("detect", "current", "plan"):
         assert hasattr(TerminalAdapter, name)
+    assert not hasattr(TerminalAdapter, "apply")
     assert "reload_semantics" in TerminalAdapter.__annotations__
 
 

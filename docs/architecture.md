@@ -105,9 +105,17 @@ results posted back through `GLib.idle_add`.
 
 ### `terminal/` — one adapter per program
 
-Ghostty, Ptyxis, Alacritty, fish, starship, btop, cava, fastfetch. Each carries
-its own honest sentence about when the change becomes visible, and the page
-renders those verbatim.
+Ghostty, Ptyxis, GNOME Terminal, Console, Alacritty, fish, starship, btop,
+cava, fastfetch. Each carries its own honest sentence about when the change
+becomes visible, and the page renders those verbatim.
+
+An adapter **works out** its writes (`plan() -> TerminalWrites`) and does not
+make them: `apply_all` turns every chosen adapter's files and settings into one
+`Transaction`, so the user's own `alacritty.toml` and `starship.toml` are
+recorded, claimed, undoable and rolled back together like anything else this
+app changes. fish is the one exception the shape admits to — its colours live
+in fish's own store and are set by running fish, which happens after the
+transaction lands, with the file fish keeps them in recorded first.
 
 ### `ui/` — the window
 

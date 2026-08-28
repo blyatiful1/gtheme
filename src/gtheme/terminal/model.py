@@ -1,11 +1,31 @@
 """What a terminal adapter has to be able to do.
 
-THE CONTRACT IS FROZEN (DESIGN.md C3f). Four terminals plus two prompts are in
-scope and they agree on almost nothing: ghostty is a ``key = value`` file that
-does not reload itself, ptyxis stores per-profile settings in the desktop's own
-settings store and applies them live, alacritty watches its file and reloads,
-fish keeps colours in shell variables that exist only while it is running. The
-protocol below is the smallest shape all of them fit.
+THE CONTRACT IS FROZEN (DESIGN.md C3f) — **with one amendment, argued below.**
+Four terminals plus two prompts are in scope and they agree on almost nothing:
+ghostty is a ``key = value`` file that does not reload itself, ptyxis stores
+per-profile settings in the desktop's own settings store and applies them live,
+alacritty watches its file and reloads, fish keeps colours in shell variables
+that exist only while it is running. The protocol below is the smallest shape
+all of them fit.
+
+**The amendment: an adapter works out its writes, it does not make them.**
+``apply(palette)`` is gone; :meth:`TerminalAdapter.plan` returns
+:class:`TerminalWrites` — the exact bytes, the exact settings — and the caller
+lands all of them through one :class:`~gtheme.core.transaction.Transaction`.
+The frozen version wrote straight to disk, and these are not gtheme's files:
+the adapters rewrote the user's own ``alacritty.toml``, ``starship.toml`` and
+Ptyxis profile with **no snapshot of any kind** — no pristine baseline, no
+ownership ledger, no restore point, and not even the process lock, so a card on
+the Terminal page could race a Look being applied on the worker thread
+(review-report H8). ``gtheme rescue`` restored ``baseline.files``, which never
+held these destinations, and the Undo page's moments were built from a diff
+that had never seen them. Freezing a contract is worth doing to stop a shape
+drifting; it is not worth doing to keep the one subsystem that changes a
+person's own settings files outside the engine that exists to make changes
+undoable. Everything else about the contract — ``detect``/``current``, the
+reload sentences, the F7 refusal, the palette validation below — is unchanged,
+and the refusals now happen at *plan* time, which is strictly earlier than the
+first byte rather than in the middle of the batch.
 
 Two rules that come out of the research and are part of the contract:
 
@@ -36,17 +56,24 @@ from __future__ import annotations
 
 import enum
 import re
+import tomllib
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 __all__ = [
+    "FileChange",
     "Palette",
     "ReloadSemantics",
+    "SettingChange",
     "TerminalAdapter",
     "TerminalState",
+    "TerminalWrites",
     "check_colour",
     "check_name",
+    "check_toml_edit",
+    "hex6",
     "is_colour",
     "one_line",
     "read_palette",
@@ -82,6 +109,24 @@ def check_colour(value: object, *, what: str = "colour") -> str:
             f"{what} is not a colour gtheme will write into a settings file: {value!r}"
         )
     return str(value)
+
+
+def hex6(value: str) -> str:
+    """A colour as ``#rrggbb``, whatever spelling it arrived in.
+
+    ``#abc`` is spelled out and the alpha of an eight-digit colour is dropped —
+    a terminal escape has nowhere to put it, fish takes six digits, and GNOME
+    Terminal's colour parser is happier with six than with four. Validated
+    first, through the one validator, because the result of this is written
+    into somebody else's settings file.
+
+    Raises:
+        ValueError: it is not a colour gtheme will write anywhere.
+    """
+    text = check_colour(value, what="that colour").lstrip("#").lower()
+    if len(text) == 3:
+        text = "".join(digit * 2 for digit in text)
+    return "#" + text[:6]
 
 
 def check_name(value: object) -> str:
@@ -124,6 +169,39 @@ def one_line(value: str, *, what: str = "value", forbid: str = "") -> str:
     if _CONTROL_RE.search(value) or any(char in value for char in forbid):
         raise ValueError(f"{what} cannot be written into a settings file: {value!r}")
     return value
+
+
+def check_toml_edit(original: str, rendered: str, *, what: str) -> str:
+    """``rendered``, unless it broke a TOML file that used to parse.
+
+    A config that does not parse costs the user their whole setup for that
+    program, which is far worse than a look that did not apply. A config that
+    was *already* broken is not made gtheme's problem — the edit goes ahead,
+    because refusing would mean somebody with one stray line could never apply
+    a look again. What is refused is *breaking* one that worked.
+
+    Alacritty had this guard and starship, whose file can name a command to run
+    on every prompt, was rewritten with no parse validation at all
+    (review-report H8). It is one rule about one file format, so it is written
+    once and both adapters call it.
+
+    Raises:
+        ValueError: the file parsed before the edit and does not after.
+    """
+    if _parses(original) and not _parses(rendered):
+        raise ValueError(
+            f"gtheme could not change your {what} settings without breaking "
+            "them, so it has not changed anything."
+        )
+    return rendered
+
+
+def _parses(text: str) -> bool:
+    try:
+        tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return False
+    return True
 
 
 def toml_string(value: str) -> str:
@@ -259,6 +337,71 @@ class TerminalState:
     notes: list[str] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class FileChange:
+    """One file an adapter wants written: where it goes, and the exact bytes.
+
+    The bytes are worked out in full before anything is written, which is what
+    lets a refusal — alacritty's "this edit would break your config", ghostty's
+    foreign directory — happen before the first byte of the *batch* rather than
+    after three other programs have already been changed.
+
+    Args:
+        dest: the full destination path, as text. It is confined against the
+            destination root twice: by the adapter that built it, and again by
+            the transaction's own preflight.
+        payload: exactly what to write. Nothing renders or templates it later.
+    """
+
+    dest: str
+    payload: bytes
+
+
+@dataclass(frozen=True)
+class SettingChange:
+    """One desktop setting an adapter wants written.
+
+    Args:
+        key: a key string in the grammar frozen in ``core.settings_backend``.
+        value: GVariant text, exactly as the backend would print it.
+    """
+
+    key: str
+    value: str
+
+
+@dataclass(frozen=True)
+class TerminalWrites:
+    """Everything one adapter wants changed, worked out without changing it.
+
+    Args:
+        files: the files, with their exact contents.
+        settings: the desktop settings.
+        runs: the escape hatch, and it is deliberately narrow. fish keeps its
+            colours in its own store, which is reachable only by running fish —
+            there is no file to write and no setting to set. Such an adapter
+            hands back what to run, and it is run **after** the transaction has
+            landed, so a program that cannot be changed through the engine can
+            still not be changed *behind* it.
+        records: destinations an adapter does not write itself but whose prior
+            contents must be saved first — fish's own variables file, which
+            fish is about to rewrite. They are recorded into the pristine
+            baseline before ``runs``, so ``gtheme rescue`` can still put them
+            back. (A restore point covers what the transaction writes; these
+            are outside it, which is the honest limit of running somebody
+            else's program to make the change.)
+    """
+
+    files: tuple[FileChange, ...] = ()
+    settings: tuple[SettingChange, ...] = ()
+    runs: tuple[Callable[[], None], ...] = ()
+    records: tuple[str, ...] = ()
+
+    def is_empty(self) -> bool:
+        """Nothing to do: the program is here and this look asks nothing of it."""
+        return not (self.files or self.settings or self.runs)
+
+
 @runtime_checkable
 class TerminalAdapter(Protocol):
     """One terminal or prompt gtheme can restyle."""
@@ -278,15 +421,20 @@ class TerminalAdapter(Protocol):
         """The look in effect now, or None if it cannot be determined."""
         ...
 
-    def apply(self, palette: Palette) -> None:
-        """Write the look.
+    def plan(self, palette: Palette) -> TerminalWrites:
+        """Work out the look. **Writes nothing.**
 
-        Must be atomic, must preserve settings gtheme does not understand
-        (a hand-written file keeps its unknown lines and its comments), and
-        must refuse a foreign config root unless the user opted in.
+        Everything an adapter used to do in ``apply`` happens here except the
+        writing: read the existing file, keep every line gtheme does not
+        understand (a hand-written config keeps its comments and its
+        ``custom-shader``), refuse a foreign config root, refuse an edit that
+        would leave a config the program cannot read — and hand back the bytes.
 
         Raises:
             PermissionError: the settings are managed elsewhere and the user
-                has not taken them over (the F7 refusal).
+                has not taken them over (the F7 refusal), or there is nothing
+                safe to write to.
+            ValueError: the look cannot be written into this program's settings
+                without breaking them.
         """
         ...

@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from terminal_write_helper import land
 
 from gtheme.terminal.model import Palette, ReloadSemantics
 from gtheme.terminal.ptyxis import (
@@ -101,7 +102,7 @@ def test_palette_file_has_both_sections_ptyxis_switches_between():
 
 @pytest.mark.mutating
 def test_apply_writes_the_file_then_selects_it(ptyxis: PtyxisAdapter):
-    ptyxis.apply(LOOK)
+    land(ptyxis, LOOK, ptyxis.backend)
     written = ptyxis.palettes_dir / "Nightbloom.palette"
     assert written.is_file()
     assert ptyxis.backend.get(profile_key(UUID, "palette")) == "'Nightbloom'"
@@ -110,7 +111,7 @@ def test_apply_writes_the_file_then_selects_it(ptyxis: PtyxisAdapter):
 
 @pytest.mark.mutating
 def test_current_round_trips_the_applied_look(ptyxis: PtyxisAdapter):
-    ptyxis.apply(LOOK)
+    land(ptyxis, LOOK, ptyxis.backend)
     read_back = ptyxis.current()
     assert read_back is not None
     assert read_back.name == "Nightbloom"
@@ -141,7 +142,7 @@ def test_without_a_readable_profile_nothing_is_written(
     adapter = PtyxisAdapter(memory_settings)
     assert adapter.default_profile_uuid() is None
     with pytest.raises(PermissionError, match="has not changed anything"):
-        adapter.apply(LOOK)
+        land(adapter, LOOK, memory_settings)
     assert not adapter.palettes_dir.exists()
 
 

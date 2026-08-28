@@ -22,10 +22,19 @@ import re
 import shutil
 from pathlib import Path
 
-from .fsio import atomic_write_text, config_root, confine
+from .fsio import config_root, confine
 from .ghostty import slugify
 from .kv import IniFile, KeyValueFile
-from .model import Palette, ReloadSemantics, TerminalState, check_colour, one_line, read_palette
+from .model import (
+    FileChange,
+    Palette,
+    ReloadSemantics,
+    TerminalState,
+    TerminalWrites,
+    hex6,
+    one_line,
+    read_palette,
+)
 
 __all__ = [
     "BtopAdapter",
@@ -175,10 +184,10 @@ class BtopAdapter:
             cursor=entries.get("hi_fg"),
         )
 
-    def apply(self, palette: Palette) -> None:
+    def plan(self, palette: Palette) -> TerminalWrites:
         confine(self.config_dir)
         slug = slugify(palette.name)
-        atomic_write_text(confine(self.themes_dir / f"{slug}.theme"), render_btop_theme(palette))
+        theme = confine(self.themes_dir / f"{slug}.theme")
 
         parsed = _parse_kv(self.config_path) or KeyValueFile.parse("")
         parsed.set("color_theme", f'"{slug}"')
@@ -186,7 +195,12 @@ class BtopAdapter:
             # Let the terminal's own glass show through the gauges instead of
             # painting a second background on top of it.
             parsed.set("theme_background", "False")
-        atomic_write_text(confine(self.config_path), parsed.render())
+        return TerminalWrites(
+            files=(
+                FileChange(str(theme), render_btop_theme(palette).encode("utf-8")),
+                FileChange(str(confine(self.config_path)), parsed.render().encode("utf-8")),
+            )
+        )
 
 
 class CavaAdapter:
@@ -235,7 +249,7 @@ class CavaAdapter:
                 found.append(value.strip("'\""))
         return found
 
-    def apply(self, palette: Palette) -> None:
+    def plan(self, palette: Palette) -> TerminalWrites:
         path = confine(self.config_path)
         text = _read_text(path) or ""
         parsed = IniFile.parse(text)
@@ -249,7 +263,7 @@ class CavaAdapter:
             # cava wraps its colours in apostrophes and has no escape for one.
             safe = one_line(colour, what=f"gradient colour {index}", forbid="'")
             parsed.set("color", f"gradient_color_{index}", f"'{safe}'")
-        atomic_write_text(path, parsed.render())
+        return TerminalWrites(files=(FileChange(str(path), parsed.render().encode("utf-8")),))
 
 
 class FastfetchAdapter:
@@ -288,7 +302,7 @@ class FastfetchAdapter:
         """None: a logo's numbered colour slots are not a palette."""
         return None
 
-    def apply(self, palette: Palette) -> None:
+    def plan(self, palette: Palette) -> TerminalWrites:
         """Replace the colour values, leaving the structure exactly as it was.
 
         Raises:
@@ -313,7 +327,7 @@ class FastfetchAdapter:
             raise PermissionError(
                 "fastfetch's settings file has no colours gtheme knows how to change."
             )
-        atomic_write_text(path, updated)
+        return TerminalWrites(files=(FileChange(str(path), updated.encode("utf-8")),))
 
 
 # -- shared file helpers ---------------------------------------------------
@@ -349,13 +363,12 @@ def _parse_btop_theme(path: Path) -> dict[str, str]:
 def _sgr(colour: str) -> str:
     """A truecolour SGR sequence — what fastfetch configs use for exact colours.
 
-    Every spelling :class:`~gtheme.terminal.model.Palette` accepts is handled:
-    ``#abc`` is spelled out, and the alpha of an eight-digit colour is dropped
-    because a terminal escape has nowhere to put it.
+    Every spelling :class:`~gtheme.terminal.model.Palette` accepts is handled
+    by the shared :func:`~gtheme.terminal.model.hex6`: ``#abc`` is spelled out,
+    and the alpha of an eight-digit colour is dropped because a terminal escape
+    has nowhere to put it.
     """
-    value = check_colour(colour, what="that colour").lstrip("#").lower()
-    if len(value) == 3:
-        value = "".join(digit * 2 for digit in value)
+    value = hex6(colour).lstrip("#")
     red, green, blue = (int(value[i : i + 2], 16) for i in (0, 2, 4))
     return f"38;2;{red};{green};{blue}"
 

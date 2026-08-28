@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
+from terminal_write_helper import land
 
 from gtheme.terminal.model import Palette, ReloadSemantics
 from gtheme.terminal.prompt import FISH_COLOR_MAP, FishAdapter, StarshipAdapter, fish_env
@@ -38,7 +39,7 @@ class Recorder:
 
 def test_apply_sets_every_mapped_colour_in_one_invocation():
     recorder = Recorder()
-    FishAdapter(recorder).apply(LOOK)
+    land(FishAdapter(recorder), LOOK)
     assert len(recorder.calls) == 1
     argv = recorder.calls[0]
     assert argv[:2] == ["fish", "-c"]
@@ -72,7 +73,7 @@ def test_a_colour_that_is_not_a_colour_is_refused_before_anything_runs():
     smuggled = Palette(name="bad", background="#000000", foreground="#ffffff")
     object.__setattr__(smuggled, "foreground", "$(rm -rf ~)")
     with pytest.raises(ValueError, match="not a colour"):
-        FishAdapter(recorder).apply(smuggled)
+        land(FishAdapter(recorder), smuggled)
     assert recorder.calls == []
 
 
@@ -130,7 +131,7 @@ def test_starship_is_live():
 
 @pytest.mark.mutating
 def test_apply_keeps_everything_the_user_wrote(starship: StarshipAdapter):
-    starship.apply(LOOK)
+    land(starship, LOOK)
     text = starship.config_path.read_text()
     data = tomllib.loads(text)
     assert "# My starship config." in text
@@ -142,7 +143,7 @@ def test_apply_keeps_everything_the_user_wrote(starship: StarshipAdapter):
 
 @pytest.mark.mutating
 def test_apply_adds_its_own_palette_and_selects_it(starship: StarshipAdapter):
-    starship.apply(LOOK)
+    land(starship, LOOK)
     data = tomllib.loads(starship.config_path.read_text())
     assert data["palette"] == "gtheme"
     assert data["palettes"]["gtheme"]["background"] == "#0A100C"
@@ -151,8 +152,8 @@ def test_apply_adds_its_own_palette_and_selects_it(starship: StarshipAdapter):
 
 @pytest.mark.mutating
 def test_applying_twice_replaces_rather_than_duplicates(starship: StarshipAdapter):
-    starship.apply(LOOK)
-    starship.apply(Palette(name="Other", background="#111111", foreground="#eeeeee"))
+    land(starship, LOOK)
+    land(starship, Palette(name="Other", background="#111111", foreground="#eeeeee"))
     text = starship.config_path.read_text()
     assert text.count("[palettes.gtheme]") == 1
     assert text.count("palette = ") == 1
@@ -163,7 +164,7 @@ def test_applying_twice_replaces_rather_than_duplicates(starship: StarshipAdapte
 
 @pytest.mark.mutating
 def test_current_round_trips(starship: StarshipAdapter):
-    starship.apply(LOOK)
+    land(starship, LOOK)
     read_back = starship.current()
     assert read_back is not None
     assert read_back.name == "gtheme"
@@ -174,6 +175,6 @@ def test_current_round_trips(starship: StarshipAdapter):
 @pytest.mark.mutating
 def test_a_missing_file_is_created(tmp_dest_root: Path):
     adapter = StarshipAdapter()
-    adapter.apply(LOOK)
+    land(adapter, LOOK)
     data = tomllib.loads(adapter.config_path.read_text())
     assert data["palette"] == "gtheme"

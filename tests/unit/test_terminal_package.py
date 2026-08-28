@@ -68,7 +68,9 @@ def test_nothing_an_adapter_says_out_loud_is_jargon(tmp_dest_root: Path):
 
 
 @pytest.mark.mutating
-def test_one_refusal_does_not_stop_the_others(tmp_dest_root: Path, tmp_path: Path):
+def test_one_refusal_does_not_stop_the_others(
+    tmp_dest_root: Path, tmp_path: Path, memory_settings
+):
     """The case that actually happens: ghostty is managed by another tool."""
     rice = tmp_path / "nightbloom" / "ghostty"
     rice.mkdir(parents=True)
@@ -78,9 +80,13 @@ def test_one_refusal_does_not_stop_the_others(tmp_dest_root: Path, tmp_path: Pat
 
     from gtheme.terminal import AlacrittyAdapter, GhosttyAdapter, StarshipAdapter
 
-    outcome = apply_all(LOOK, [GhosttyAdapter(), AlacrittyAdapter(), StarshipAdapter()])
-    assert outcome["ghostty"] is not None
-    assert "managed by another tool" in outcome["ghostty"]
-    assert outcome["alacritty"] is None
-    assert outcome["starship"] is None
+    report = apply_all(
+        LOOK,
+        [GhosttyAdapter(), AlacrittyAdapter(), StarshipAdapter()],
+        backend=memory_settings,
+    )
+    assert report.problems["ghostty"] is not None
+    assert "managed by another tool" in report.problems["ghostty"]
+    assert report.problems["alacritty"] is None
+    assert report.problems["starship"] is None
     assert (rice / "config").read_text() == "theme = nightbloom\n"
