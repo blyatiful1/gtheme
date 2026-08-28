@@ -35,7 +35,12 @@ feedback loop.
 from __future__ import annotations
 
 import inspect
+import json
+import os
+import platform
+import sys
 from collections.abc import Callable, Iterable
+from pathlib import Path
 from typing import Any
 
 import gi
@@ -53,14 +58,22 @@ from .ui.applyrunner import ApplyRunner  # noqa: E402
 from .ui.rowindex import RowIndex  # noqa: E402
 
 __all__ = [
+    "ASK_DESKTOP",
+    "ASK_LIBADWAITA",
     "COPY",
     "DEFAULT_HEIGHT",
     "DEFAULT_WIDTH",
     "MINIMUM_GNOME",
+    "MINIMUM_LIBADWAITA",
     "DesktopVerdict",
     "Window",
     "check_desktop",
+    "details_text",
+    "fit_to_monitor",
     "is_text_editing",
+    "libadwaita_version",
+    "monitor_size",
+    "unfinished_changes",
 ]
 
 
@@ -72,6 +85,8 @@ COPY: dict[str, str] = {
     "menu-tooltip": "Main menu",
     "menu-search": "Search",
     "menu-undo": "Undo last change",
+    "menu-details": "Copy details for a bug report",
+    "menu-shortcuts": "Keyboard shortcuts",
     "menu-about": "About Gtheme",
     "menu-quit": "Quit",
     # -- the "this is not the desktop I am for" screen
@@ -86,6 +101,37 @@ COPY: dict[str, str] = {
         "settings your computer does not have. Nothing has been altered, and you "
         "can close this window safely."
     ),
+    # "Too old" and "could not tell" are different answers and get different
+    # sentences. Saying "too old" to somebody whose desktop simply did not
+    # answer sends them looking for an upgrade they do not need.
+    "unknown-desktop-title": "gtheme could not tell what this computer is running",
+    "unknown-desktop-body": (
+        "gtheme asks the desktop what it is before it changes anything, and this "
+        "time nothing answered. Rather than guess and risk changing the wrong "
+        "thing, it has stopped. Nothing has been altered. If you are logged in to "
+        "a GNOME desktop, open gtheme again from your list of apps."
+    ),
+    # -- copying the details a bug report asks for
+    "details-copied": "Details copied. Paste them into your bug report.",
+    "details-failed": "The details could not be copied.",
+    # -- the change that was interrupted last time
+    "unfinished-title": "The last change did not finish",
+    "unfinished-body": (
+        "gtheme was in the middle of changing your desktop when it stopped. Part "
+        "of the change may have gone through. You can put things back the way "
+        "they were before it started."
+    ),
+    "unfinished-dismiss": "Leave it",
+    "unfinished-restore": "Put things back",
+    # -- the keyboard list
+    "shortcuts-window-title": "Keyboard Shortcuts",
+    "shortcuts-group": "Getting around",
+    "shortcut-search": "Search everything",
+    "shortcut-undo": "Undo the last change",
+    "shortcut-sidebar": "Jump to the list on the left",
+    "shortcut-help": "Show this list",
+    "shortcut-about": "About Gtheme",
+    "shortcut-quit": "Close Gtheme",
     # -- shared outcomes
     "page-broken": "This page could not be opened.",
     "undo": "Undo",
@@ -116,6 +162,50 @@ COPY: dict[str, str] = {
 #: that says so is built out of widgets that have existed for years.
 MINIMUM_GNOME = 49
 
+#: The libadwaita the sidebar is built out of, as (major, minor).
+#:
+#: This is the question the gate actually wants answered, and unlike the
+#: desktop's version it can always be answered: libadwaita is linked into this
+#: process, so ``Adw.get_major_version()`` cannot time out, cannot need a
+#: session bus and cannot be absent. The GNOME version over D-Bus was only ever
+#: a *proxy* for it — and a proxy that returns nothing on a slow login, in a
+#: terminal, or over ssh, where the old gate read "no answer" as "go ahead" and
+#: walked straight back into the ``Adw.Sidebar`` crash its own comment said was
+#: fixed (persona-report §3.1, X2).
+MINIMUM_LIBADWAITA = (1, 9)
+
+#: How small the window is allowed to go. Also the floor every clamp stops at.
+MINIMUM_WIDTH = 360
+MINIMUM_HEIGHT = 294
+
+#: Room left around the window when the screen is smaller than the size it
+#: wants. Horizontal is a margin; vertical also has to clear the top bar, which
+#: a window opening at the full height of the screen would sit under.
+SCREEN_MARGIN_X = 32
+SCREEN_MARGIN_Y = 96
+
+#: Where somebody who is stuck is sent. The metainfo names the same page as its
+#: ``<url type="help">``; About never showed it, because the appdata route
+#: needs a GResource this project does not build (persona-report §3.1).
+SUPPORT_URL = "https://github.com/blyatiful1/gtheme/blob/main/docs/start-here.md"
+
+#: How much of the log the "copy details" button takes. Enough to hold the
+#: launch line and what happened after it; short enough to paste into a form.
+LOG_TAIL_LINES = 40
+LOG_TAIL_CHARS = 8000
+
+#: The name ``core.transaction`` gives the temporary directory it records a
+#: change into before making it. Left behind, it is the one durable sign that a
+#: gtheme was killed in the middle of an apply — every path that runs Python,
+#: including the interrupt path, deletes it (E6). A test pins this constant
+#: against the engine's own spelling, because a rename over there would
+#: otherwise turn this notice off in silence.
+JOURNAL_PREFIX = "gtheme-rollback-"
+
+#: Preference holding the journals already answered for, newest last.
+DISMISSED_UNFINISHED_KEY = "unfinished/dismissed"
+DISMISSED_LIMIT = 10
+
 #: What size the window opens at the first time, before anyone has resized it.
 #:
 #: The old default was 1000x720, which cut the sidebar off in the middle of its
@@ -127,6 +217,13 @@ MINIMUM_GNOME = 49
 #: of a first run are the same shape. Neither is a *minimum* — ``width_request``
 #: and ``height_request`` still let the window go down to 360x294, and a size
 #: the user chose is restored over this by :meth:`Window._restore_window_state`.
+#:
+#: It is a *wish*, not a size: :func:`fit_to_monitor` shrinks it to whatever
+#: screen the window is opening on. 1200x900 is bigger than a 1920x1080 screen
+#: at 200% scaling, which reports 960x540 in the units a window is measured in
+#: — so the app that exists to make a desktop usable opened off the bottom of
+#: the screen for the person most likely to be scaling it up (persona-report
+#: §2.10).
 DEFAULT_WIDTH = 1200
 DEFAULT_HEIGHT = 900
 
@@ -150,26 +247,65 @@ class DesktopVerdict:
         return f"DesktopVerdict(ok={self.ok!r}, title={self.title!r})"
 
 
+class _AskLibadwaita:
+    """Sentinel: work the answer out from the libadwaita in this process."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging only
+        return "ASK_LIBADWAITA"
+
+
+#: Default for ``check_desktop(adw_version=…)``. A test passes a tuple to
+#: describe a machine it is not running on, or ``None`` to describe one whose
+#: desktop pieces could not be identified at all.
+ASK_LIBADWAITA = _AskLibadwaita()
+
+
+def libadwaita_version() -> tuple[int, int] | None:
+    """The libadwaita this process is linked against, as (major, minor).
+
+    None only if the question itself fails, which would mean a broken install
+    rather than an old one — and that is a different sentence, not a shrug.
+    """
+    try:
+        return int(Adw.get_major_version()), int(Adw.get_minor_version())
+    except Exception:  # noqa: BLE001 - an answer that will not come is not an answer
+        return None
+
+
 def check_desktop(
     *,
     current_desktop: str | None = None,
     version: str | None = None,
+    adw_version: tuple[int, int] | None | _AskLibadwaita = ASK_LIBADWAITA,
 ) -> DesktopVerdict:
     """Can gtheme honestly do anything on this computer?
+
+    Three answers, not two, because "this desktop is too old" and "this desktop
+    would not say what it is" are different things to be told and lead to
+    different next steps.
+
+    The version that decides is libadwaita's, not the desktop's. Everything the
+    window is built out of — ``Adw.Sidebar`` and its three companions — arrived
+    in libadwaita 1.9, and libadwaita is linked into this process, so the
+    question always gets an answer. The desktop's own version comes over D-Bus
+    and does not: on a slow login, in a terminal or over ssh it is simply
+    absent. Treating that absence as permission to proceed is what put the
+    ``Adw.Sidebar`` ``AttributeError`` back in front of exactly the people the
+    polite screen was written for (persona-report §3.1, X2).
 
     Args:
         current_desktop: what the session calls itself. None reads the
             environment, which is what the real window does.
         version: the desktop's version, if it could be asked. None means it
-            could not be — a perfectly ordinary state, and NOT a reason to
-            refuse: gtheme opened from a terminal on a machine that is not
-            logged in has no version to read and still has settings to show.
+            could not be — ordinary, and on its own not a refusal.
+        adw_version: the libadwaita to judge against. Left alone this is read
+            from the running one; ``None`` means it could not be read.
 
     Returns:
         A verdict. ``ok`` false carries the whole screen to show instead.
     """
-    import os
-
     session = current_desktop if current_desktop is not None else os.environ.get(
         "XDG_CURRENT_DESKTOP", ""
     )
@@ -178,12 +314,24 @@ def check_desktop(
             False, COPY["wrong-desktop-title"], COPY["wrong-desktop-body"]
         )
 
+    pieces = libadwaita_version() if isinstance(adw_version, _AskLibadwaita) else adw_version
     major = _major(version)
-    if major is not None and major < MINIMUM_GNOME:
+
+    too_old = (major is not None and major < MINIMUM_GNOME) or (
+        pieces is not None and pieces < MINIMUM_LIBADWAITA
+    )
+    if too_old:
         return DesktopVerdict(
             False,
             COPY["old-desktop-title"],
             COPY["old-desktop-body"].format(minimum=MINIMUM_GNOME),
+        )
+    if pieces is None and major is None:
+        # Nothing here can be checked: the desktop said nothing and the pieces
+        # this window is made of could not be identified either. The sidebar
+        # would be built on a guess, and the guess is the crash.
+        return DesktopVerdict(
+            False, COPY["unknown-desktop-title"], COPY["unknown-desktop-body"]
         )
     return DesktopVerdict(True)
 
@@ -211,12 +359,13 @@ class Window(Adw.ApplicationWindow):
         mirror: bool = True,
         **kwargs: Any,
     ) -> None:
+        width, height = fit_to_monitor(DEFAULT_WIDTH, DEFAULT_HEIGHT, monitor_size())
         super().__init__(
             title="Gtheme",
-            default_width=DEFAULT_WIDTH,
-            default_height=DEFAULT_HEIGHT,
-            width_request=360,
-            height_request=294,
+            default_width=width,
+            default_height=height,
+            width_request=MINIMUM_WIDTH,
+            height_request=MINIMUM_HEIGHT,
             **kwargs,
         )
         self.prefs = prefs if prefs is not None else Prefs()
@@ -236,6 +385,10 @@ class Window(Adw.ApplicationWindow):
         #: on the machine that wrote it than anywhere else.
         self._shell_asked = shell is not None or not ask_desktop
         self._shell_is_ours = shell is None
+        #: Kept apart from ``_shell_asked``: the version read below is allowed
+        #: to touch the bus without *building* the shared connection, and it
+        #: has to know whether it is allowed to touch it at all.
+        self._ask_desktop = ask_desktop
 
         self.runner = ApplyRunner(self)
 
@@ -406,6 +559,12 @@ class Window(Adw.ApplicationWindow):
 
         second = Gio.Menu()
         second.append(onboarding.MENU_LABEL, "win.onboarding")
+        second.append(COPY["menu-shortcuts"], "win.show-help-overlay")
+        # The one button that answers "what do I send them?" for somebody
+        # helping a relative over the phone. In the menu as well as in About,
+        # because that is where a person hunting for help looks first
+        # (persona-report §2.5).
+        second.append(COPY["menu-details"], "win.copy-details")
         menu.append_section(None, second)
 
         third = Gio.Menu()
@@ -443,11 +602,23 @@ class Window(Adw.ApplicationWindow):
         self._action("search", lambda *_a: self.open_search())
         self._action("undo", lambda *_a: self.undo_shortcut())
         self._action("onboarding", lambda *_a: onboarding.show_again(self))
+        self._action("focus-sidebar", lambda *_a: self.focus_sidebar())
+        self._action("copy-details", lambda *_a: self.copy_details())
+
+        # The list of keys, and the key that shows the list. ``set_help_overlay``
+        # is what installs ``win.show-help-overlay``, which is the action every
+        # GNOME app answers Ctrl+? with — so this is the standard door rather
+        # than one of gtheme's own (persona-report §2.10, U10).
+        self.set_help_overlay(self._build_shortcuts_window())
 
         application = self.get_application()
         if application is not None:
             application.set_accels_for_action("win.search", ["<primary>f"])
             application.set_accels_for_action("win.undo", ["<primary>z"])
+            application.set_accels_for_action("win.focus-sidebar", ["F6"])
+            application.set_accels_for_action(
+                "win.show-help-overlay", ["<primary>question"]
+            )
 
         # Ctrl+F also works with no application object at all — a window built
         # by a test or a probe still answers the shortcut.
@@ -458,6 +629,56 @@ class Window(Adw.ApplicationWindow):
         action.connect("activate", callback)
         self.add_action(action)
         return action
+
+    def _build_shortcuts_window(self) -> Gtk.ShortcutsWindow | None:
+        """Every key this app answers, in the window GNOME shows on Ctrl+?.
+
+        There was no such list, and no key that reached the sidebar at all —
+        so somebody working without a mouse could open gtheme and never get
+        into the list of pages (persona-report §2.10). Every entry below is a
+        key this window really binds; a list that names one it does not is
+        worse than no list.
+
+        ``Gtk.ShortcutsWindow`` is deprecated as of GTK 4.22 with no successor
+        in that release (``Gtk.ShortcutsDialog`` is not there yet), and it is
+        still what ``set_help_overlay`` takes. Building it defensively means a
+        GTK that finally drops it costs the app its shortcut list, not its
+        window.
+        """
+        try:
+            group = Gtk.ShortcutsGroup(title=COPY["shortcuts-group"])
+            for accelerator, title in (
+                ("<primary>f", COPY["shortcut-search"]),
+                ("<primary>z", COPY["shortcut-undo"]),
+                ("F6", COPY["shortcut-sidebar"]),
+                ("<primary>question", COPY["shortcut-help"]),
+                ("F1", COPY["shortcut-about"]),
+                ("<primary>q", COPY["shortcut-quit"]),
+            ):
+                group.add_shortcut(
+                    Gtk.ShortcutsShortcut(accelerator=accelerator, title=title)
+                )
+            section = Gtk.ShortcutsSection(section_name="shortcuts", max_height=10)
+            section.add_group(group)
+            window = Gtk.ShortcutsWindow(
+                title=COPY["shortcuts-window-title"], modal=True
+            )
+            window.add_section(section)
+        except Exception:  # noqa: BLE001 - no list is survivable; no window is not
+            return None
+        return window
+
+    def focus_sidebar(self) -> bool:
+        """F6: put the keyboard in the list of pages.
+
+        On a narrow window the sidebar is a page of its own behind the content,
+        so getting there is two moves — show it, then focus it — and a
+        keyboard-only user could do neither before this existed.
+        """
+        if self.sidebar is None or self.split is None:
+            return False
+        self.split.set_show_content(False)
+        return bool(self.sidebar.grab_focus())
 
     # -- navigation --------------------------------------------------------
 
@@ -481,7 +702,14 @@ class Window(Adw.ApplicationWindow):
         index = next((i for i, p in enumerate(self._order) if p.id == page_id), None)
         if index is not None and self.sidebar.get_selected() != index:
             self.sidebar.set_selected(index)
-        self.prefs.set("window/last-page", page_id)
+        # ``save=False``: which page was open matters at the *next* launch and
+        # nowhere else, and ``Prefs.save`` is a mkstemp + write + fsync +
+        # rename on the main loop. Clicking down the fifteen-item sidebar used
+        # to issue fifteen durable-write barriers, one per click, between the
+        # click and the page appearing (review-report L14). The one write is
+        # done by ``_save_window_state`` when the window closes, which is where
+        # the size and the maximised flag are already batched to.
+        self.prefs.set("window/last-page", page_id, save=False)
         self._watch_schemas()
 
     def go_to(self, page_id: str, descriptor_id: str | None = None) -> None:
@@ -522,17 +750,22 @@ class Window(Adw.ApplicationWindow):
     #: A factory gets exactly the ones it names in its own signature — which is
     #: why every page can still be built by hand, with none of them.
     def _offer(self, factory: Callable[..., Any]) -> dict[str, Any]:
-        available = {
-            "probe": self.schema_probe,
-            "shell": self.shell,
+        # Each one is fetched only if the factory names it. ``shell`` is the
+        # reason: reading it *builds* the desktop connection, and this method
+        # runs for all fifteen pages — so asking for it up front made every
+        # page, including the fourteen that never touch the desktop, pay for a
+        # ``ListExtensions`` round trip (review-report M26).
+        available: dict[str, Callable[[], Any]] = {
+            "probe": lambda: self.schema_probe,
+            "shell": lambda: self.shell,
         }
         try:
             parameters = inspect.signature(factory).parameters
         except (TypeError, ValueError):  # pragma: no cover - not introspectable
             return {}
         return {
-            name: value
-            for name, value in available.items()
+            name: fetch()
+            for name, fetch in available.items()
             if name in parameters and parameters[name].kind is not inspect.Parameter.POSITIONAL_ONLY
         }
 
@@ -570,14 +803,71 @@ class Window(Adw.ApplicationWindow):
             self._shell = _connect_shell()
         return self._shell
 
+    def adopt_shell(self, shell: Any) -> Any:
+        """Take a freshly-made desktop connection as the window's shared one.
+
+        The Add-ons page's "Ask again" is what calls this: it does the slow
+        part off the main loop, and hands the answer here so that the *window's*
+        memoised connection is the new one too. Without this the page would
+        recover and the Home page's add-on line would go on reporting the
+        desktop that was not answering ten seconds ago (persona-report §3.3,
+        E10).
+
+        The old connection is closed only if the window owned it. The new one
+        is the window's from now on, whoever built it — a connection with two
+        owners is closed twice, and the second close is on somebody else's
+        object.
+
+        Returns:
+            The connection now in force, so a caller can carry on with it.
+        """
+        previous, was_ours = self._shell, self._shell_is_ours
+        self._shell = shell
+        self._shell_asked = True
+        self._shell_is_ours = True
+        if previous is not None and previous is not shell and was_ours:
+            try:
+                previous.close()
+            except Exception:  # noqa: BLE001 - it was already unreachable
+                pass
+        home = self._pages.get("home")
+        if home is not None:
+            # The Home page was handed whatever the answer was when it was
+            # built. Handing it the new one is the difference between "add-ons:
+            # not reachable" until the app is restarted and a line that follows
+            # the same recovery the Add-ons page just did.
+            if hasattr(home, "shell"):
+                home.shell = shell
+            refresh = getattr(home, "refresh", None)
+            if callable(refresh):
+                refresh()
+        return shell
+
     def _shell_version(self) -> str | None:
-        shell = self.shell
-        if shell is None:
+        """The desktop's version, read the cheap way (review-report M26).
+
+        This runs inside ``__init__``, before the window is presented, so what
+        it must never do is what it used to do: touch :attr:`shell`, whose
+        ``_connect_shell()`` calls ``ShellExtensions.load()`` → a blocking
+        ``ListExtensions`` with GDBus's 25-second default timeout. Launching
+        while the desktop was busy meant nothing was drawn at all, for a
+        property — ``ShellVersion`` — that is cached on the proxy and needs no
+        call. It also contradicted :attr:`shell`'s own docstring, which
+        promises the connection is built on first *use*.
+
+        A connection that already exists is asked (there is no reason to build
+        a second proxy); otherwise a bare proxy is made for the one property
+        and the shared connection stays unbuilt.
+        """
+        shell = self._shell
+        if shell is not None:
+            try:
+                return shell.proxy.shell_version() or None
+            except Exception:  # noqa: BLE001 - the desktop answered nothing useful
+                return None
+        if not self._ask_desktop:
             return None
-        try:
-            return shell.proxy.shell_version()
-        except Exception:  # noqa: BLE001 - the desktop answered nothing useful
-            return None
+        return _bare_shell_version()
 
     # -- what pages call back into -----------------------------------------
 
@@ -798,8 +1088,16 @@ class Window(Adw.ApplicationWindow):
     def _restore_window_state(self) -> None:
         width = self.prefs.get("window/width")
         height = self.prefs.get("window/height")
-        if isinstance(width, int) and isinstance(height, int) and width > 360 and height > 294:
-            self.set_default_size(width, height)
+        if (
+            isinstance(width, int)
+            and isinstance(height, int)
+            and width > MINIMUM_WIDTH
+            and height > MINIMUM_HEIGHT
+        ):
+            # Fitted like the default is, and for a case the default does not
+            # cover: a size chosen on a docked 4K screen, restored on the
+            # laptop panel it is now the only screen of.
+            self.set_default_size(*fit_to_monitor(width, height, monitor_size()))
         if self.prefs.get("window/maximized") is True:
             self.maximize()
 
@@ -837,13 +1135,27 @@ class Window(Adw.ApplicationWindow):
 
     # -- about -------------------------------------------------------------
 
-    def show_about(self) -> None:
+    def show_about(self) -> Adw.AboutDialog:
+        """:meth:`about_dialog`, shown."""
+        dialog = self.about_dialog()
+        dialog.present(self)
+        return dialog
+
+    def about_dialog(self) -> Adw.AboutDialog:
         """The About dialog, read from the packaged description of the app.
 
         ``new_from_appdata`` means the version, the licence, the description
         and the release notes come from ``data/*.metainfo.xml`` — the same file
         the software centre reads — instead of being typed out a second time
         here and drifting.
+
+        Two things are added on top of whichever dialog was built, because they
+        are the two things somebody in trouble came here for (persona-report
+        §2.5, §3.1): where to get help, and the details a bug report asks for.
+        The details go in as ``debug_info``, which is libadwaita's own
+        troubleshooting page with its own copy button — and they are also one
+        click away in the main menu, for people who would never think to look
+        inside About.
         """
         dialog = _about_from_appdata()
         if dialog is None:
@@ -856,7 +1168,87 @@ class Window(Adw.ApplicationWindow):
                 issue_url="https://github.com/blyatiful1/gtheme/issues",
                 license_type=Gtk.License.MIT_X11,
             )
-        dialog.present(self)
+        dialog.set_support_url(SUPPORT_URL)
+        dialog.set_debug_info(details_text(version=self._shell_version()))
+        dialog.set_debug_info_filename("gtheme-details.txt")
+        return dialog
+
+    def copy_details(self) -> str:
+        """Put the details a bug report asks for on the clipboard.
+
+        Version, desktop version and the tail of the log — never the value of
+        a setting: :mod:`gtheme.core.applog` records *which* key changed and
+        not what it changed to, precisely so that this button can exist.
+        """
+        text = details_text(version=self._shell_version())
+        if _to_clipboard(self, text):
+            self.toast(COPY["details-copied"])
+        else:
+            self.toast(COPY["details-failed"])
+        return text
+
+    # -- the change that did not finish ------------------------------------
+
+    def unfinished_notice(self) -> Adw.AlertDialog | None:
+        """The notice for a change a previous gtheme was killed in the middle of.
+
+        Nothing used to notice. The apply worker is a daemon thread and the
+        progress dialog can be closed, so a machine that lost power — or a
+        person who closed the window during a three-minute add-on download —
+        came back to a desktop that was half changed and an app with nothing to
+        say about it (persona-report §3.3, E6).
+
+        What is looked at is the transaction's own rollback journal: the engine
+        makes one per apply and deletes it on every path that runs Python,
+        including the interrupt path. One that is still there recorded a change
+        nothing unwound.
+
+        Returns:
+            The dialog to show, or None when there is nothing to say — which
+            is the overwhelmingly common case, so this is cheap and quiet.
+        """
+        leftovers = [
+            journal for journal in unfinished_changes() if journal not in self._dismissed()
+        ]
+        if not leftovers or _change_in_progress():
+            return None
+
+        dialog = Adw.AlertDialog(
+            heading=COPY["unfinished-title"], body=COPY["unfinished-body"]
+        )
+        dialog.add_response("dismiss", COPY["unfinished-dismiss"])
+        dialog.add_response("restore", COPY["unfinished-restore"])
+        dialog.set_response_appearance("restore", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("restore")
+        dialog.set_close_response("dismiss")
+        dialog.connect("response", self._on_unfinished, leftovers)
+        return dialog
+
+    def present_unfinished_notice(self) -> Adw.AlertDialog | None:
+        """:meth:`unfinished_notice`, shown. What the application calls."""
+        dialog = self.unfinished_notice()
+        if dialog is not None:
+            dialog.present(self)
+        return dialog
+
+    def _on_unfinished(self, _dialog: Any, response: str, leftovers: list[str]) -> None:
+        # Answered either way, the question is not asked about these journals
+        # again: a notice that comes back every launch is one people learn to
+        # click past, which is the opposite of what it is for.
+        self._dismiss(leftovers)
+        if response == "restore":
+            # Straight into the machinery that already exists for this: the
+            # Undo page's confirmation, which names the moment it would go back
+            # to and lists what that changes before anything happens.
+            self.undo_last_change()
+
+    def _dismissed(self) -> list[str]:
+        seen = self.prefs.get(DISMISSED_UNFINISHED_KEY, [])
+        return [item for item in seen if isinstance(item, str)] if isinstance(seen, list) else []
+
+    def _dismiss(self, journals: Iterable[str]) -> None:
+        remembered = [*self._dismissed(), *journals]
+        self.prefs.set(DISMISSED_UNFINISHED_KEY, remembered[-DISMISSED_LIMIT:])
 
 
 # --------------------------------------------------------------------------
@@ -940,6 +1332,210 @@ def _build_probe() -> Any:
     from .panels.schema_probe import SchemaProbe
 
     return SchemaProbe()
+
+
+def monitor_size(display: Any = None) -> tuple[int, int] | None:
+    """The size of the smallest screen attached, or None if nothing answers.
+
+    The smallest rather than the first: a window is opened by the compositor on
+    whichever screen it likes, and a default that fits the smallest fits
+    everywhere. Sizes come back in the same units a window is measured in, so a
+    1920x1080 screen at 200% correctly reports 960x540 — which is the case that
+    made this necessary.
+    """
+    try:
+        from gi.repository import Gdk
+
+        display = display if display is not None else Gdk.Display.get_default()
+        if display is None:
+            return None
+        monitors = display.get_monitors()
+        sizes: list[tuple[int, int]] = []
+        for index in range(monitors.get_n_items()):
+            geometry = monitors.get_item(index).get_geometry()
+            if geometry.width > 0 and geometry.height > 0:
+                sizes.append((geometry.width, geometry.height))
+    except Exception:  # noqa: BLE001 - no display is not a reason to refuse a size
+        return None
+    return min(sizes, key=lambda size: size[0] * size[1]) if sizes else None
+
+
+def fit_to_monitor(
+    width: int, height: int, monitor: tuple[int, int] | None
+) -> tuple[int, int]:
+    """Shrink a wanted window size until it fits on the screen it will open on.
+
+    Never grows it, and never goes below the window's own minimum — a window
+    that will not fit at all is better shown too big than shown as a stump.
+    """
+    if monitor is None:
+        return width, height
+    monitor_width, monitor_height = monitor
+    if monitor_width > 0:
+        width = max(MINIMUM_WIDTH, min(width, monitor_width - SCREEN_MARGIN_X))
+    if monitor_height > 0:
+        height = max(MINIMUM_HEIGHT, min(height, monitor_height - SCREEN_MARGIN_Y))
+    return width, height
+
+
+class _AskDesktop:
+    """Sentinel: read the desktop's version rather than being told it."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging only
+        return "ASK_DESKTOP"
+
+
+#: Default for ``details_text(version=…)``. The window passes what it already
+#: read at launch instead, so opening About costs no traffic of its own.
+ASK_DESKTOP = _AskDesktop()
+
+
+def details_text(
+    *, version: str | None | _AskDesktop = ASK_DESKTOP, lines: int = LOG_TAIL_LINES
+) -> str:
+    """The details a bug report asks for, as text somebody can paste.
+
+    Deliberately technical — a maintainer reads this, and precision is the
+    whole point of a version string. The plain-language half of this feature is
+    the button that produces it, not its payload.
+
+    **No setting values, ever.** The versions are versions and the log records
+    which key changed rather than what it changed to (see
+    :mod:`gtheme.core.applog`). Somebody pasting this into a public issue is
+    not publishing their home directory, their terminal profile or their
+    wallpaper's name.
+    """
+    from .core import applog
+
+    parts = [f"gtheme {__version__}"]
+
+    desktop = _desktop_version_for_details() if isinstance(version, _AskDesktop) else version
+    parts.append(f"GNOME {desktop}" if desktop else "GNOME version: no answer")
+    pieces = libadwaita_version()
+    parts.append(
+        "libadwaita {}.{}, GTK {}.{}".format(
+            *(pieces or ("?", "?")),
+            Gtk.get_major_version(),
+            Gtk.get_minor_version(),
+        )
+    )
+    parts.append(f"Python {sys.version.split()[0]} on {platform.platform()}")
+
+    log = applog.log_file()
+    parts.append(f"\nLog ({log}), last {lines} lines:")
+    parts.append(_log_tail(log, lines=lines))
+    return "\n".join(parts)
+
+
+def _desktop_version_for_details() -> str:
+    """The desktop's version for the details blob. Never raises, never stalls."""
+    try:
+        return _bare_shell_version() or ""
+    except Exception:  # noqa: BLE001 - a detail nobody has is still a detail
+        return ""
+
+
+def _log_tail(path: Any, *, lines: int) -> str:
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return "(no log file yet)"
+    tail = "\n".join(text.splitlines()[-lines:])
+    return tail[-LOG_TAIL_CHARS:] if tail else "(the log is empty)"
+
+
+def _to_clipboard(widget: Any, text: str) -> bool:
+    """Put text on the clipboard. False when there is no display to put it on."""
+    try:
+        clipboard = widget.get_clipboard()
+        if clipboard is None:
+            return False
+        clipboard.set(text)
+    except Exception:  # noqa: BLE001 - a clipboard that refuses is said out loud
+        return False
+    return True
+
+
+def unfinished_changes(*, temp_dir: Any = None) -> list[str]:
+    """Rollback journals a killed gtheme left behind, oldest first.
+
+    A journal that recorded nothing is not reported: the change was interrupted
+    before it touched anything, so there is nothing to put back and nothing
+    worth saying. Recording happens *before* the change it describes, so this
+    errs towards asking about a change that did not quite land — the same
+    direction the engine's own ledger errs in, and the cheap one.
+
+    Directories belonging to another user are skipped rather than read.
+    """
+    import tempfile
+
+    root = Path(temp_dir) if temp_dir is not None else Path(tempfile.gettempdir())
+    found: list[str] = []
+    try:
+        candidates = sorted(root.glob(f"{JOURNAL_PREFIX}*"))
+    except OSError:  # pragma: no cover - an unreadable temp directory
+        return []
+    for candidate in candidates:
+        try:
+            if not candidate.is_dir() or candidate.stat().st_uid != os.getuid():
+                continue
+            if not _journal_recorded_something(candidate):
+                continue
+        except OSError:  # pragma: no cover - it went away while we looked
+            continue
+        found.append(str(candidate))
+    return found
+
+
+def _journal_recorded_something(journal: Path) -> bool:
+    for name in ("files.json", "settings.json"):
+        try:
+            recorded = json.loads((journal / name).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if recorded:
+            return True
+    return False
+
+
+def _change_in_progress() -> bool:
+    """Is another gtheme applying something right now?
+
+    Asked before the "it did not finish" notice, so that a second window
+    opening while the first one is mid-apply says nothing rather than
+    announcing a crash that is not happening.
+    """
+    from .core.lock import LockBusy, process_lock
+
+    try:
+        with process_lock():
+            return False
+    except LockBusy:
+        return True
+    except OSError:  # pragma: no cover - no state directory to lock in
+        return False
+
+
+def _bare_shell_version() -> str | None:
+    """``ShellVersion`` off a proxy of its own, with no add-on listing behind it.
+
+    The property is cached on the proxy — it arrives with the proxy and costs
+    no call. What this deliberately does *not* do is build the window's shared
+    connection, whose ``load()`` is the 25-second-capable ``ListExtensions``
+    round trip that used to sit between the launcher and the first frame
+    (review-report M26).
+    """
+    from .core.backends import has_session_bus
+    from .ego.shelldbus import GDBusShellProxy
+
+    if not has_session_bus():
+        return None
+    try:
+        return GDBusShellProxy().shell_version() or None
+    except Exception:  # noqa: BLE001 - no bus, no desktop, no typelib: no version
+        return None
 
 
 def _connect_shell() -> Any:

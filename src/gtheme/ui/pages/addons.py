@@ -125,11 +125,25 @@ COPY: dict[str, str] = {
     ),
     # -- no desktop to talk to
     "no-desktop-title": "Add-ons are not reachable right now",
+    # This used to end "give it a moment and open this page again", which could
+    # not work: the desktop connection is made once per window and this page's
+    # widgets are kept, so leaving the page and coming back showed the same
+    # answer from the same failed attempt until the app was quit
+    # (persona-report §3.3, E10). The sentence now names a button that really
+    # does ask again.
     "no-desktop-body": (
         "Add-ons are run by GNOME itself, and it is not answering. Everything "
         "else in this app still works. If you have just logged in, give it a "
-        "moment and open this page again."
+        "moment and then ask again."
     ),
+    "no-desktop-retry": "Ask again",
+    "reprobe-heading": "Looking for your add-ons",
+    "reprobe-starting": "Asking GNOME again…",
+    "reprobe-failed": (
+        "Still no answer. If you have just logged in, wait a few seconds and "
+        "ask again."
+    ),
+    "reprobe-worked": "Found them.",
     # -- installed
     "installed-empty-title": "No add-ons yet",
     "installed-empty-body": (
@@ -550,6 +564,9 @@ class AddonsPage(Adw.Bin):
         self._search_text = ""
         self._sort = SORTS[0][0]
         self._rebuild_queued = False
+        #: True while "Ask again" is waiting for the desktop, so a second press
+        #: cannot start a second connection attempt beside the first.
+        self._reprobing = False
 
         self._build_ui()
         if self.shell is not None:
@@ -652,12 +669,106 @@ class AddonsPage(Adw.Bin):
         )
 
     def _unavailable_page(self) -> Adw.StatusPage:
-        return Adw.StatusPage(
+        """The "GNOME is not answering" screen, with the way out on it.
+
+        The button is the whole point (E10): the sentence beside it used to
+        tell people to come back to a page that would give the same answer
+        forever, because the connection is memoised for the life of the window.
+        """
+        page = Adw.StatusPage(
             icon_name="application-x-addon-symbolic",
             title=COPY["no-desktop-title"],
             description=COPY["no-desktop-body"],
             vexpand=True,
         )
+        button = Gtk.Button(
+            label=COPY["no-desktop-retry"],
+            halign=Gtk.Align.CENTER,
+            css_classes=["pill", "suggested-action"],
+        )
+        button.connect("clicked", lambda *_a: self.ask_again())
+        page.set_child(button)
+        return page
+
+    # -- asking the desktop again ------------------------------------------
+
+    def ask_again(self) -> None:
+        """Make a new connection to the desktop and rebuild what depends on it.
+
+        The slow half — building a proxy and listing what is installed — runs
+        on the shared runner, because it is a blocking call that can take as
+        long as the desktop takes to answer, and doing it in a click handler is
+        the freeze this app has a runner to avoid.
+
+        The answer is handed to the window as well as kept here: the window's
+        connection is the one the Home page's add-on line reads, and a page
+        that recovered on its own would leave the rest of the app reporting a
+        desktop that answered fine ten seconds ago.
+        """
+        if self._reprobing:
+            return
+        self._reprobing = True
+        runner = self._apply_runner()
+        if runner is None:
+            self._reconnected(self._reconnect())
+            return
+        runner.run(
+            lambda _narrate: self._reconnect(),
+            heading=COPY["reprobe-heading"],
+            starting=COPY["reprobe-starting"],
+            on_done=self._reconnected,
+            on_failed=lambda _error: self._reconnected((None, False)),
+        )
+
+    def _reconnect(self) -> tuple[ShellExtensions | None, bool]:
+        """The slow half. No widgets — this runs off the main loop."""
+        return self._connect_desktop(None)
+
+    def _reconnected(self, answer: tuple[ShellExtensions | None, bool]) -> None:
+        """Take the new connection, or say plainly that there still is none."""
+        self._reprobing = False
+        shell, available = answer
+        if shell is None or not available:
+            self._toast(COPY["reprobe-failed"])
+            return
+
+        previous = self.shell
+        if previous is not None:
+            previous.disconnect(self._on_extension_changed)
+        adopt = getattr(self.window, "adopt_shell", None)
+        if callable(adopt):
+            adopt(shell)
+            # The window owns the shared connection, so this page must not
+            # close it — the same rule the borrowed connection has always had.
+            self._owns_shell = False
+        elif previous is not None and self._owns_shell:
+            try:
+                previous.close()
+            except Exception:  # noqa: BLE001 - it was already unreachable
+                pass
+
+        self.shell = shell
+        self.available = available
+        self.shell.connect(self._on_extension_changed)
+        if self.client is None:
+            self.client = self._build_client()
+        self.installer = ExtensionInstaller(self.shell, self.client)
+        self.checker = (
+            UpdateChecker(self.client, self.shell) if self.client is not None else None
+        )
+
+        self._fill_installed()
+        self._fill_updates_idle_state()
+        if self.client is not None:
+            self._run_query(page=1)
+        self._toast(COPY["reprobe-worked"])
+
+    def _apply_runner(self) -> Any:
+        """The window's runner, or None when this page is not in a window."""
+        from ..applyrunner import ApplyRunner
+
+        runner = getattr(self.window, "runner", None)
+        return runner if isinstance(runner, ApplyRunner) else None
 
     # -- installed ---------------------------------------------------------
 
@@ -1232,15 +1343,10 @@ class AddonsPage(Adw.Bin):
     def _run_query(self, *, page: int) -> None:
         """One page of results. Paging follows the page count, never a hunch."""
         if self.client is None or not self.available:
-            self._show_status(
-                self.discover_stack,
-                Adw.StatusPage(
-                    icon_name="application-x-addon-symbolic",
-                    title=COPY["no-desktop-title"],
-                    description=COPY["no-desktop-body"],
-                    vexpand=True,
-                ),
-            )
+            # The same screen as the other two tabs, button and all: whichever
+            # tab somebody is looking at when the desktop goes quiet is the tab
+            # they need the way out on.
+            self._show_status(self.discover_stack, self._unavailable_page())
             return
         if page == 1:
             self.discover_stack.set_visible_child_name("spinner")

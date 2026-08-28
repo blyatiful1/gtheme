@@ -66,9 +66,17 @@ def test_it_opens_big_enough_to_show_the_whole_sidebar(window: Window):
     its header bar; asserting against the sidebar rather than against 900 means
     a fifth section added later fails here instead of silently going missing.
     """
-    from gtheme.window import DEFAULT_HEIGHT, DEFAULT_WIDTH
+    from gtheme.window import DEFAULT_HEIGHT, DEFAULT_WIDTH, fit_to_monitor, monitor_size
 
-    assert window.get_default_size() == (DEFAULT_WIDTH, DEFAULT_HEIGHT)
+    # Amended for U10, and the claim is unchanged: the window opens at the
+    # default size — fitted to the screen it is opening on. It used to assert
+    # the constant flatly, which was true only on a screen big enough to hold
+    # it, and 1200x900 is bigger than a 1920x1080 screen at 200% scaling. The
+    # sidebar claim below is about the constant and is asserted against the
+    # constant, exactly as before.
+    assert window.get_default_size() == fit_to_monitor(
+        DEFAULT_WIDTH, DEFAULT_HEIGHT, monitor_size()
+    )
 
     wanted = window.sidebar.measure(Gtk.Orientation.VERTICAL, -1).natural
     header = 50  # one Adw.HeaderBar above the sidebar, generously
@@ -352,7 +360,13 @@ def test_the_window_remembers_its_size_and_the_page_you_were_on(prefs: Prefs):
 
     again = Window(Prefs(prefs.path), ask_desktop=False, mirror=False)
     assert again.content_page.get_title() == registry.get("wallpaper").title
-    assert again.get_default_size() == (1400, 900)
+    # Amended for U10 like the assertion above, and for the same reason: a
+    # remembered size is fitted to the screen it is being restored on, which is
+    # the case of a size chosen on a docked monitor and restored on a laptop
+    # panel. On a screen big enough for it, this is still (1400, 900).
+    assert again.get_default_size() == window_module.fit_to_monitor(
+        1400, 900, window_module.monitor_size()
+    )
 
 
 def test_a_remembered_page_that_no_longer_exists_is_ignored(prefs: Prefs):
