@@ -23,6 +23,18 @@ key or token in some extension's settings. Those are replaced with the
 ``{{ home }}`` placeholder or held back entirely, and either way the user is
 told which values were changed before anything is written.
 
+The scan covers the **files** the Look carries as well as its values, which is
+the half that was missing. A bundled file is somebody's real configuration, and
+a rendered one is full of this computer's home folder: ``magma`` ships a
+slideshow whose template writes ``{{ home }}/.local/share/backgrounds/…`` nine
+times, so the file sitting on the desktop that gets saved has the login name in
+it nine times. Copied byte for byte, that is a Look which publishes a name and
+points at folders the recipient does not have. So the copy inside the Look is
+read back, every mention of this home folder is turned into ``{{ home }}``
+again, the entry is marked ``template`` so the other machine fills in its own,
+and the rewrite is said out loud like every other one. Files that are not text
+— a picture, a font — are copied unchanged; there is nothing in them to read.
+
 **A saved desktop is a whole Look, not a wallpaper.** For a long time it was
 the wallpaper and nothing else: no ``[[files]]`` beyond the picture and no
 ``[palette]`` at all, while the four Looks in this repository ship eighteen to
@@ -49,6 +61,7 @@ true. And nothing is omitted silently: every drop produces an entry.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 from collections.abc import Iterable, Sequence
@@ -56,6 +69,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Literal
 
+from ..core.confine import ConfinementError, confine_src
 from ..core.ledger import current_look, read_ledger
 from ..core.paths import dest_root
 from ..core.policy import file_verdict, setting_verdict
@@ -66,6 +80,8 @@ from .loader import discover, load
 from .model import Component, ExtensionsBlock, FileEntry, Meta, Preset, SettingEntry
 
 __all__ = [
+    "PRIVATE_SETTING_REASON",
+    "REFUSED_SETTING_REASON",
     "SECRET_HINTS",
     "CaptureResult",
     "Omission",
@@ -101,6 +117,34 @@ SECRET_HINTS = (
 #: scan, because it is the only thing that finds *somebody else's* home folder
 #: in a captured value.
 _HOME_SHAPE = r"/home/[^/'\"\s]+"
+
+#: Why a setting did not travel. Written once and used in three places — the
+#: skip reason, the omission, and the line the user reads — because the line the
+#: user reads is chosen by matching on it.
+REFUSED_SETTING_REASON = "a Look is not allowed to change this"
+PRIVATE_SETTING_REASON = "it may contain something private, like a password"
+
+#: ``(reason, one, many)`` for every reason a setting is left out. Settings are
+#: counted rather than listed in the sentences a person reads: a setting's name
+#: is its schema and key (``org.gnome.desktop.lockdown disable-show-password``),
+#: which is an address for a programmer and nothing anybody saving their desktop
+#: can act on — and one of them is left out of *every* save, so that line was
+#: shown to everyone, every time, twice. The keys themselves stay in
+#: :attr:`CaptureResult.omissions` for a dialog that wants to show them.
+_SETTING_NOTES: tuple[tuple[str, str, str], ...] = (
+    (
+        PRIVATE_SETTING_REASON,
+        "one setting was left out because it may contain something private, "
+        "like a password",
+        "{count} settings were left out because they may contain something private, "
+        "like a password",
+    ),
+    (
+        REFUSED_SETTING_REASON,
+        "one setting was left out because a Look is not allowed to change it",
+        "{count} settings were left out because a Look is not allowed to change them",
+    ),
+)
 
 _IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp")
 _WALLPAPER_KEY = "gsettings:org.gnome.desktop.background picture-uri"
@@ -179,9 +223,11 @@ class CaptureResult:
             changed or withheld.
         omissions: everything the Look does *not* carry that a person might
             reasonably have expected it to, one entry each. Every omission is
-            also said in :attr:`warnings`, so the dialog that exists today says
-            something; a dialog that wants to lay them out properly should
-            render this list and stop reading the warnings for them.
+            also *accounted for* in :attr:`warnings`, so the dialog that exists
+            today says something — settings by the count and the reason rather
+            than by name, since a setting's name is a schema path. A dialog that
+            wants to lay them out properly should render this list, which is the
+            one place the keys themselves survive.
     """
 
     preset: Preset
@@ -189,6 +235,40 @@ class CaptureResult:
     skipped: list[tuple[str, str]] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     omissions: list[Omission] = field(default_factory=list)
+
+
+def _omission_notes(omissions: Sequence[Omission]) -> list[str]:
+    """The things left out, as lines for the dialog the user actually sees.
+
+    Not one :meth:`Omission.sentence` each, which is what this was. A setting
+    names itself with its schema and its key, and one setting — "which program
+    opens a command window" — is refused on *every* save, so every person who
+    saved a desktop was shown ``gsettings:org.gnome.desktop.default-applications
+    .terminal exec: a Look is not allowed to change this``, and a second, nearly
+    identical line whenever something looked private. So settings are counted by
+    reason and said in words here, while :attr:`CaptureResult.omissions` keeps
+    every key for a dialog that wants to lay them out properly.
+
+    Files and colours keep their sentence: a path and "the colours" are things
+    the person already has words for.
+
+    The missing picture is left to the caller — it has its own, longer sentence,
+    and saying it twice would read like two different problems.
+    """
+    notes: list[str] = []
+    counted = {reason for reason, _one, _many in _SETTING_NOTES}
+    for reason, one, many in _SETTING_NOTES:
+        count = sum(1 for o in omissions if o.kind == "setting" and o.reason == reason)
+        if count == 1:
+            notes.append(one)
+        elif count:
+            notes.append(many.format(count=count))
+    notes.extend(
+        o.sentence()
+        for o in omissions
+        if o.kind != "picture" and not (o.kind == "setting" and o.reason in counted)
+    )
+    return notes
 
 
 def _looks_secret(key: str, value: str) -> bool:
@@ -225,7 +305,7 @@ def capture_settings(
     for key in keys:
         verdict = setting_verdict(key)
         if verdict.refused:
-            skipped.append((key, "a Look is not allowed to change this"))
+            skipped.append((key, REFUSED_SETTING_REASON))
             continue
         try:
             value = backend.get(key)
@@ -332,13 +412,55 @@ def _home_bases(root: Path) -> list[Path]:
     return [root] if resolved == root else [root, resolved]
 
 
+def _below_home(claimed: str, bases: Sequence[Path]) -> PurePosixPath | None:
+    """``claimed`` as a path under one of ``bases``, or None if it is not one.
+
+    Three things have to agree, and a ledger entry is only a string, so none of
+    them can be assumed:
+
+    * the path with ``..`` worked out — ``<home>/../../elsewhere/x`` is
+      *lexically* under the home folder and names a file that is not. Taken at
+      face value it produced ``files/../../elsewhere/x`` as the place inside the
+      Look, and the copy landed outside the Look folder entirely;
+    * the path with links followed, for the same reason one step further out: a
+      claim reached through a shortcut pointing away from the home folder would
+      siphon whatever it points at into a Look meant to be given away — the H5
+      rule, in the one direction that had never been asked;
+    * and the result, which may then contain no ``..`` at all.
+
+    A claim that fails any of them is *not* silently dropped: the caller names
+    it, in the same words it uses for a file that was never in the home folder,
+    because that is what it is.
+    """
+    source = Path(os.path.normpath(claimed))
+    try:
+        resolved = source.resolve()
+    except OSError:  # pragma: no cover - a symlink loop in a ledger claim
+        return None
+    for base in bases:
+        try:
+            relative = PurePosixPath(source.relative_to(base).as_posix())
+        except ValueError:
+            continue
+        if ".." in relative.parts:
+            return None
+        try:
+            resolved.relative_to(base.resolve())
+        except (OSError, ValueError):
+            return None
+        return relative
+    return None
+
+
 def _owned_files(root: Path) -> tuple[list[_Bundled], list[Omission]]:
     """The files gtheme wrote that this Look can carry, and what it cannot.
 
     Three things stop a file travelling, and each of them is named rather than
     dropped:
 
-    * it is not inside the home folder, so a Look could not write it anywhere;
+    * it is not inside the home folder — really inside it, ``..`` worked out and
+      links followed (:func:`_below_home`) — so a Look could not write it
+      anywhere;
     * :mod:`gtheme.core.policy` refuses the destination — a captured Look obeys
       the same tiers a downloaded one does, or the promise in its own header is
       not true;
@@ -349,14 +471,8 @@ def _owned_files(root: Path) -> tuple[list[_Bundled], list[Omission]]:
     bundled: list[_Bundled] = []
     left_out: list[Omission] = []
     for claimed in _claimed_files():
-        source = Path(claimed)
-        relative = None
-        for base in bases:
-            try:
-                relative = source.relative_to(base)
-            except ValueError:
-                continue
-            break
+        source = Path(os.path.normpath(claimed))
+        relative = _below_home(claimed, bases)
         if relative is None:
             left_out.append(
                 Omission(
@@ -464,6 +580,28 @@ def _free_name(rel: str, taken: set[str]) -> str:
     raise ValueError(f"no free name inside the Look for {rel}")
 
 
+def _generalise_copy(target: Path, home_re: re.Pattern[str]) -> bool:
+    """Rewrite this computer's home folder out of a file already copied in.
+
+    Returns whether anything was rewritten, which is also whether the Look has
+    to render the file as a template on the machine it lands on.
+
+    The copy is made first and read back afterwards, rather than the source
+    being read and written out: ``shutil.copy2`` carries the file's permissions,
+    and writing over a file that already exists keeps them. A file that is not
+    UTF-8 text is a picture or a font — nothing to read, nothing to rewrite, and
+    the transaction refuses to template one anyway.
+    """
+    try:
+        text = target.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+    if not home_re.search(text):
+        return False
+    target.write_text(home_re.sub("{{ home }}", text), encoding="utf-8")
+    return True
+
+
 def _write_look(
     preset: Preset,
     out_dir: Path,
@@ -471,20 +609,36 @@ def _write_look(
     wallpaper: Path | None,
     bundle: Sequence[_Bundled],
     header: str,
-) -> tuple[Preset, list[Omission]]:
+    home_re: re.Pattern[str],
+) -> tuple[Preset, list[Omission], list[str]]:
     """Materialise a captured Look, copying in its picture and its files.
 
-    Returns the Look as written, and an omission for every file that could not
-    be copied after all — a file gtheme was allowed to read a moment ago and
-    cannot read now is rare, and reporting it is cheaper than explaining a Look
-    that quietly ships one file fewer than it lists.
+    Returns the Look as written, an omission for every file that could not be
+    copied after all — a file gtheme was allowed to read a moment ago and cannot
+    read now is rare, and reporting it is cheaper than explaining a Look that
+    quietly ships one file fewer than it lists — and the destinations of the
+    files whose *contents* had to be made general, for the caller to say out
+    loud.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     files = list(preset.files)
     copied: dict[Path, str] = {}
     left_out: list[Omission] = []
+    generalised: list[str] = []
     for item in bundle:
-        target = out_dir / item.rel
+        try:
+            # Where inside the Look this may land. Every other source path in
+            # the app is confined; this one was not, and ``item.rel`` is built
+            # from a destination the ledger claimed, so a claim that walked
+            # upwards wrote a file next to the Look rather than into it. The
+            # claim is refused before it gets here now — this is the second
+            # lock on the same door, and it says so rather than writing.
+            target = confine_src(item.rel, out_dir)
+        except ConfinementError:
+            left_out.append(
+                Omission("file", item.dest, "gtheme could not put it inside this Look")
+            )
+            continue
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(item.source, target)
@@ -494,7 +648,10 @@ def _write_look(
             )
             continue
         copied[item.source] = item.rel
-        files.append(FileEntry(src=item.rel, dest=item.dest))
+        templated = _generalise_copy(target, home_re)
+        if templated:
+            generalised.append(item.dest)
+        files.append(FileEntry(src=item.rel, dest=item.dest, template=templated))
 
     screenshots = list(preset.meta.screenshots)
     if wallpaper is not None and wallpaper.is_file():
@@ -515,7 +672,7 @@ def _write_look(
         }
     )
     (out_dir / "theme.toml").write_text(dumps_preset(final, header=header), encoding="utf-8")
-    return final, left_out
+    return final, left_out, generalised
 
 
 def capture_share(
@@ -548,6 +705,11 @@ def capture_share(
     the ownership ledger, and so do the colours — from the applied Look if
     there is one, from the terminal if there is not. Whatever cannot travel is
     named in :attr:`CaptureResult.omissions`.
+
+    A bundled file's *contents* are scanned like a value: every mention of this
+    computer's home folder becomes ``{{ home }}`` again and the entry is marked
+    ``template``, so the Look neither publishes the login name nor lands
+    pointing at folders the recipient does not have.
     """
     entries, skipped = capture_settings(keys, backend, components=components)
     warnings: list[str] = []
@@ -602,13 +764,10 @@ def capture_share(
     safe: list[SettingEntry] = []
     for entry in entries:
         if _looks_secret(entry.key, entry.value):
-            warnings.append(
-                f"one setting was left out because it may contain something private "
-                f"({entry.key})"
-            )
-            omissions.append(
-                Omission("setting", entry.key, "it may contain something private, like a password")
-            )
+            # Said once, by the omission pass at the end. Saying it here as
+            # well put the identical fact in the dialog twice, once with the
+            # schema path in brackets and once with it in front of a colon.
+            omissions.append(Omission("setting", entry.key, PRIVATE_SETTING_REASON))
             continue
         if entry.key in rewritten:
             safe.append(entry.model_copy(update={"value": rewritten[entry.key]}))
@@ -644,7 +803,7 @@ def capture_share(
         extensions=ExtensionsBlock(enable=list(enabled_extensions)),
     )
     wallpaper = _wallpaper_source(entries)
-    final, uncopied = _write_look(
+    final, uncopied, generalised = _write_look(
         preset,
         Path(out_dir),
         wallpaper=wallpaper,
@@ -653,8 +812,14 @@ def capture_share(
             "Made with gtheme by saving a desktop as a Look. It changes settings only; "
             "it cannot run programs."
         ),
+        home_re=home_re,
     )
     omissions.extend(uncopied)
+    if generalised:
+        warnings.append(
+            f"the place your home folder lives was written inside {len(generalised)} of "
+            "those file(s), and was made general so they work on somebody else's computer"
+        )
     if wallpaper is None:
         warnings.append(
             "no wallpaper picture could be found, so add a screenshot before sharing this Look"
@@ -668,10 +833,8 @@ def capture_share(
         )
     # Said as well as recorded: the dialog that exists today reads warnings,
     # and a saved Look that quietly left something behind is the failure this
-    # list was added to stop. The missing picture is the one exception — it
-    # already has its own, longer sentence a few lines up, and saying it twice
-    # would read like two different problems.
-    warnings.extend(o.sentence() for o in omissions if o.kind != "picture")
+    # list was added to stop.
+    warnings.extend(_omission_notes(omissions))
     return CaptureResult(
         preset=final,
         path=Path(out_dir),

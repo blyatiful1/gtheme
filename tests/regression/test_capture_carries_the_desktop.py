@@ -250,6 +250,157 @@ def test_a_wallpaper_named_like_a_file_gtheme_wrote_gets_a_name_of_its_own(
     assert (out / "files/w.png").read_text() == "not really a picture"
 
 
+# ── L3 again, one layer down: inside the files themselves ────────────────
+#
+# The scan that made captured *values* general never looked at the *contents*
+# of the files the capture bundles. magma ships a slideshow template that
+# renders {{ home }}/.local/share/backgrounds/magma/... nine times, so applying
+# it and then saving the desktop copied a file with the login name in it nine
+# times into a Look meant to be given away — and pointed the recipient at
+# folders they do not have. Same defect as L3, same fix, one layer down.
+
+
+SLIDESHOW = ".local/share/backgrounds/rice/slideshow.xml"
+
+
+def _slideshow(root: Path) -> str:
+    """A rendered slideshow, exactly as an apply would have left one behind."""
+    return (
+        "<background>\n"
+        f"  <file>{root}/.local/share/backgrounds/rice/day.png</file>\n"
+        f"  <file>{root}/.local/share/backgrounds/rice/night.png</file>\n"
+        "</background>\n"
+    )
+
+
+@mutating
+def test_a_bundled_file_that_names_this_home_folder_is_made_general(
+    backend, tmp_dest_root: Path, state_dir: Path, tmp_path: Path
+):
+    """The file's contents are scanned like a value, and the change is said."""
+    _owned("Some Look", _wrote(tmp_dest_root, SLIDESHOW, _slideshow(tmp_dest_root)))
+
+    out = tmp_path / "look"
+    result = _save(backend, out)
+
+    entry = result.preset.files[0]
+    assert entry.dest == f"~/{SLIDESHOW}"
+    assert entry.template, "the recipient's own home folder has to be filled in"
+    copied = (out / entry.src).read_text(encoding="utf-8")
+    assert str(tmp_dest_root) not in copied
+    assert copied.count("{{ home }}") == 2
+    assert str(tmp_dest_root) not in (out / "theme.toml").read_text(encoding="utf-8")
+    assert any("made general" in warning for warning in result.warnings), result.warnings
+
+
+@mutating
+def test_a_bundled_file_that_is_not_text_is_copied_untouched(
+    backend, tmp_dest_root: Path, state_dir: Path, tmp_path: Path
+):
+    """A picture has nothing to read, and templating one would truncate it."""
+    picture = tmp_dest_root / ".local/share/backgrounds/rice/w.png"
+    picture.parent.mkdir(parents=True)
+    picture.write_bytes(b"\x89PNG\r\n\x1a\n\xff\xfe not text")
+    _owned("Some Look", str(picture))
+
+    out = tmp_path / "look"
+    result = _save(backend, out)
+
+    entry = result.preset.files[0]
+    assert not entry.template
+    assert (out / entry.src).read_bytes() == b"\x89PNG\r\n\x1a\n\xff\xfe not text"
+
+
+@mutating
+def test_the_generalised_file_lands_on_the_other_computers_home_folder(
+    backend, tmp_dest_root: Path, state_dir: Path, tmp_path: Path, monkeypatch
+):
+    """The whole point, proved end to end: save here, apply as somebody else.
+
+    Rewriting the copy is only half a fix. The entry has to be marked
+    ``template`` as well, or the file arrives with ``{{ home }}`` written in it
+    literally — which is worse than the login name it replaced.
+    """
+    from gtheme.core import backends, placeholders
+    from gtheme.preset.compile import compile_preset
+
+    _owned("Some Look", _wrote(tmp_dest_root, SLIDESHOW, _slideshow(tmp_dest_root)))
+    out = tmp_path / "look"
+    _save(backend, out, keys=[])
+
+    theirs = tmp_path / "their-home"
+    theirs.mkdir()
+    monkeypatch.setenv("GTHEME_DEST_ROOT", str(theirs))
+    placeholders.clear_cache()
+    try:
+        with backends.use_backend(backend):
+            compiled = compile_preset(load(out).preset, out, dest_root=str(theirs))
+            assert not compiled.refusals, compiled.refusals
+            compiled.transaction.apply(restore_point=False)
+    finally:
+        placeholders.clear_cache()
+
+    landed = (theirs / SLIDESHOW).read_text(encoding="utf-8")
+    assert landed == _slideshow(theirs)
+    assert "{{" not in landed
+
+
+# ── a ledger claim that walks out of the home folder ─────────────────────
+
+
+@mutating
+def test_a_claim_that_walks_upwards_is_refused_and_named(
+    backend, tmp_dest_root: Path, state_dir: Path, tmp_path: Path
+):
+    """The ledger is a file of strings, and a string can say ``..``.
+
+    ``<home>/../../victim.txt`` is lexically under the home folder and names a
+    file that is not, so ``files/../../victim.txt`` was written as the place
+    inside the Look — and the copy landed beside the Look folder rather than in
+    it. Every other source path in the app is confined; this one was not.
+    """
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "victim.txt").write_text("not gtheme's\n", encoding="utf-8")
+    walked = str(tmp_dest_root / ".." / ".." / outside.name / "victim.txt")
+    _owned("Some Look", walked)
+
+    out = tmp_path / "looks" / "mine"
+    result = _save(backend, out)
+
+    assert result.preset.files == []
+    assert [(o.kind, o.what) for o in result.omissions if o.kind == "file"] == [
+        ("file", walked)
+    ]
+    assert not (out.parent / outside.name).exists(), "the copy escaped the Look folder"
+    assert list(out.parent.iterdir()) == [out]
+
+
+@mutating
+def test_a_claim_reached_through_a_shortcut_out_of_the_home_folder_is_refused(
+    backend, tmp_dest_root: Path, state_dir: Path, tmp_path: Path
+):
+    """H5's rule, in the direction nobody had asked: a Look must not siphon.
+
+    A claim under the home folder whose path runs through a shortcut pointing
+    away from it would read somebody's private file straight into a Look meant
+    to be given to a stranger.
+    """
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "id_ed25519").write_text("PRIVATE KEY\n", encoding="utf-8")
+    (tmp_dest_root / ".secrets").symlink_to(elsewhere)
+    _owned("Some Look", str(tmp_dest_root / ".secrets" / "id_ed25519"))
+
+    out = tmp_path / "look"
+    result = _save(backend, out)
+
+    assert result.preset.files == []
+    assert [o.kind for o in result.omissions if o.kind == "file"] == ["file"]
+    assert not (out / "files").exists()
+    assert "PRIVATE KEY" not in (out / "theme.toml").read_text(encoding="utf-8")
+
+
 # ── the colours travel too ───────────────────────────────────────────────
 
 
