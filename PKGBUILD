@@ -4,8 +4,17 @@
 # launcher entry, the store listing and the icons under its `.data/data/share`
 # tree, so `python -m installer` puts every one of them in the right place with
 # no custom code here (research/packaging.md §2, the waypaper precedent).
+#
+# THIS FILE BUILDS A RELEASE, AND THE v2.0.0 TAG IS NOT CUT YET: `makepkg`
+# fetches $url/archive/refs/tags/v2.0.0.tar.gz, which returns 404 today, so
+# this file cannot build anything until the tag exists (then: run updpkgsums
+# and replace the SKIP below). To build a checkout — which is what `git clone`
+# followed by `makepkg` actually means — use PKGBUILD-git beside this file.
 
 pkgname=gtheme
+# Must equal `__version__` in src/gtheme/__init__.py and the newest <release>
+# in data/*.metainfo.xml, or `pacman -Qi` and the About dialog name different
+# builds and no bug report can be pinned to one.
 pkgver=2.0.0
 pkgrel=1
 pkgdesc="Change how your GNOME desktop looks — safely, with one-click undo"
@@ -17,7 +26,6 @@ depends=(
   'python-gobject'
   'gtk4'
   'libadwaita'
-  'python-jinja2'
   'python-pydantic'
   'glib2'
   'dconf'

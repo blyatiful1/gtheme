@@ -1,0 +1,86 @@
+# Maintainer: blyatiful1 <https://github.com/blyatiful1>
+#
+# Arch package built from the checkout you are standing in, not from a release
+# tarball. This is the file the README's `git clone …` route means: the plain
+# PKGBUILD beside it downloads $url/archive/refs/tags/v$pkgver.tar.gz and would
+# build that instead of the revision you just cloned and are reading.
+#
+# Use it from inside the clone:
+#
+#   makepkg -p PKGBUILD-git -si
+#
+# `source=()` is deliberate — there is nothing to fetch, so every function
+# works in "$startdir", the clone itself. Everything else follows the plain
+# PKGBUILD: no meson, the wheel already carries the launcher entry, the store
+# listing and the icons under its `.data/data/share` tree (research/packaging.md
+# §2).
+
+pkgname=gtheme-git
+pkgver=2.0.0.r0.g0000000
+pkgrel=1
+pkgdesc="Change how your GNOME desktop looks — safely, with one-click undo (git checkout)"
+arch=('any')
+url="https://github.com/blyatiful1/gtheme"
+license=('MIT')
+depends=(
+  'python'
+  'python-gobject'
+  'gtk4'
+  'libadwaita'
+  'python-pydantic'
+  'glib2'
+  'dconf'
+)
+optdepends=(
+  'gnome-shell: the desktop gtheme changes'
+  'libsoup3: find and install add-ons from extensions.gnome.org'
+  'gnome-backgrounds: more wallpapers to choose from'
+)
+makedepends=('git' 'python-build' 'python-installer' 'python-wheel' 'python-hatchling')
+checkdepends=('python-pytest')
+provides=('gtheme')
+conflicts=('gtheme')
+source=()
+sha256sums=()
+
+pkgver() {
+  cd "$startdir"
+  local described
+  # Only v2 tags count. The repository still carries `v0.1.0` and `v1-final`
+  # from the CLI era, and describing against either would produce a package
+  # that pacman considers older than the tarball one.
+  if described=$(git describe --long --tags --abbrev=7 --match 'v2*' 2>/dev/null); then
+    printf '%s' "${described#v}" | sed 's/\([^-]*-g\)/r\1/; s/-/./g'
+  else
+    # No v2 tag is cut yet. The version the source declares plus the commit
+    # this was built from keeps the package name honest in the meantime.
+    printf '%s.r%s.g%s' \
+      "$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/gtheme/__init__.py)" \
+      "$(git rev-list --count HEAD)" \
+      "$(git rev-parse --short=7 HEAD)"
+  fi
+}
+
+build() {
+  cd "$startdir"
+  python -m build --wheel --no-isolation
+}
+
+check() {
+  cd "$startdir"
+  # The tiers that need a real desktop session are never run here: the
+  # graphical tier needs a display and the sandbox tier boots its own copy of
+  # GNOME. Both are local-only (docs/testing.md).
+  python -m pytest -q -m "not gtk and not sandbox"
+}
+
+package() {
+  cd "$startdir"
+  python -m installer --destdir="$pkgdir" dist/*.whl
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}
+
+# No post_install() hook, for the same reason the plain PKGBUILD has none:
+# gtheme ships no settings descriptions of its own for glib-compile-schemas to
+# build (research/packaging.md §4).

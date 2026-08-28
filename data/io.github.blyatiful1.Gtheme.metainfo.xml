@@ -11,6 +11,14 @@
 
   <name>Gtheme</name>
   <summary>Change how your desktop looks — safely</summary>
+  <!-- The app's own text is English only for now; the store listing's one-line
+       summary and the words people search by are not, because those are data
+       and need no translation machinery behind them. The wording matches
+       Comment[xx] and Keywords[xx] in the .desktop file. -->
+  <summary xml:lang="de">Das Aussehen des Desktops ändern — sicher</summary>
+  <summary xml:lang="pt_BR">Mude a aparência da sua área de trabalho — com segurança</summary>
+  <summary xml:lang="es">Cambia el aspecto de tu escritorio — de forma segura</summary>
+  <summary xml:lang="fr">Changez l'apparence de votre bureau — en toute sécurité</summary>
 
   <description>
     <p>
@@ -51,6 +59,22 @@
     <keyword>wallpaper</keyword>
     <keyword>appearance</keyword>
     <keyword>add-ons</keyword>
+    <keyword xml:lang="de">Thema</keyword>
+    <keyword xml:lang="de">Hintergrundbild</keyword>
+    <keyword xml:lang="de">Erscheinungsbild</keyword>
+    <keyword xml:lang="de">Erweiterungen</keyword>
+    <keyword xml:lang="pt_BR">tema</keyword>
+    <keyword xml:lang="pt_BR">papel de parede</keyword>
+    <keyword xml:lang="pt_BR">aparência</keyword>
+    <keyword xml:lang="pt_BR">extensões</keyword>
+    <keyword xml:lang="es">tema</keyword>
+    <keyword xml:lang="es">fondo de pantalla</keyword>
+    <keyword xml:lang="es">apariencia</keyword>
+    <keyword xml:lang="es">extensiones</keyword>
+    <keyword xml:lang="fr">thème</keyword>
+    <keyword xml:lang="fr">fond d'écran</keyword>
+    <keyword xml:lang="fr">apparence</keyword>
+    <keyword xml:lang="fr">extensions</keyword>
   </keywords>
 
   <screenshots>
@@ -109,6 +133,9 @@
   </requires>
 
   <releases>
+    <!-- This version must equal `__version__` in src/gtheme/__init__.py and
+         `pkgver` in PKGBUILD. It stays type="development" until the matching
+         v2.0.0 git tag is cut. -->
     <release version="2.0.0" type="development" date="2026-08-25">
       <description>
         <p>The v2 rebuild: gtheme becomes a graphical app.</p>

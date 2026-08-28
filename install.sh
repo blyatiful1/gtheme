@@ -49,8 +49,27 @@ oops() { echo "!! $*" >&2; }
 if [ "$DO_UNINSTALL" -eq 1 ]; then
   # Don't strand a changed desktop: without the launcher there is no way left
   # to put it back.
-  if [ -s "$STATE_DIR/v2/current.json" ] && [ "$DO_FORCE" -eq 0 ]; then
-    oops "your desktop is still using a look that gtheme applied."
+  #
+  # Two files answer "is anything of yours still in place", and both have to be
+  # asked. current.json names the whole look that is applied, and is written
+  # only when a whole look is applied. ownership.json — the ledger — lists
+  # every single thing gtheme is holding, look or no look; an untouched one
+  # reads as `{}`, so "has a quoted name in it" is the emptiness test.
+  #
+  # NOTE: today the ledger is written by the whole-look path only. The
+  # one-thing-at-a-time pages record their edits in it from a later change
+  # (audit finding H3); until that lands, a desktop changed only from those
+  # pages still reads as clean here.
+  STILL_APPLIED=0
+  if [ -s "$STATE_DIR/v2/current.json" ]; then
+    STILL_APPLIED=1
+  fi
+  if [ -s "$STATE_DIR/v2/ownership.json" ] \
+     && grep -q '"' "$STATE_DIR/v2/ownership.json" 2>/dev/null; then
+    STILL_APPLIED=1
+  fi
+  if [ "$STILL_APPLIED" -eq 1 ] && [ "$DO_FORCE" -eq 0 ]; then
+    oops "your desktop is still using something gtheme put there."
     oops "open gtheme, go to Undo & Restore Points, and put it back first."
     oops "(or remove the launcher anyway: ./install.sh --uninstall --force)"
     exit 1
@@ -121,35 +140,116 @@ if [ -n "$MISSING" ]; then
 fi
 say "desktop pieces: OK"
 
+# The pieces being *present* is not enough: gtheme's window is built out of
+# parts that only exist from GNOME 49 onwards, and the app refuses to open on
+# anything older (src/gtheme/window.py, MINIMUM_GNOME). Asking the pieces
+# themselves is better than asking the desktop: it answers on a machine that is
+# not logged in, and it is the exact thing that would be missing. This runs
+# before anything is created, so a computer that cannot run gtheme is left
+# exactly as it was found.
+ADW_VERSION=$(python3 - <<'PY' 2>/dev/null || true
+import gi
+gi.require_version("Adw", "1")
+from gi.repository import Adw
+print("%d %d" % (Adw.get_major_version(), Adw.get_minor_version()))
+PY
+)
+if [ -n "$ADW_VERSION" ]; then
+  # Anything below 1.9 — what GNOME 48 and older ship.
+  ADW_MAJOR=${ADW_VERSION%% *}
+  ADW_MINOR=${ADW_VERSION##* }
+  if [ "$ADW_MAJOR" -lt 1 ] || { [ "$ADW_MAJOR" -eq 1 ] && [ "$ADW_MINOR" -lt 9 ]; }; then
+    oops "your desktop is older than gtheme can work with."
+    say  "gtheme needs GNOME 49 or newer. On an older one it would list settings"
+    say  "your computer does not have, so it stops here instead. Nothing on this"
+    say  "computer has been changed."
+    say  "The fix is a newer release of your system:"
+    say  "Ubuntu/Debian/Mint:  Ubuntu 25.10 or newer; Debian 13 is still older"
+    say  "Fedora:              Fedora 43 or newer"
+    say  "Arch/CachyOS/Endeavour: sudo pacman -Syu brings you up to date"
+    exit 1
+  fi
+fi
+say "desktop version: OK"
+
 # --- 2. the private folder --------------------------------------------------
 if ! python3 -c 'import venv, ensurepip' >/dev/null 2>&1; then
   oops "your Python cannot make a private folder yet."
-  say  "Ubuntu/Debian/Mint keep that part separate — install it and run this again:"
-  say  "sudo apt install python3-venv"
+  say  "Install the missing part with the line for your system, then run this again:"
+  say  "Ubuntu/Debian/Mint:  sudo apt install python3-venv"
+  say  "Fedora:              sudo dnf install python3-pip"
+  say  "Arch/CachyOS/Endeavour: sudo pacman -S python-pip"
   exit 1
 fi
-if [ ! -x "$VENV/bin/python" ]; then
+
+make_private_folder() {
   say "making a private folder for gtheme at $VENV ..."
   # --system-site-packages is required, not a preference: the graphical pieces
   # checked above live in the system's Python and must stay visible in here.
   if ! python3 -m venv --system-site-packages "$VENV"; then
     oops "that folder could not be made."
-    say  "Ubuntu/Debian/Mint: sudo apt install python3-venv, then run this again."
+    say  "Install the missing part with the line for your system, then run this again:"
+    say  "Ubuntu/Debian/Mint:  sudo apt install python3-venv"
+    say  "Fedora:              sudo dnf install python3-pip"
+    say  "Arch/CachyOS/Endeavour: sudo pacman -S python-pip"
     say  "(a half-made folder can be cleared with: rm -rf $VENV)"
     exit 1
   fi
-else
-  say "private folder: already there"
-fi
+}
 
-say "getting the two small pieces gtheme needs from the internet ..."
+# A private folder that merely *exists* is not a private folder that works. It
+# is tied to one version of Python, so a system update that moves Python on
+# leaves it looking perfect and failing on every start — and it only sees the
+# graphical pieces if it was made with --system-site-packages. Both are asked
+# here, because the alternative is an install that ends in a broken app and a
+# message blaming the internet.
+VENV_VERDICT=missing
+if [ -x "$VENV/bin/python" ]; then
+  WANT_PY=$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')
+  HAVE_PY=$(sed -n 's/^version[_a-z]* *= *\([0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' \
+              "$VENV/pyvenv.cfg" 2>/dev/null | head -n 1)
+  if [ "$HAVE_PY" != "$WANT_PY" ]; then
+    VENV_VERDICT=old-python
+  elif ! "$VENV/bin/python" -c 'import gi' >/dev/null 2>&1; then
+    VENV_VERDICT=no-pieces
+  else
+    VENV_VERDICT=good
+  fi
+fi
+case "$VENV_VERDICT" in
+  good)
+    say "private folder: already there and still working"
+    ;;
+  old-python)
+    say "the private folder was built for Python $HAVE_PY and this computer now"
+    say "has $WANT_PY, so it cannot work any more. Making it again:"
+    rm -rf "$VENV"
+    make_private_folder
+    ;;
+  no-pieces)
+    say "the private folder cannot see this computer's desktop pieces, so gtheme"
+    say "could not open from it. Making it again:"
+    rm -rf "$VENV"
+    make_private_folder
+    ;;
+  *)
+    make_private_folder
+    ;;
+esac
+
+say "getting the one small piece gtheme needs from the internet ..."
 if ! "$VENV/bin/python" -m pip install --quiet --upgrade pip >/dev/null 2>&1; then
   say "(could not update the installer itself — carrying on)"
 fi
 if ! "$VENV/bin/python" -m pip install --quiet -e "$REPO"; then
   oops "that did not work."
-  say  "The usual reason is no internet connection. Check it and run this again."
-  say  "(if it keeps failing, clear the folder and retry: rm -rf $VENV)"
+  # The private folder itself was checked a few lines up, so the usual causes
+  # are outside this script by the time we get here — say both, and do not
+  # blame the connection for something else.
+  say  "The most common reason is no internet connection: check it, then run"
+  say  "this again."
+  say  "If you are online, clear the private folder and run this again:"
+  say  "rm -rf $VENV"
   exit 1
 fi
 say "gtheme itself: installed"

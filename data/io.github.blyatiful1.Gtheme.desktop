@@ -10,3 +10,27 @@ StartupNotify=true
 StartupWMClass=io.github.blyatiful1.Gtheme
 Categories=GNOME;GTK;Settings;DesktopSettings;
 Keywords=theme;wallpaper;background;icons;fonts;colours;colors;appearance;customize;customise;add-ons;extensions;dark mode;
+
+# The app itself is still English (there is no translation machinery yet — see
+# the requirements table in README.md). These four entries are the part that
+# works without one: the desktop searches Comment, GenericName and Keywords in
+# the user's own language, so someone who types "tema" or "fond d'écran" finds
+# gtheme in their applications list instead of finding nothing.
+#
+# Name is deliberately absent here: "Gtheme" is the app's name and is the same
+# word in every language. What a person actually types is in Keywords.
+GenericName[de]=Desktop-Anpassung
+Comment[de]=Das Aussehen des Desktops ändern — sicher
+Keywords[de]=Thema;Design;Erscheinungsbild;Hintergrundbild;Symbole;Schriftarten;Farben;Aussehen;anpassen;Erweiterungen;dunkler Modus;
+
+GenericName[pt_BR]=Personalização da área de trabalho
+Comment[pt_BR]=Mude a aparência da sua área de trabalho — com segurança
+Keywords[pt_BR]=tema;aparência;papel de parede;plano de fundo;ícones;fontes;cores;personalizar;extensões;modo escuro;
+
+GenericName[es]=Personalización del escritorio
+Comment[es]=Cambia el aspecto de tu escritorio — de forma segura
+Keywords[es]=tema;apariencia;fondo de pantalla;iconos;fuentes;colores;personalizar;extensiones;modo oscuro;
+
+GenericName[fr]=Personnalisation du bureau
+Comment[fr]=Changez l'apparence de votre bureau — en toute sécurité
+Keywords[fr]=thème;apparence;fond d'écran;icônes;polices;couleurs;personnaliser;extensions;mode sombre;
