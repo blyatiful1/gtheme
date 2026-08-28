@@ -27,18 +27,25 @@ jobs:
           python-version: "3.13"
 
       # Same reason as ci.yml: core/ imports Gio, so the unit tier needs the
-      # GLib bindings even though no window is ever opened here.
+      # GLib bindings even though no window is ever opened here. dbus and the
+      # dconf pieces are what the `dconf` tier needs — a private bus and a
+      # dconf-service on it, nothing more.
       - name: Install GLib bindings
         run: |
           sudo apt-get update
           sudo apt-get install -y python3-gi gir1.2-glib-2.0 libglib2.0-bin \
+                                  dbus dconf-cli dconf-gsettings-backend \
                                   desktop-file-utils appstream
 
       - name: Test before shipping
+        # dbus-run-session, exactly as verify.sh and ci.yml do it (M16): a
+        # runner has no session bus, and the settings phase decides whether to
+        # run from DBUS_SESSION_BUS_ADDRESS. Shipping a tag is the last place
+        # that should be deciding it by accident.
         run: |
           python -m venv --system-site-packages .venv
           .venv/bin/python -m pip install -e '.[dev]'
-          .venv/bin/python -m pytest -q -m "not gtk and not sandbox"
+          dbus-run-session -- .venv/bin/python -m pytest -q -m "not gtk and not sandbox"
 
       - name: Check the launcher entry and the store listing
         run: |
