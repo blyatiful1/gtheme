@@ -60,6 +60,7 @@ __all__ = [
     "DesktopVerdict",
     "Window",
     "check_desktop",
+    "is_text_editing",
 ]
 
 
@@ -88,6 +89,10 @@ COPY: dict[str, str] = {
     # -- shared outcomes
     "page-broken": "This page could not be opened.",
     "undo": "Undo",
+    "undo-tooltip": "Go back to “{moment}”",
+    "undo-unavailable": (
+        "Undo could not be opened. Open Undo & Restore Points from the list on the left."
+    ),
     "undo-nothing": "There is no saved moment to go back to yet.",
     "undo-done": "Put back how it was.",
     "undo-failed": "gtheme could not put everything back. Open Undo & Restore Points.",
@@ -253,6 +258,10 @@ class Window(Adw.ApplicationWindow):
         # precisely the audience that screen was written for.
         self.sidebar: Adw.Sidebar | None = None
         self.split: Adw.NavigationSplitView | None = None
+        #: The header's way back. Built with the header, not by whichever page
+        #: happens to be opened first (review-report L6). None on the "not
+        #: here" screen, which has nothing to undo.
+        self.undo_button: Gtk.Button | None = None
 
         self._root = Gtk.Stack()
         if self.verdict.ok:
@@ -318,6 +327,8 @@ class Window(Adw.ApplicationWindow):
         sidebar_view.add_top_bar(sidebar_bar)
 
         self.header = Adw.HeaderBar()
+        self.undo_button = self._build_undo_button()
+        self.header.pack_start(self.undo_button)
         self.header.pack_end(
             Gtk.Button(
                 icon_name="system-search-symbolic",
@@ -335,6 +346,53 @@ class Window(Adw.ApplicationWindow):
             sidebar=Adw.NavigationPage(title="Gtheme", child=sidebar_view),
             content=self.content_page,
         )
+
+    def _build_undo_button(self) -> Gtk.Button:
+        """The header's way back: an icon **and** the word, built by the window.
+
+        Two defects, one button (review-report L6, persona-report §2.8). It
+        used to be built by the Home page and packed as a side effect of that
+        page happening to be opened — so somebody whose last session ended on
+        Wallpaper reopened gtheme with no undo in the header at all, for the
+        whole session. And it was built as ``Gtk.Button(label=…,
+        icon_name=…)``, where the icon silently replaces the label: every
+        screenshot shows a bare back-arrow in the position a Windows user reads
+        as "Back". ``Adw.ButtonContent`` is the widget that shows both, and the
+        window builds its own header.
+        """
+        button = Gtk.Button(has_tooltip=True)
+        button.set_child(
+            Adw.ButtonContent(icon_name="edit-undo-symbolic", label=COPY["undo-button"])
+        )
+        # Not ``action_name``: the shortcut has to let a text box being typed
+        # in keep its own Ctrl+Z (see :meth:`undo_shortcut`), and a click on
+        # this button is never ambiguous in that way.
+        button.connect("clicked", lambda *_a: self.undo_last_change())
+        button.connect("query-tooltip", self._on_undo_tooltip)
+        return button
+
+    def _on_undo_tooltip(self, _button: Gtk.Widget, _x: int, _y: int, _kb: bool, tooltip: Any) -> bool:
+        """Name the moment, and only when somebody is actually looking.
+
+        Read on hover rather than kept up to date: the answer costs a directory
+        listing, and computing it at startup or after every change would spend
+        that on the overwhelming majority of sessions where nobody ever points
+        at this button.
+        """
+        tooltip.set_text(self.undo_tooltip_text())
+        return True
+
+    def undo_tooltip_text(self) -> str:
+        """"Go back to <the moment>", or the honest sentence when there is none."""
+        from .core import restorepoints
+
+        try:
+            points = [p for p in restorepoints.list_restore_points() if p.kind != "pristine"]
+        except Exception:  # noqa: BLE001 - a tooltip is never worth an error
+            points = []
+        if not points:
+            return COPY["undo-nothing"]
+        return COPY["undo-tooltip"].format(moment=points[0].label)
 
     def _menu_model(self) -> Gio.Menu:
         menu = Gio.Menu()
@@ -380,7 +438,7 @@ class Window(Adw.ApplicationWindow):
         shows the key beside it because both name the same action.
         """
         self._action("search", lambda *_a: self.open_search())
-        self._action("undo", lambda *_a: self.undo_last_change())
+        self._action("undo", lambda *_a: self.undo_shortcut())
         self._action("onboarding", lambda *_a: onboarding.show_again(self))
 
         application = self.get_application()
@@ -454,7 +512,6 @@ class Window(Adw.ApplicationWindow):
         else:
             if page.id == "home":
                 self._home = widget
-                self._pack_undo_button(widget)
         self._pages[page.id] = widget
         return widget
 
@@ -475,16 +532,6 @@ class Window(Adw.ApplicationWindow):
             for name, value in available.items()
             if name in parameters and parameters[name].kind is not inspect.Parameter.POSITIONAL_ONLY
         }
-
-    def _pack_undo_button(self, home: Any) -> None:
-        """Put the Home page's undo button in the header bar, once."""
-        from .ui.pages import home as home_page
-
-        if not isinstance(home, home_page.HomePage):
-            return
-        button = home_page.header_button(home)
-        button.set_tooltip_text(COPY["undo-button"])
-        self.header.pack_start(button)
 
     def _placeholder(self, page: registry.PageDescriptor, exc: Exception | None = None) -> Gtk.Widget:
         """The stand-in shown for a page whose module is not written yet.
@@ -550,7 +597,11 @@ class Window(Adw.ApplicationWindow):
         rather than a rule five pages have to remember.
         """
         kwargs.setdefault("timeout", 8 if undo_point else 5)
-        toast = Adw.Toast(title=text, **kwargs)
+        # ``Adw.Toast:title`` renders Pango markup, and what lands here is
+        # routinely a Look's title or a name somebody typed: an ampersand made
+        # the whole confirmation render as nothing, and markup in a title could
+        # make it say something else entirely (review-report M15).
+        toast = Adw.Toast(title=ui_search.escape_markup(text), **kwargs)
         if undo_point:
             toast.set_button_label(COPY["undo"])
             toast.connect("button-clicked", lambda _t, p=undo_point: self.undo_point(p))
@@ -604,15 +655,55 @@ class Window(Adw.ApplicationWindow):
 
     # -- undo --------------------------------------------------------------
 
-    def undo_last_change(self) -> None:
-        """The header button and Ctrl+Z. Goes back to the most recent moment."""
-        from .core import restorepoints
+    def undo_shortcut(self) -> bool:
+        """Ctrl+Z, and the menu entry beside it.
 
-        points = [p for p in restorepoints.list_restore_points() if p.kind != "pristine"]
-        if not points:
-            self.toast(COPY["undo-nothing"])
+        A window-wide accelerator over four text entries had no guard on it: a
+        person editing the name of a Look they are saving pressed the undo they
+        have pressed in every other program of their life and got their whole
+        desktop put back instead of their last word (persona-report §2.8). A
+        text box that is being typed in keeps its own undo — and gets it
+        forwarded, so the key does what it was pressed for rather than nothing.
+
+        Returns:
+            True when this was the desktop's undo, False when the keystroke
+            belonged to whatever has focus.
+        """
+        focus = self.get_focus()
+        if is_text_editing(focus):
+            _forward_text_undo(focus)
+            return False
+        self.undo_last_change()
+        return True
+
+    def undo_last_change(self) -> None:
+        """The header button, the menu entry and Ctrl+Z.
+
+        Goes through the Undo page's own confirmation, which names the moment
+        and lists what going back would change. It used to apply the newest
+        restore point outright — no preview, no confirmation, from anywhere in
+        the app — while the identical action started from the Undo page asked
+        first (persona-report §2.8). One of the two was wrong, and it was not
+        the one with the dialog.
+        """
+        page = self._undo_page()
+        confirm = getattr(page, "confirm_undo_last", None)
+        if not callable(confirm):
+            self.toast(COPY["undo-unavailable"])
             return
-        self.undo_point(points[0].id)
+        confirm(self)
+
+    def _undo_page(self) -> Any:
+        """The Undo & Restore Points page, built if this session never opened it.
+
+        Built rather than shown: the confirmation is a dialog over whatever the
+        person is looking at, and yanking them to another page before they have
+        agreed to anything answers a question they have not been asked yet.
+        """
+        try:
+            return self._page_widget(registry.get("restore"))
+        except Exception:  # noqa: BLE001 - a page that will not build is said out loud
+            return None
 
     def undo_point(self, point_id: str) -> None:
         """Go back to one saved moment, narrating it on the shared runner."""
@@ -752,6 +843,38 @@ class Window(Adw.ApplicationWindow):
 # --------------------------------------------------------------------------
 # the parts with no window in them
 # --------------------------------------------------------------------------
+
+
+def is_text_editing(widget: Any) -> bool:
+    """Is this widget a text box somebody could be typing in?
+
+    The question Ctrl+Z has to ask before it undoes a desktop. ``Gtk.Editable``
+    covers every entry in the app — the search box, the Look name, the two
+    filters — because ``Gtk.Text`` (the widget focus actually lands on inside a
+    ``Gtk.Entry``) implements it; ``Gtk.TextView`` is checked separately
+    because it does not. A box that cannot be edited is not being typed in and
+    has no undo of its own to protect.
+    """
+    if widget is None:
+        return False
+    if isinstance(widget, Gtk.TextView):
+        return bool(widget.get_editable())
+    if isinstance(widget, Gtk.Editable):
+        return bool(widget.get_editable())
+    return False
+
+
+def _forward_text_undo(widget: Any) -> None:
+    """Give the keystroke to the text box it was meant for.
+
+    ``text.undo`` is the action GTK's own entries and text views install for
+    exactly this key. Handing it over is the difference between "your undo went
+    somewhere else" and "your undo did nothing".
+    """
+    try:
+        widget.activate_action("text.undo", None)
+    except Exception:  # noqa: BLE001 - a widget without one keeps its own behaviour
+        return
 
 
 def _narration(args: Iterable[Any]) -> str:

@@ -40,14 +40,19 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw, GLib, Gtk  # noqa: E402
+from gi.repository import Adw, GLib, Gtk, Pango  # noqa: E402
 
 from ...core import restorepoints  # noqa: E402
 from ...core.backends import get_backend  # noqa: E402
 from ...core.gvariant import parse_string_list  # noqa: E402
 from ...core.transaction import (  # noqa: E402
     ENABLED_EXTENSIONS_KEY,
+    Diff,
+    ExtensionEnable,
     ExtensionInstall,
+    FileLink,
+    FileRemove,
+    FileWrite,
     Progress,
     Transaction,
     TransactionError,
@@ -68,6 +73,7 @@ from ...preset.loader import LoadResult, load_all, user_themes_dir  # noqa: E402
 from ...preset.model import Component  # noqa: E402
 from ..applyrunner import ApplyRunner  # noqa: E402
 from ..preview import ASPECT_RATIO, build_preview  # noqa: E402
+from ..search import escape_markup  # noqa: E402
 from ..widgets.rows import key_for  # noqa: E402
 
 __all__ = [
@@ -80,9 +86,11 @@ __all__ = [
     "LookTile",
     "LooksPage",
     "TileFrame",
+    "addon_names",
     "build",
     "capture_keys",
     "component_for_key",
+    "detail_lines",
     "plan_apply",
     "slugify",
     "tiles_from_results",
@@ -156,6 +164,19 @@ COPY: dict[str, str] = {
     "cannot-preview": (
         "gtheme could not work out what this Look would change on this computer."
     ),
+    # -- what the change really is, under the everyday summary
+    "details-title": "Show exactly what changes",
+    "details-note": (
+        "The list above is this change in everyday words. This is the same change "
+        "written the way your computer stores it."
+    ),
+    "details-file-add": "added",
+    "details-file-replace": "replaces what is there now",
+    "details-file-remove": "deleted",
+    "details-file-link": "becomes a shortcut to {target}",
+    "details-nothing": "nothing yet",
+    "details-addon-on": "turned on",
+    "details-addon-get": "not on this computer yet",
     # -- applying
     "working": "Getting your desktop ready…",
     "applied": "{title} is on now.",
@@ -166,8 +187,22 @@ COPY: dict[str, str] = {
     "failed-body": "Your desktop is exactly as it was.",
     "half-heading": "Something went wrong part way through",
     "half-body": (
-        "gtheme could not put everything back on its own. Open Undo & Restore Points "
-        "and go back to a saved moment."
+        "gtheme could not put everything back on its own. Go back to the moment "
+        "gtheme saved just before this, or open Undo & Restore Points."
+    ),
+    "failure-undo": "Put my desktop back",
+    # -- what gtheme could not do, said after the Look is on
+    "after-heading": "What gtheme could not do",
+    "snapshot-partial": (
+        "gtheme saved how your desktop looked before this, but not all of it. "
+        "Undo puts back everything it did save. These were left out:"
+    ),
+    "cleanup-partial": (
+        "Parts of the Look you had on before could not be changed back:"
+    ),
+    "cleanup-kept": "Those things are still on your desktop. Undo & Restore Points can put them back.",
+    "cleanup-dead": (
+        "gtheme no longer has a saved copy of those, so it cannot put them back."
     ),
     # -- saving your own
     "save": "Save how my desktop looks now",
@@ -331,6 +366,11 @@ class ApplyPlan:
             shape ``ego.install.ExtensionInstaller.plan_for_look`` takes, so
             the "get the missing ones" button hands this straight over instead
             of rebuilding it from something that has already been worked out.
+        details: the same change, one line per thing that moves, with the real
+            destination or the real value on it. The second layer of the
+            preview (persona-report §2.4): :attr:`lines` stays the headline in
+            everyday words, and this is what the "Show exactly what changes"
+            expander holds for anyone who wants to check.
         transaction: what to apply. None when the Look could not be compiled.
         problem: why there is nothing to apply, when there is nothing.
     """
@@ -340,6 +380,7 @@ class ApplyPlan:
     warnings: list[str] = field(default_factory=list)
     missing_addons: int = 0
     missing: list[tuple[str, str, tuple[str, ...]]] = field(default_factory=list)
+    details: list[str] = field(default_factory=list)
     transaction: Transaction | None = None
     problem: str | None = None
 
@@ -372,11 +413,91 @@ class ApplyPlan:
         return "\n\n".join(parts)
 
 
+def addon_names(uuids: Iterable[str]) -> dict[str, str]:
+    """What each add-on calls itself, read from this computer and nothing else.
+
+    The preview has to name add-ons (persona-report §2.4) and must do it with
+    no network: a dialog that cannot be shown offline is a dialog that is not
+    shown when somebody's connection is down. Every add-on that is already
+    here has its own name on disk, so that is where the name comes from; one
+    that is not here yet has only its identifier, and the expander shows that
+    rather than inventing a title for it.
+    """
+    from ...system.extscan import default_extension_roots, scan_extensions
+
+    wanted = set(uuids)
+    if not wanted:
+        return {}
+    try:
+        entries = scan_extensions(default_extension_roots())
+    except OSError:  # pragma: no cover - a directory that will not be read
+        return {}
+    return {entry.uuid: entry.name for entry in entries if entry.uuid in wanted}
+
+
+def detail_lines(diff: Diff, *, names: Mapping[str, str] | None = None) -> list[str]:
+    """Every change in the plan, one line each, with the real thing named.
+
+    The honest second layer of the preview. ``Diff.to_novice_lines`` collapses
+    twenty files into "20 files" on purpose — that is the right headline for
+    somebody who has never heard of a config file — but it was also the *only*
+    thing the app ever showed, so "Terminal" could stand for rewriting five
+    files under the user's own home and nothing said which (persona-report
+    §2.4). ``DiffEntry`` has carried ``before`` and ``after`` since the first
+    contract; this renders them.
+
+    Args:
+        diff: what the transaction plans to do.
+        names: add-on identifier to the name it calls itself, from
+            :func:`addon_names`. Missing ones are shown by identifier.
+
+    Returns:
+        One line per real change, in the order the engine will carry them out.
+    """
+    known = dict(names or {})
+    lines: list[str] = []
+    for entry in diff.changes:
+        op = entry.op
+        if isinstance(op, FileWrite):
+            state = COPY["details-file-replace"] if entry.before else COPY["details-file-add"]
+            lines.append(f"{op.dest} — {state}")
+        elif isinstance(op, FileRemove):
+            lines.append(f"{op.dest} — {COPY['details-file-remove']}")
+        elif isinstance(op, FileLink):
+            lines.append(f"{op.dest} — {COPY['details-file-link'].format(target=op.target)}")
+        elif isinstance(op, ExtensionEnable | ExtensionInstall):
+            state = (
+                COPY["details-addon-get"]
+                if isinstance(op, ExtensionInstall)
+                else COPY["details-addon-on"]
+            )
+            name = known.get(op.uuid)
+            lines.append(f"{name} ({op.uuid}) — {state}" if name else f"{op.uuid} — {state}")
+        else:
+            before = entry.before if entry.before is not None else COPY["details-nothing"]
+            after = entry.after if entry.after is not None else COPY["details-nothing"]
+            lines.append(f"{_plain_key(op.key)}: {before} → {after}")
+    return lines
+
+
+def _plain_key(key: str) -> str:
+    """A setting's name without the part that says how it is stored.
+
+    ``gsettings:org.gnome.desktop.interface icon-theme`` is two facts, and only
+    the second one is about the user's desktop. The first names the machinery,
+    which is a word this app does not say (``ui.jargon``), so it is dropped
+    here rather than shown and then explained.
+    """
+    scheme, sep, rest = key.partition(":")
+    return rest if sep and not scheme.startswith("/") else key
+
+
 def plan_apply(
     tile: LookTile,
     *,
     installed: Sequence[str] | None = None,
     dest_root: str | None = None,
+    shell_version: str | None = None,
 ) -> ApplyPlan:
     """Compile a Look and work out what applying it would change.
 
@@ -384,6 +505,17 @@ def plan_apply(
     validate, a settings store that cannot be read — is something the dialog has
     to be able to say out loud, so it comes back as ``problem`` rather than as
     an exception thrown at a click handler.
+
+    Args:
+        tile: the Look, as the grid holds it.
+        installed: the add-ons on this machine. None reads them.
+        dest_root: passed to the compiler; the tests' seam.
+        shell_version: what this desktop calls itself. The compiler's
+            ``min_shell`` warning is computed from it, and a caller that does
+            not pass it gets no warning — which is why the page reads it from
+            the window instead of leaving it out (review-report L8: the engine
+            half landed in Wave A and nothing ever handed it a version, so a
+            Look made for a newer GNOME still applied in silence).
     """
     result = tile.result
     if result is None or result.preset is None:
@@ -396,6 +528,7 @@ def plan_apply(
             tile.directory,
             dest_root=dest_root,
             installed_extensions=present,
+            shell_version=shell_version,
         )
     except Exception as exc:  # noqa: BLE001 - a bad Look must not kill the page
         return ApplyPlan(title=tile.title, problem=f"{COPY['cannot-preview']}\n\n{exc}")
@@ -416,12 +549,18 @@ def plan_apply(
             problem=f"{COPY['cannot-preview']}\n\n{exc}",
         )
 
+    uuids = [
+        op.uuid
+        for op in compiled.transaction.ops
+        if isinstance(op, ExtensionEnable | ExtensionInstall)
+    ]
     return ApplyPlan(
         title=tile.title,
         lines=diff.to_novice_lines(),
         warnings=list(compiled.warnings),
         missing_addons=len(missing),
         missing=missing,
+        details=detail_lines(diff, names=addon_names(uuids)),
         transaction=compiled.transaction,
     )
 
@@ -820,6 +959,51 @@ def _tile_description(text: str) -> Gtk.Widget:
     return description
 
 
+def _details_widget(lines: Sequence[str]) -> Gtk.Widget:
+    """The "Show exactly what changes" expander, closed until it is asked for.
+
+    Closed, because the headline is what a first-time user needs and a wall of
+    destinations under it would bury the one sentence that matters. Present,
+    because "nothing is applied that you have not seen" is the page's first
+    rule and a count is not a sight of it.
+
+    A plain ``Gtk.Label`` rather than a row list: this is a body of text a
+    person may want to read, select and paste into a question, and it must not
+    render markup — a Look's own file names are not this app's words.
+    """
+    body = Gtk.Label(
+        label="\n".join(lines),
+        xalign=0,
+        wrap=True,
+        wrap_mode=Pango.WrapMode.WORD_CHAR,
+        selectable=True,
+        margin_top=6,
+        margin_start=6,
+        margin_end=6,
+    )
+    body.add_css_class("caption")
+    body.add_css_class("monospace")
+
+    note = Gtk.Label(label=COPY["details-note"], xalign=0, wrap=True, margin_top=6)
+    note.add_css_class("dimmed")
+    note.add_css_class("caption")
+
+    inside = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+    inside.append(note)
+    inside.append(
+        Gtk.ScrolledWindow(
+            child=body,
+            hscrollbar_policy=Gtk.PolicyType.NEVER,
+            max_content_height=260,
+            propagate_natural_height=True,
+        )
+    )
+
+    expander = Gtk.Expander(label=COPY["details-title"], expanded=False, margin_top=6)
+    expander.set_child(inside)
+    return expander
+
+
 # --------------------------------------------------------------------------
 # the page
 # --------------------------------------------------------------------------
@@ -1056,7 +1240,7 @@ class LooksPage(Gtk.Box):
         if tile.broken:
             self._show_problem(tile)
             return
-        plan = plan_apply(tile)
+        plan = plan_apply(tile, shell_version=self._shell_version())
         self._show_preview(tile, plan)
 
     def _show_problem(self, tile: LookTile) -> None:
@@ -1067,6 +1251,8 @@ class LooksPage(Gtk.Box):
 
     def _show_preview(self, tile: LookTile, plan: ApplyPlan) -> None:
         dialog = Adw.AlertDialog(heading=tile.title, body=plan.body(), prefer_wide_layout=True)
+        if plan.details:
+            dialog.set_extra_child(_details_widget(plan.details))
         dialog.add_response("cancel", COPY["cancel"])
         if plan.missing_addons:
             dialog.add_response("addons", COPY["get-addons"])
@@ -1092,6 +1278,13 @@ class LooksPage(Gtk.Box):
 
     def _apply(self, tile: LookTile, transaction: Transaction) -> None:
         """Apply a Look on the shared runner, narrating while it happens."""
+        # Which saved moment was the newest before any of this started. The
+        # engine reports the moment it took only on the success path, and the
+        # failure dialog is exactly where a way back is worth offering — so
+        # "did a new moment appear" is what tells them apart, and it is read
+        # here rather than after the failure alone, when an older moment would
+        # look like this apply's own.
+        before = _newest_point_id()
 
         def work(narrate: Any) -> Any:
             def report(_stage: Progress, text: str) -> None:
@@ -1105,20 +1298,71 @@ class LooksPage(Gtk.Box):
             point = getattr(outcome, "restore_point", None)
             self._toast(COPY["applied"].format(title=tile.title), undo_point=point)
             self._changed()
+            self._report_leftovers(outcome)
 
         def failed(error: Exception) -> None:
             if not self._alive:
                 return
             if not isinstance(error, TransactionError):
-                error = TransactionError(str(error), rolled_back=True)
+                # An unknown failure is an unknown desktop state. This wrapper
+                # used to claim ``rolled_back=True``, and the only failures
+                # that reach it as something other than a TransactionError are
+                # the ones that did *not* unwind — so the app said "Nothing was
+                # changed. Your desktop is exactly as it was." about precisely
+                # the half-applied case, and the honest wording written for it
+                # could never be reached (review-report H2).
+                error = TransactionError(str(error), rolled_back=False)
             heading, body = failure_text(error)
             dialog = Adw.AlertDialog(heading=heading, body=body)
             dialog.add_response("close", COPY["close"])
+            # The moment before this apply is the thing that answers "what do I
+            # do now", so it is offered here instead of being described as a
+            # page the frightened person has to go and find.
+            point = _newest_point_id()
+            if point is not None and point != before:
+                dialog.add_response("undo", COPY["failure-undo"])
+                dialog.set_response_appearance("undo", Adw.ResponseAppearance.SUGGESTED)
+                dialog.set_default_response("undo")
+                dialog.connect(
+                    "response",
+                    lambda _d, answer, p=point: self._undo(p) if answer == "undo" else None,
+                )
+            dialog.set_close_response("close")
             dialog.present(self)
 
         self._runner().run(
             work, heading=tile.title, starting=COPY["working"], on_done=done, on_failed=failed
         )
+
+    def _report_leftovers(self, outcome: Any) -> None:
+        """Say what an otherwise successful apply could not do.
+
+        Two things the engine now reports and nothing showed. A restore point
+        that could only be taken in part means Undo will put back less than the
+        person was promised, and the tidy-up after the Look that was on before
+        can leave parts of it behind (review-report M1, persona-report §2.5).
+        Both are quiet by nature — the Look went on, the toast says so — which
+        is exactly why they are said out loud here.
+        """
+        sections: list[str] = []
+        snapshot = [str(text) for text in getattr(outcome, "restore_warnings", []) or []]
+        if snapshot:
+            sections.append(
+                COPY["snapshot-partial"] + "\n" + "\n".join(f"• {text}" for text in snapshot)
+            )
+        leftovers = [str(text) for text in getattr(outcome, "cleanup_warnings", []) or []]
+        if leftovers:
+            part = COPY["cleanup-partial"] + "\n" + "\n".join(f"• {text}" for text in leftovers)
+            if getattr(outcome, "cleanup_kept", 0):
+                part = f"{part}\n\n{COPY['cleanup-kept']}"
+            if getattr(outcome, "cleanup_dead", 0):
+                part = f"{part}\n\n{COPY['cleanup-dead']}"
+            sections.append(part)
+        if not sections:
+            return
+        dialog = Adw.AlertDialog(heading=COPY["after-heading"], body="\n\n".join(sections))
+        dialog.add_response("close", COPY["close"])
+        dialog.present(self)
 
     # -- the add-ons a Look wants and this computer does not have ----------
 
@@ -1170,15 +1414,28 @@ class LooksPage(Gtk.Box):
             on_failed=failed,
         )
 
+    def _shell_version(self) -> str | None:
+        """What this desktop calls itself, or None when it will not say.
+
+        One reader, because two of them drift: the add-on batch needs it to
+        pick a build, and the preview needs it for the ``min_shell`` warning
+        (review-report L8). None means "not measured", and every caller treats
+        that as a reason to claim nothing rather than to guess.
+        """
+        shell = getattr(self._window, "shell", None)
+        if shell is None:
+            return None
+        try:
+            return shell.proxy.shell_version() or None
+        except Exception:  # noqa: BLE001 - the desktop answered nothing useful
+            return None
+
     def _addon_batch(self, label: str) -> AddonBatch | None:
         """The batch installer, or None when there is no desktop to add to."""
         shell = getattr(self._window, "shell", None)
         if shell is None:
             return None
-        try:
-            version = shell.proxy.shell_version() or ""
-        except Exception:  # noqa: BLE001 - the desktop answered nothing useful
-            version = ""
+        version = self._shell_version() or ""
         installer = ExtensionInstaller(shell, self._addon_client(version))
         return AddonBatch(installer, installer.client, shell_version=version, label=label)
 
@@ -1213,8 +1470,16 @@ class LooksPage(Gtk.Box):
         def done(result: Any) -> None:
             if not self._alive:
                 return
-            warnings = list(getattr(result, "warnings", []))
-            self._toast(COPY["undo-failed"] if warnings else COPY["undone"])
+            # The same test the other two undo paths use (``window.py`` and the
+            # Undo page). ``warnings`` is filled on the *success* path too —
+            # from the settings a saved moment covers that this desktop no
+            # longer has — so warnings alone said "gtheme could not put
+            # everything back" about a restore that put everything back
+            # (review-report M6). What did not finish is a restore with
+            # nothing written: no transaction.
+            warnings = list(getattr(result, "warnings", []) or [])
+            failed = bool(warnings) and getattr(result, "transaction", None) is None
+            self._toast(COPY["undo-failed"] if failed else COPY["undone"])
             self._changed()
 
         self._runner().run(
@@ -1487,7 +1752,12 @@ class LooksPage(Gtk.Box):
         self._prefs.mark_banner_seen(BANNER_ID)
 
     def _toast(self, text: str, *, undo_point: str | None = None) -> None:
-        toast = Adw.Toast(title=text, timeout=8)
+        # ``Adw.Toast:title`` renders Pango markup. A Look is named by whoever
+        # wrote it, so "Black & Gold" made the one confirmation that a Look was
+        # applied render as nothing at all, and a title that is markup could
+        # make it say something else entirely (review-report M15). The rest of
+        # the app already escapes third-party names; the toasts were the miss.
+        toast = Adw.Toast(title=escape_markup(text), timeout=8)
         if undo_point:
             toast.set_button_label(COPY["undo"])
             toast.connect("button-clicked", lambda _toast, p=undo_point: self._undo(p))
@@ -1522,6 +1792,22 @@ class LooksPage(Gtk.Box):
             after()
         else:
             self.reload()
+
+
+def _newest_point_id() -> str | None:
+    """The most recent saved moment that is not "Before gtheme", if there is one.
+
+    Never raises: this is only ever used to decide whether a *better* answer
+    than "Close" can be offered on a failure dialog, and a state directory that
+    cannot be read is a reason to offer less, not to lose the dialog.
+    """
+    try:
+        points = [
+            point for point in restorepoints.list_restore_points() if point.kind != "pristine"
+        ]
+    except Exception:  # noqa: BLE001 - no saved moments readable, no offer to make
+        return None
+    return points[0].id if points else None
 
 
 def _first_sentence(args: Iterable[Any]) -> str:

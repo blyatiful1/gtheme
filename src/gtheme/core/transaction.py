@@ -38,7 +38,7 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from . import ledger as ledger_store
 from . import placeholders
@@ -424,6 +424,21 @@ class TransactionError(Exception):
 class DiffEntry:
     """One line of a planned change, in both machine and human form.
 
+    **The contract, amended.** ``summary`` is still never a key name: it is the
+    novice line, and "Wallpaper" is what the person who has never heard of a
+    settings key needs to read. What the original wording was taken to mean —
+    that the app never shows the real key or the real destination *anywhere* —
+    was never the promise, and holding to it cost the app its own first rule:
+    "nothing is applied that you have not seen first" was satisfied by the
+    words "Terminal" and "20 files", and ``before``/``after`` were carried
+    through every plan and rendered by nothing (persona-report §2.4). So there
+    are deliberately two layers. ``summary`` is the headline and stays in the
+    user's words; ``before`` and ``after`` are the machine's own values, and a
+    caller may show them. The Looks page does, in a collapsed expander headed
+    "Show exactly what changes" that nobody has to open. A second, honest
+    layer behind one click is not a novice-first failure; a count with nothing
+    behind it is.
+
     Args:
         op: the operation this describes.
         component: closed-registry component name, for grouping.
@@ -514,6 +529,13 @@ class TransactionResult:
     applied: list[Op] = field(default_factory=list)
     skipped: list[tuple[Op, str]] = field(default_factory=list)
     restore_point: str | None = None
+    #: What the restore point could not cover. A moment can be saved in part —
+    #: one file unreadable, one setting the desktop would not report — and the
+    #: point records that in its own warnings. They were read and dropped on
+    #: the floor here (persona-report §2.5), so "you can put it back with one
+    #: click" was said with the same confidence over a snapshot with holes in
+    #: it. The UI shows these after the change lands.
+    restore_warnings: list[str] = field(default_factory=list)
     #: Sentences about the previous Look that could not be changed back.
     cleanup_warnings: list[str] = field(default_factory=list)
     #: How many of the previous Look's things are still on the desktop and
@@ -1114,7 +1136,7 @@ class Transaction:
 
         report(Progress.SNAPSHOTTING, "Saving how things look right now")
         if restore_point:
-            result.restore_point = self._capture_restore_point(
+            point = self._capture_restore_point(
                 diff,
                 backend,
                 dests,
@@ -1122,6 +1144,11 @@ class Transaction:
                 extra_dests=orphan_files if self.look else [],
                 resolved_keys=resolved_keys,
             )
+            if point is not None:
+                result.restore_point = point.id
+                result.restore_warnings = list(point.warnings)
+                for warning in point.warnings:
+                    report(Progress.SNAPSHOTTING, warning)
 
         # A single change made from a page, and a saved moment being put back,
         # are not switches and must never strip the rest of the desktop — so
@@ -1411,18 +1438,39 @@ class Transaction:
         extra_keys: list[str] | None = None,
         extra_dests: list[str] | None = None,
         resolved_keys: dict[str, str] | None = None,
-    ) -> str | None:
-        """Take a restore point before touching anything. Never fatal.
+    ) -> Any:
+        """Take a restore point before touching anything, or refuse to go on.
 
-        A restore point that cannot be written is worth going without, not a
-        refusal: the pristine baseline is the real guarantee and is recorded
-        regardless. Imported here rather than at module scope because a restore
-        point is itself applied as a transaction.
+        A restore point that cannot be *written* used to be worth going
+        without: the pristine baseline is a real guarantee and is recorded
+        regardless. That reasoning was right about the engine and wrong about
+        the person, because by the time this runs the dialog has already said
+        "gtheme saves how your desktop looks right now. You can put it back
+        with one click" (persona-report §2.5). Going on after that turns a
+        promise the user agreed to into one they were never told was withdrawn
+        — and the only sign of it was a missing button on an eight-second
+        toast. So the failure stops the apply instead.
+
+        Stopping here is cheap and honest: nothing has been written yet — not a
+        file, not a setting, not the ledger — so this is genuinely the
+        "nothing was changed" case and says so.
+
+        Returns:
+            The restore point, or None when the transaction would change
+            nothing at all and there was nothing to save. Its ``warnings`` are
+            what could only be saved in part, and the caller carries them out
+            to the person rather than dropping them.
+
+        Raises:
+            TransactionError: the moment could not be saved. ``rolled_back`` is
+                True because there is nothing yet to roll back.
         """
+        # Imported here rather than at module scope because a restore point is
+        # itself applied as a transaction.
         from . import restorepoints
 
         try:
-            point = restorepoints.capture_from_diff(
+            return restorepoints.capture_from_diff(
                 diff,
                 label=self.label or "Before your last change",
                 backend=backend,
@@ -1431,9 +1479,12 @@ class Transaction:
                 extra_keys=extra_keys,
                 extra_dests=extra_dests,
             )
-        except OSError:
-            return None
-        return point.id if point is not None else None
+        except OSError as exc:
+            raise TransactionError(
+                f"could not save how your desktop looks right now, so nothing was "
+                f"changed: {exc}",
+                rolled_back=True,
+            ) from exc
 
     def _snapshot_file(
         self,
