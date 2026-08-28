@@ -5,11 +5,12 @@
 # tree, so `python -m installer` puts every one of them in the right place with
 # no custom code here (research/packaging.md §2, the waypaper precedent).
 #
-# THIS FILE BUILDS A RELEASE, AND THE v2.0.0 TAG IS NOT CUT YET: `makepkg`
-# fetches $url/archive/refs/tags/v2.0.0.tar.gz, which returns 404 today, so
-# this file cannot build anything until the tag exists (then: run updpkgsums
-# and replace the SKIP below). To build a checkout — which is what `git clone`
-# followed by `makepkg` actually means — use PKGBUILD-git beside this file.
+# THIS FILE BUILDS A RELEASE: `makepkg` fetches
+# $url/archive/refs/tags/v$pkgver.tar.gz, so it builds from the moment that tag
+# is pushed and not one minute before. The checksum below is still `SKIP`, which
+# means the download is not verified — whoever cuts the tag runs `updpkgsums`
+# and replaces it in the same breath. To build the checkout you have instead,
+# use PKGBUILD-git beside this file.
 
 pkgname=gtheme
 # Must equal `__version__` in src/gtheme/__init__.py and the newest <release>

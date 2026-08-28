@@ -162,10 +162,11 @@ with a text prompt appears. This is the only time you will need it.
 ./install.sh
 ```
 
-It checks that the pieces it needs are present — it refuses on a GNOME older than
-49 or a libadwaita older than 1.9 rather than installing an app that cannot run —
-sets itself up in its own private corner of that folder so it cannot disturb
-anything else, and adds **Gtheme** to your list of applications. It prints what it
+It checks that the pieces it needs are present — and it asks libadwaita its
+version, so a desktop older than GNOME 49 is refused before anything is created
+rather than left with an app that cannot open — then sets itself up in its own
+private corner of that folder so it cannot disturb anything else, and adds
+**Gtheme** to your list of applications. It prints what it
 is doing as it goes. If something is missing it stops and tells you the exact
 command to install it — it never installs system packages behind your back.
 
@@ -331,10 +332,10 @@ are built in, and **Get more** lists what the community has published:
 |---|---|
 | **DAYBREAK** | First light: warm white surfaces, palest sage underfoot, a leaf-green highlight. Sunrise through a glasshouse roof. |
 | **HEARTH** | Banked embers: cream surfaces, amber light low in the frame, a terracotta highlight. It turns Night Light on so the evening matches the picture. |
-| **HYPERCLASS** | Gilded void: champagne brass on deep-space ink, ivory starlight, one vein of ice. |
-| **MAGMA** | Obsidian flow: black rock with the heat still moving in the cracks. |
-| **NETRUNNER** | The night city: neon on black, with the terminal to match. |
-| **NIGHTBLOOM** | The glasshouse after dark: deep green, brass and slow bloom. |
+| **HYPERCLASS** | Gilded void: first class aboard a starliner, champagne brass on deep-space ink, one vein of ice. |
+| **MAGMA** | Obsidian flow: obsidian glass over a living magma chamber, ember orange and lava gold, one cool teal vein. |
+| **NETRUNNER** | Jack in: a netrunner's deck in Night City, HUD cyan on a desaturated navy void, one cyber-yellow signature per surface. |
+| **NIGHTBLOOM** | The glasshouse after dark: glass panes over deep green, bioluminescent jade, exactly one amber firefly on every surface. |
 
 DAYBREAK and HEARTH are the two light ones, and they use only what a stock GNOME
 desktop already has: no add-ons, nothing to download.
@@ -354,6 +355,12 @@ in it and the pictures it uses beside it, kept in
 `~/.local/share/gtheme/v2/themes`. You can open it, read it and edit it in any
 text editor; `gtheme validate <folder>` checks one over before you share it; and
 [docs/preset-format.md](docs/preset-format.md) explains every field.
+
+If you keep your setup in a repository, `gtheme apply <name-or-folder>` puts a
+Look on from a terminal, with `--dry-run` to see what it would change first. It
+is the same machinery the tiles on this page use, down to the saved moment taken
+before anything moves — "Can I use a Look without opening the app?" under
+[Questions people ask](#questions-people-ask) has the details.
 
 </details>
 
@@ -470,9 +477,9 @@ with nine greyed out is a list of things you cannot do.
 
 Two honest notes on that list. GNOME Terminal, the one Ubuntu ships, takes the
 Look's colours in full. Console, the one GNOME ships, chooses its own colours to
-go with light or dark mode and offers nobody a palette to write, so it gets the
-see-through background and its card says exactly that rather than pretending to
-more.
+go with light or dark mode and offers no palette anyone else may write, so the
+one thing gtheme changes there is the see-through background — and Console's card
+says that on the page, next to the colours it is not going to give you.
 
 Each card says honestly when you will see the change: some terminals update while
 you watch, some within a second, some only when you open a new window.

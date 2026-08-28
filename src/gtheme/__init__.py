@@ -7,9 +7,8 @@ Two files outside Python's reach must be kept equal to it by hand — ``PKGBUILD
 ``<release>``) — because ``pacman -Qi`` and the About dialog naming different
 builds is how a bug report stops being traceable to one.
 
-It is a plain ``2.0.0`` and not ``2.0.0.dev0``: the three places now agree.
-The matching ``v2.0.0`` git tag has not been cut yet, so this is what a build
-of the current tree calls itself until it is.
+It is a plain ``2.0.0`` and not ``2.0.0.dev0``: the three places now agree, and
+this is the version a build of this tree calls itself, tag or no tag.
 """
 
 __version__ = "2.0.0"
