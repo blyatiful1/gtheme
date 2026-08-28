@@ -59,7 +59,7 @@ be the one piece of the app that could touch a live desktop from a unit test.
 
 | Module | What it owns |
 |---|---|
-| `transaction.py` | The only path by which anything changes. Operation types (`FileWrite`, `SettingWrite`, `ExtensionEnable`, `ExtensionInstall`), `plan() -> Diff`, `apply(progress_cb)`. Frozen signatures. |
+| `transaction.py` | The all-or-nothing path: everything a *Look* changes goes through it. Seven operation types (`FileWrite`, `FileRemove`, `FileLink`, `SettingWrite`, `SettingReset`, `ExtensionEnable`, `ExtensionInstall`), `plan() -> Diff`, `apply(progress_cb)`. Frozen signatures. There is one other writer, deliberately: `ui/widgets/recording.py` writes a single page edit straight to the backend under the process lock, after recording it into the same baseline and ledger a transaction would — wrapping each toggle in a `Transaction` would take a restore point per toggle and evict the moment the person actually needs. That module's docstring argues it. |
 | `baseline.py` | The pristine baseline: what a file or setting looked like the *first* time gtheme touched it. Never re-recorded, so "before gtheme" stays true forever. |
 | `ledger.py` | Who owns what *now*. Answers a different question from the baseline, and confusing the two is how theme managers leave debris. Enables surgical Look-to-Look switching. |
 | `confine.py` | The security boundary. `confine_dest` (where a file may land) and `confine_src` (where it may come from), both after resolving `..` and symbolic links. |
@@ -67,12 +67,12 @@ be the one piece of the app that could touch a live desktop from a unit test.
 | `lock.py` | One gtheme at a time, non-blocking, with an honest message. |
 | `gvariant.py` | The wire format. Exact GVariant text in, exact GVariant text out, no normalisation — plus canonicalising comparison, and the list-union that `enabled-extensions` needs. |
 | `placeholders.py` | `{{ }}` tokens resolved from a probe registry at apply time, and the gate that refuses to write a half-resolved one. |
-| `restorepoints.py` | Saved moments. Includes the read-only importer that turns version 1's baseline store into the "Before gtheme" point. |
+| `restorepoints.py` | Saved moments. The "Before gtheme" point is captured on the first GUI launch (`ui/onboarding.py`, `capture_pristine_point`); on an upgrader's machine the read-only importer here builds it from version 1's baseline store instead, so it reaches back further. |
 | `rescue.py` | The headless "put it back" path. No GTK, no session, no window. |
 | `settings_backend.py` | The frozen seam: one key grammar, four address forms, a typed error enum, three implementations. |
 | `backends.py` | Which backend is in use, and `use_backend()` — the one supported override. |
 | `paths.py` | Every root as a *function*, read from the environment on each call. Version 1 resolved them at import time, and a test that forgot to reload wrote to the real home. |
-| `color.py` | Hex colour arithmetic, ported unchanged because the bundled Looks were authored against exactly this maths. |
+| `color.py` | Hex colour arithmetic. The derivation maths is ported unchanged, because the bundled Looks were authored against exactly it; the WCAG readability maths (`relative_luminance`, `contrast_ratio`, `readable_contrast`) was added on top and is deliberately kept separate — it undoes gamma where `luminance` does not, and reusing one for the other would change every bundled Look. |
 
 ### `preset/` — Looks
 
@@ -105,9 +105,17 @@ results posted back through `GLib.idle_add`.
 
 ### `terminal/` — one adapter per program
 
-Ghostty, Ptyxis, Alacritty, fish, starship, btop, cava, fastfetch. Each carries
-its own honest sentence about when the change becomes visible, and the page
-renders those verbatim.
+Ghostty, Ptyxis, GNOME Terminal, Console, Alacritty, fish, starship, btop,
+cava, fastfetch. Each carries its own honest sentence about when the change
+becomes visible, and the page renders those verbatim.
+
+An adapter **works out** its writes (`plan() -> TerminalWrites`) and does not
+make them: `apply_all` turns every chosen adapter's files and settings into one
+`Transaction`, so the user's own `alacritty.toml` and `starship.toml` are
+recorded, claimed, undoable and rolled back together like anything else this
+app changes. fish is the one exception the shape admits to — its colours live
+in fish's own store and are set by running fish, which happens after the
+transaction lands, with the file fish keeps them in recorded first.
 
 ### `ui/` — the window
 
@@ -116,6 +124,14 @@ renders those verbatim.
 deep-links and external-change mirroring possible. `search.py`, `jargon.py`,
 `onboarding.py`, `preview.py`, `applyrunner.py`, `widgets/rows.py`, and
 `pages/`.
+
+`widgets/` is where anything more than one page draws lives, so that there is
+one of it rather than nine: `rows.py` (the frozen descriptor-to-widget
+library, which also owns `key_for`, `set_plain_text` and the GVariant
+`quote`/`unquote` pair), `recording.py` (every write, recorded and honest),
+`explainer.py` (the one-shot first-visit banner) and `actions.py` (a sentence
+with a button that does it). A page that finds itself writing one of these
+again is the drift `review-report` P7 is about.
 
 ## The safety model
 

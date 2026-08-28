@@ -492,6 +492,18 @@ class ShellExtensions:
     def all(self) -> dict[str, InstalledExtension]:
         return dict(self._extensions)
 
+    @property
+    def loaded(self) -> bool:
+        """Has the full list been read once already?
+
+        Public because a caller that only wants to *show* the current list has
+        to be able to tell "ask the desktop" from "read what is already being
+        followed". Without it, every re-read is another ``ListExtensions``
+        round trip for a map this object keeps live from the signal
+        (review-report M26).
+        """
+        return self._loaded
+
     def get(self, uuid: str) -> InstalledExtension | None:
         """What is known about one add-on, asking the desktop if need be."""
         known = self._extensions.get(uuid)

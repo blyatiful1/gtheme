@@ -19,6 +19,7 @@ from gtheme.system.iconscan import IconThemeEntry  # noqa: E402
 from gtheme.ui import jargon  # noqa: E402
 from gtheme.ui.pages import _style_common as common  # noqa: E402
 from gtheme.ui.pages import icons  # noqa: E402
+from gtheme.ui.widgets.rows import PUT_BACK_DEFAULT, PUT_BACK_RECORDED  # noqa: E402
 
 pytestmark = pytest.mark.gtk
 
@@ -164,10 +165,14 @@ def test_the_pointer_size_offers_the_three_sizes_gnome_uses(tmp_path, memory_set
 def test_each_grid_carries_the_put_this_back_button(tmp_path, memory_settings):
     window = make_window(tmp_path)
     page = build_page(icons, window, memory_settings)
+    # Both wordings count: the button says "the way it was" once gtheme has a
+    # pristine value recorded for the setting and "what this computer came
+    # with" until then, and this page has touched nothing (review-report H3).
     resets = [
         w
         for w in _walk(page)
-        if isinstance(w, Gtk.Button) and w.get_tooltip_text() == "Put this back the way it was"
+        if isinstance(w, Gtk.Button)
+        and w.get_tooltip_text() in (PUT_BACK_RECORDED, PUT_BACK_DEFAULT)
     ]
     assert len(resets) >= 2, "the icon set and the pointer style both need one"
 

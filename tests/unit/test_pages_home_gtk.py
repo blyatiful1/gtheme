@@ -24,6 +24,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk  # noqa: E402
 
+from gtheme.core import restorepoints  # noqa: E402
 from gtheme.core.settings_backend import MemoryBackend  # noqa: E402
 from gtheme.prefs import Prefs  # noqa: E402
 from gtheme.ui.applyrunner import ApplyRunner  # noqa: E402
@@ -109,6 +110,67 @@ def test_the_add_on_row_is_honest_when_the_desktop_cannot_be_asked(window, backe
         window, backend=backend, root=tmp_path, thumbnails=False, shell=Silent()
     )
     assert _subtitles(page)["addons"] == home.COPY["addons-unavailable"]
+
+
+# -- M26: counting add-ons never holds up the window ------------------------
+
+
+def test_building_the_page_never_asks_the_desktop_for_its_add_ons(
+    window, backend, tmp_path, monkeypatch
+):
+    """Home is the first page the window opens, so its constructor is the freeze.
+
+    ``ListExtensions`` is a blocking call with GDBus's 25-second default
+    timeout, and it used to run while ``Window.__init__`` was building this
+    page — before anything was drawn (review-report M26). The count is deferred
+    now: the row says what it is doing and the asking happens on an idle, after
+    the window is up.
+    """
+    from gtheme.ego import shelldbus
+
+    def never(*_a, **_k):
+        raise AssertionError("the desktop was asked while the page was being built")
+
+    monkeypatch.setattr(shelldbus, "GDBusShellProxy", never)
+    page = _page(window, backend, tmp_path)
+    assert _subtitles(page)["addons"] == home.COPY["addons-checking"]
+
+
+def test_the_count_lands_on_the_row_once_the_desktop_has_answered(
+    window, backend, tmp_path
+):
+    class Shell:
+        loaded = True
+        all = {"a": type("E", (), {"is_running": True})()}
+
+    page = _page(window, backend, tmp_path)
+    page._addons_found(Shell())
+    assert _subtitles(page)["addons"] == "1 of 1 switched on"
+
+
+def test_a_desktop_that_never_answered_says_so_rather_than_counting_forever(
+    window, backend, tmp_path
+):
+    page = _page(window, backend, tmp_path)
+    page._addons_found(None)
+    assert _subtitles(page)["addons"] == home.COPY["addons-unavailable"]
+    # And a later re-read of the card keeps the honest answer instead of
+    # dropping back to "Counting…" with nothing on its way.
+    page.refresh()
+    assert _subtitles(page)["addons"] == home.COPY["addons-unavailable"]
+
+
+def test_the_slow_half_borrows_the_windows_connection_rather_than_making_one(
+    window, backend, tmp_path
+):
+    """One connection, or the two pages disagree about what is running."""
+
+    class Shell:
+        loaded = True
+
+    window.shell = Shell()
+    page = _page(window, backend, tmp_path)
+    assert page._connect_for_addons() is window.shell
 
 
 def test_the_first_visit_explainer_shows_once_and_stays_dismissed(window, backend, tmp_path):
@@ -220,11 +282,23 @@ def test_home_save_and_undo_go_through_the_shared_runner(window, backend, tmp_pa
     assert window.runner.headings == [restore_page.COPY["save-title"]]
 
     backend.set(key, "'purple'")
+    # Read before the undo runs: going back takes a restore point of its own,
+    # so the newest moment afterwards is not the one that was applied.
+    newest = [
+        p
+        for p in restorepoints.list_restore_points(tmp_path)
+        if p.kind != "pristine"
+    ][0]
     page.undo_last_change()
 
     assert window.runner.headings[-1] == restore_page.COPY["working-heading"]
     assert backend.get(key) == "'green'", "the undo itself must still work"
-    assert window.toasts[-1] == restore_page.COPY["done"]
+    # U8: the Home card has no list of moments under it, so its toast is the
+    # only place the answer to "back to when?" can appear. This assertion used
+    # to read ``COPY["done"]``, the unnamed sentence, and is changed here
+    # deliberately — that wording is what failed the requirement.
+    assert window.toasts[-1] == restore_page.done_sentence(newest)
+    assert newest.label in window.toasts[-1]
 
 
 def test_the_header_undo_button_uses_the_runner_too(window, backend, tmp_path):

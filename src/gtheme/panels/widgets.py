@@ -47,30 +47,48 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
 
+from ..core.backends import is_missing  # noqa: E402
 from ..core.settings_backend import BackendError, SettingsBackend  # noqa: E402
-from ..ui.widgets.rows import RowBuildError, key_for, register_kind, set_plain_text  # noqa: E402
+from ..ui.widgets.recording import WriteRefused, reason_for, recording  # noqa: E402
+from ..ui.widgets.rows import (  # noqa: E402
+    RowBuildError,
+    clear_refusal,
+    key_for,
+    register_kind,
+    report_refusal,
+    set_plain_text,
+    write_value,
+)
 from ..ui.widgets.rows import build_row as build_base_row  # noqa: E402
 from .descriptor import Row, WidgetKind  # noqa: E402
 from .schema_probe import Availability, SchemaProbe, resolve_row  # noqa: E402
 
 __all__ = [
+    "CLASH_COPY",
     "CLEARED",
     "Capture",
     "CaptureAction",
     "Clamp",
     "KNOWN_CLAMPS",
     "NO_EFFECT_LABEL",
+    "ShortcutClash",
     "build_effect_picker",
     "build_effect_speed",
     "build_link_row",
     "build_row",
     "capture_for_key",
     "clamp_violations",
+    "clash_sentence",
+    "confirm_replace",
     "decode_accelerator",
     "dict_number",
     "dict_with_number",
     "encode_accelerator",
+    "find_clashes",
+    "same_keys",
     "set_link_handler",
+    "shortcut_keys_label",
+    "shortcut_rows",
     "unavailable_row",
 ]
 
@@ -364,7 +382,7 @@ def _build_dict_slider(
             updated = dict_with_number(backend.get(key), row.dict_key or "", value)
         except (KeyError, RowBuildError, BackendError):
             return
-        backend.set(key, updated)
+        write_value(backend, key, updated, widget=widget, refresh=refresh, component=row.id)
 
     refresh()
     widget.connect("notify::value", on_changed)
@@ -435,15 +453,33 @@ def build_effect_picker(
         if index == Gtk.INVALID_LIST_POSITION or index >= len(options):
             return
         chosen = options[index][0]
+        recorder = recording(backend, component=row.id)
         for name, _label, _sub in options:
             if name is None:
                 continue
             try:
-                backend.set(key_of(name), "true" if name == chosen else "false")
-            except BackendError:
+                recorder.set(key_of(name), "true" if name == chosen else "false")
+            except BackendError as exc:
                 # An effect this version of the add-on does not have is not a
-                # reason to abandon the rest of the change.
-                continue
+                # reason to abandon the rest of the change — but only that.
+                # A write the desktop *refused* (a locked dconf profile, a
+                # read-only store) is true of all twenty-six keys, and
+                # swallowing it left the row showing a choice that never
+                # happened (review-report M7).
+                if is_missing(exc):
+                    continue
+                refresh()
+                report_refusal(widget, reason_for(exc))
+                return
+            except WriteRefused as exc:
+                # This one is not per-effect: the lock is held by an apply, or
+                # nothing can be written down first. It is true of all
+                # twenty-six keys, so it is said once and the row goes back to
+                # showing what is really playing (review-report M7).
+                refresh()
+                report_refusal(widget, reason_for(exc))
+                return
+        clear_refusal(widget)
 
     refresh()
     widget.connect("notify::selected", on_selected)
@@ -535,10 +571,14 @@ def build_effect_speed(
         if guard["busy"] or state["key"] is None:
             return
         value = int(min(max(widget.get_value(), row.clamp_min), row.clamp_max))
-        try:
-            backend.set(state["key"], str(value))
-        except BackendError:
-            return
+        write_value(
+            backend,
+            state["key"],
+            str(value),
+            widget=widget,
+            refresh=refresh,
+            component=row.id,
+        )
 
     refresh()
     widget.connect("notify::value", on_changed)
@@ -594,6 +634,143 @@ def set_link_handler(
     setattr(widget, _LINK_HANDLER, handler)
 
 
+# --------------------------------------------------------------------------
+# shortcut clashes (persona-report §3.2)
+#
+# GNOME's own Settings stops you when the keys you just pressed already belong
+# to something else, and offers to move them. gtheme — which exists to be the
+# safer of the two — wrote whatever was pressed and left two shortcuts fighting
+# over one combination, with nothing on screen to say which one would win.
+# --------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ShortcutClash:
+    """Another shortcut that already answers to the keys just pressed."""
+
+    row: Row
+    accelerator: str
+
+
+def same_keys(first: str, second: str) -> bool:
+    """Whether two written combinations are the same combination.
+
+    Compared through the toolkit rather than as text: ``<Primary>t``,
+    ``<Control>T`` and ``<Ctrl>t`` are one shortcut spelled three ways, and all
+    three spellings are in GNOME's own defaults.
+    """
+    if not first or not second:
+        return False
+    parsed_first = Gtk.accelerator_parse(first)
+    parsed_second = Gtk.accelerator_parse(second)
+    if not parsed_first[0] or not parsed_second[0]:
+        return first.strip().lower() == second.strip().lower()
+    return parsed_first[1:] == parsed_second[1:]
+
+
+def shortcut_keys_label(accelerator: str) -> str:
+    """``<Super>m`` as a person reads it: "Super+M"."""
+    ok, keyval, mods = Gtk.accelerator_parse(accelerator)
+    if not ok:
+        return accelerator
+    return Gtk.accelerator_get_label(keyval, mods)
+
+
+def shortcut_rows(corpus: Any = None) -> list[Row]:
+    """Every row in the app that holds a key combination.
+
+    All of them, not only the ones on the page being edited: the shortcuts and
+    the media keys are two files and one keyboard, and a clash between them is
+    exactly the clash a person cannot see coming.
+    """
+    from .loader import load_corpus
+
+    loaded = corpus if corpus is not None else load_corpus()
+    return [row for row in loaded.rows if row.kind is WidgetKind.SHORTCUT and row.key]
+
+
+def find_clashes(
+    backend: SettingsBackend,
+    accelerator: str,
+    *,
+    exclude_key: str,
+    rows: Iterable[Row] | None = None,
+) -> list[ShortcutClash]:
+    """Which other shortcuts already use these keys.
+
+    Only the first combination of a setting that holds several is compared —
+    that is the one the row shows and the one this app can write, so it is the
+    one it can honestly offer to take away.
+    """
+    if not accelerator:
+        return []
+    clashes: list[ShortcutClash] = []
+    for other in rows if rows is not None else shortcut_rows():
+        other_key = key_for(other)
+        if other_key == exclude_key:
+            continue
+        try:
+            current = decode_accelerator(backend.get(other_key))
+        except BackendError:
+            continue
+        if same_keys(current, accelerator):
+            clashes.append(ShortcutClash(row=other, accelerator=current))
+    return clashes
+
+
+def clash_sentence(clashes: Iterable[ShortcutClash], accelerator: str) -> str:
+    """What the dialog says, in the order a person needs to hear it."""
+    titles = [f"“{clash.row.title}”" for clash in clashes]
+    if len(titles) > 2:
+        named = ", ".join(titles[:-1]) + f" and {titles[-1]}"
+    else:
+        named = " and ".join(titles)
+    verb = "uses" if len(titles) == 1 else "use"
+    subject = "That shortcut" if len(titles) == 1 else "Those shortcuts"
+    return (
+        f"{named} already {verb} {shortcut_keys_label(accelerator)}. "
+        f"{subject} will be left with no keys at all if you use them here."
+    )
+
+
+#: What the clash dialog says. Named so the plain-language lint can read it.
+CLASH_COPY: dict[str, str] = {
+    "heading": "Those keys are already used",
+    "cancel": "Keep it as it was",
+    "replace": "Use them here",
+}
+
+
+def confirm_replace(
+    origin: Gtk.Widget,
+    accelerator: str,
+    clashes: list[ShortcutClash],
+    on_replace: Callable[[], None],
+) -> Adw.AlertDialog:
+    """Offer the choice GNOME's own Settings offers: replace, or keep.
+
+    Returned so a test can press either response without a pointer.
+    """
+    dialog = Adw.AlertDialog(
+        heading=CLASH_COPY["heading"], body=clash_sentence(clashes, accelerator)
+    )
+    dialog.add_response("cancel", CLASH_COPY["cancel"])
+    dialog.add_response("replace", CLASH_COPY["replace"])
+    dialog.set_response_appearance("replace", Adw.ResponseAppearance.DESTRUCTIVE)
+    dialog.set_default_response("cancel")
+    dialog.set_close_response("cancel")
+
+    def answered(_dialog: Adw.AlertDialog, response: str) -> None:
+        if response == "replace":
+            on_replace()
+
+    dialog.connect("response", answered)
+    root = origin.get_root()
+    if root is not None:
+        dialog.present(root)
+    return dialog
+
+
 def _build_shortcut(
     backend: SettingsBackend, row: Row
 ) -> tuple[Adw.PreferencesRow, Callable[[], None]]:
@@ -612,12 +789,53 @@ def _build_shortcut(
         except BackendError:
             label.set_accelerator("")
 
+    def put(encoded: str) -> None:
+        if write_value(
+            backend, key_for(row), encoded, widget=widget, refresh=refresh, component=row.id
+        ):
+            refresh()
+
+    def take_from(clashes: list[ShortcutClash]) -> None:
+        """Leave the other shortcuts with no keys, so this one really works.
+
+        Two settings holding one combination is not a state the desktop
+        resolves in anybody's favour; it is the state where pressing the keys
+        does whichever of the two the shell happened to bind last.
+        """
+        for clash in clashes:
+            other_type = _value_type(backend, clash.row) or "as"
+            try:
+                cleared = encode_accelerator(other_type, CLEARED)
+            except RowBuildError:  # pragma: no cover - defensive
+                continue
+            write_value(
+                backend,
+                key_for(clash.row),
+                cleared,
+                widget=widget,
+                refresh=refresh,
+                component=clash.row.id,
+            )
+
     def store(accelerator: str) -> None:
         try:
-            backend.set(key_for(row), encode_accelerator(type_string, accelerator))
-        except (BackendError, RowBuildError):
+            encoded = encode_accelerator(type_string, accelerator)
+        except RowBuildError:
+            # A key combination this setting cannot hold. Nothing was written,
+            # and the label still shows what really is set.
             return
-        refresh()
+        clashes = find_clashes(backend, accelerator, exclude_key=key_for(row))
+        if clashes:
+            # Nothing is written yet. The question is asked first, and both
+            # answers are honest: "Use them here" takes the keys away from the
+            # others, and anything else leaves the desktop exactly as it is.
+            def replace() -> None:
+                take_from(clashes)
+                put(encoded)
+
+            confirm_replace(button, accelerator, clashes, replace)
+            return
+        put(encoded)
 
     button.connect("clicked", lambda *_a: present_capture_dialog(button, row, store))
     refresh()

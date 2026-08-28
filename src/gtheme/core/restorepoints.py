@@ -40,7 +40,7 @@ from .atomic import atomic_write_json, load_json
 from .backends import get_backend, is_missing
 from .confine import safe_name
 from .paths import restore_points_dir, v1_backup_dir
-from .settings_backend import BackendError, SettingsBackend
+from .settings_backend import BackendError, BackendErrorKind, SettingsBackend
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from .transaction import Diff, Transaction
@@ -191,6 +191,33 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
+def _claimed_settings() -> list[str]:
+    """Every setting key the ownership ledger currently claims, in one list.
+
+    A hand-saved moment is built from the descriptor corpus, which is derived
+    from GNOME's own schemas and contains no third-party extension keys at all
+    — while a Look may write any key it likes, and the four shipped ones write
+    between 15 and 24 keys each that the corpus has never heard of (dash-to-dock
+    indicators, blur-my-shell's per-application blur, tiling-shell borders,
+    burn-my-windows' active profile). Saving "how my desktop looks now" without
+    them recorded a moment that could not put those back (review-report M14).
+
+    The ledger is the honest answer to "what has gtheme changed that a saved
+    moment would otherwise miss?": it is written before every change, it is
+    keyed by owner rather than by corpus membership, and the user's own page
+    edits are in it too under ``MANUAL_OWNER``. Read through the ledger
+    module's own API, never by parsing its file here.
+    """
+    from .ledger import read_ledger
+
+    claimed: list[str] = []
+    for owned in read_ledger().values():
+        if not isinstance(owned, dict):
+            continue
+        claimed.extend(key for key in owned.get("settings", []) if isinstance(key, str))
+    return claimed
+
+
 def _new_id(when: datetime, base_dir: Path | None = None) -> str:
     """A folder name for a moment, and never one that is already taken.
 
@@ -324,13 +351,31 @@ def capture(
             that needs several moments in a known order can say so instead of
             sleeping through real seconds.
 
-    A key that cannot be read is recorded as having no value, with a warning
-    naming it. That is honest and restorable: "there was nothing here" is a
-    state, and restoring it means unsetting the key again.
+    A key or file that genuinely is not there is recorded as absent, which is
+    honest and restorable: "there was nothing here" is a state, and restoring
+    it means unsetting the key or deleting the file again.
+
+    A key or file that is there but could not be *read* is a different answer
+    and gets a different one: it is left out of the moment altogether, with a
+    warning naming it. Absence compiles to a removal
+    (:meth:`RestorePoint.to_transaction`), so recording "could not save this"
+    as "this was not here" would make restoring the moment delete the very
+    file the copy failed to protect (review-report H10). A destination left out
+    is one the restore does not touch.
+
+    A ``manual`` moment covers more than it is asked for: every setting key the
+    ownership ledger claims is added to ``keys``. See :func:`_claimed_settings`
+    — the caller's list comes from the descriptor corpus, which knows nothing
+    about the add-on keys a Look writes, and a moment that cannot put those
+    back is not "how your whole desktop looked". Automatic moments are built
+    from a transaction's own diff and already cover exactly what is changing,
+    so they are left alone.
     """
     when = when or _now()
     reader = backend if backend is not None else get_backend()
     base_dir = _root(root)
+    if kind == "manual":
+        keys = [*keys, *_claimed_settings()]
     identifier = safe_name(point_id or _new_id(when, base_dir))
     point = RestorePoint(
         id=identifier,
@@ -343,10 +388,13 @@ def capture(
         try:
             point.settings[key] = reader.get(key)
         except BackendError as exc:
-            if is_missing(exc):
-                # There is genuinely nothing here: no such schema, no such key.
-                # "There was nothing here" is a state, and restoring it means
-                # unsetting the key again.
+            if is_missing(exc) or exc.kind is BackendErrorKind.UNSET:
+                # There is genuinely nothing here: no such schema, no such key,
+                # or a location that has never been written. "There was nothing
+                # here" is a state, and restoring it means unsetting the key
+                # again. (The unset case is a *value* answer, not an
+                # availability one — the same read that tells an apply "go
+                # ahead, this is writable" tells a capture "record absence".)
                 point.settings[key] = None
                 continue
             # Anything else — the settings service was momentarily unreachable,
@@ -372,8 +420,19 @@ def capture(
                 try:
                     target = os.readlink(source)
                 except OSError as exc:
-                    point.files[dest] = None
-                    point.warnings.append(f"could not read the shortcut at {dest}: {exc}")
+                    # "We cannot record this" must never compile to "delete
+                    # it". Recording None here said *the destination was not
+                    # there* about a shortcut that demonstrably was, and
+                    # ``to_transaction`` turns None into a FileRemove — so a
+                    # momentary read failure while saving produced a moment
+                    # that, restored, deleted the user's own link
+                    # (review-report H10). Leaving the destination out is the
+                    # only honest answer, and it is the same one
+                    # ``import_v1_baseline`` gives.
+                    point.warnings.append(
+                        f"could not read the shortcut at {dest}: {exc}; it is not covered "
+                        "by this saved moment and will be left exactly as it is"
+                    )
                     continue
                 point.files[dest] = {"link": target}
                 continue
@@ -389,8 +448,16 @@ def capture(
             try:
                 shutil.copy2(source, files_dir / blob)
             except OSError as exc:
-                point.files[dest] = None
-                point.warnings.append(f"could not save a copy of {dest}: {exc}")
+                # Same rule as the unreadable shortcut above, and the same one
+                # the v1 importer follows: a copy that failed (a full disk, a
+                # file that became unreadable) means this destination is *not
+                # covered*, which is not the same thing as "it was not there"
+                # — and only one of those two is a deletion when the moment is
+                # restored (review-report H10).
+                point.warnings.append(
+                    f"could not save a copy of {dest}: {exc}; it is not covered by this "
+                    "saved moment and will be left exactly as it is"
+                )
                 continue
             point.files[dest] = blob
 
@@ -497,12 +564,21 @@ class RestoreResult:
         unset: settings returned to having no value.
         removed: files deleted because they were not there before.
         warnings: what could not be put back, in plain words.
+        rolled_back: after a failure, whether the desktop really did come back
+            to where it was before the restore started. Only meaningful
+            alongside a warning from a failed restore — nothing was half-done
+            when there was no failure, which is why it defaults to True. This
+            is the difference between "nothing was changed" and "part of that
+            moment was written and part was not", and an undo — the app's
+            headline safety feature — is the last place to be vague about it
+            (review-report L1).
     """
 
     transaction: object | None = None
     unset: list[str] = field(default_factory=list)
     removed: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    rolled_back: bool = True
 
 
 def apply_point(
@@ -564,6 +640,13 @@ def apply_point(
         outcome = transaction.apply(progress_cb)
     except TransactionError as exc:
         result.warnings.append(str(exc))
+        # Carry the engine's answer through instead of dropping it. The
+        # transaction knows whether its own rollback finished; a page that
+        # cannot see that has no way to tell the user which of the two very
+        # different things just happened, and defaulting to the reassuring one
+        # is how an app comes to say "nothing was changed" over a half-restored
+        # desktop.
+        result.rolled_back = exc.rolled_back
         return result
 
     result.transaction = outcome
@@ -671,28 +754,48 @@ def import_v1_baseline(
                 point.files[dest] = None
                 continue
             if record.get("symlink"):
-                # v1 recorded links as links. A restore point restores files;
-                # re-creating the link is the pristine baseline's job, so say
-                # so rather than pretending the file is covered.
-                point.files[dest] = None
+                # v1 recorded links as links, and so does v2: ``{"link":
+                # target}`` restores by putting the shortcut back. Recording it
+                # as absence instead compiled to FileRemove — pressing "Before
+                # gtheme" *deleted the user's own link* into their dotfiles
+                # repository and left a hole, while the attached warning said
+                # that one was "not covered here" (review-report H10). The
+                # capture path has recorded links correctly since the same bug
+                # was fixed there; the importer was simply never updated.
+                target = record.get("target")
+                if isinstance(target, str) and target:
+                    point.files[dest] = {"link": target}
+                    continue
+                # A link whose target v1 never recorded cannot be recreated.
+                # Leaving the destination out is the only honest answer.
                 point.warnings.append(
-                    f"{dest} was a shortcut to somewhere else before gtheme; "
-                    "undoing that one is not covered here"
+                    f"{dest} was a shortcut to somewhere else before gtheme, and where it "
+                    "pointed was not recorded; it is left exactly as it is"
                 )
                 continue
             blob = record.get("backup")
             source_blob = blobs / str(blob) if blob else None
             if source_blob is None or not source_blob.is_file():
-                point.files[dest] = None
-                point.warnings.append(f"the saved copy of {dest} is missing")
+                # "We cannot restore this" must never compile to "delete it".
+                # A destination left out of the moment is one the restore does
+                # not touch; recording None here would have removed the file
+                # whose only saved copy is the thing that went missing.
+                point.warnings.append(
+                    f"the saved copy of {dest} is missing; it is left exactly as it is"
+                )
                 continue
             assert files_dir is not None
             files_dir.mkdir(parents=True, exist_ok=True)
             try:
                 shutil.copy2(source_blob, files_dir / str(blob))
             except OSError as exc:
-                point.files[dest] = None
-                point.warnings.append(f"could not copy the saved {dest}: {exc}")
+                # Same rule as the missing blob above: a copy that failed means
+                # this destination is not covered, which is not the same thing
+                # as "it was not there", and only one of those two is a
+                # deletion.
+                point.warnings.append(
+                    f"could not copy the saved {dest}: {exc}; it is left exactly as it is"
+                )
                 continue
             point.files[dest] = str(blob)
 

@@ -26,7 +26,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gdk, Gtk, Pango  # noqa: E402
 
-from ...core.settings_backend import BackendError, SettingsBackend  # noqa: E402
+from ...core.settings_backend import SettingsBackend  # noqa: E402
 from ...panels.descriptor import Row  # noqa: E402
 from ...system.iconscan import (  # noqa: E402
     IconThemeEntry,
@@ -34,7 +34,8 @@ from ...system.iconscan import (  # noqa: E402
     default_icon_roots,
     scan_icon_themes,
 )
-from ..widgets.rows import attach_reset, key_for  # noqa: E402
+from ..widgets import a11y  # noqa: E402
+from ..widgets.rows import attach_reset, key_for, write_value  # noqa: E402
 from ._style_common import PageShell, quote, unquote, value_or_none  # noqa: E402
 
 __all__ = [
@@ -42,6 +43,7 @@ __all__ = [
     "SAMPLE_ICONS",
     "build",
     "icon_grid",
+    "icon_set_description",
     "icon_sets",
     "pointer_description",
     "sample_images",
@@ -59,6 +61,18 @@ COPY: dict[str, str] = {
     "icons-description": (
         "The small pictures used for apps, folders and files. Each tile below "
         "shows that set's own pictures."
+    ),
+    # The pointer group has said this since it was written; the icon group did
+    # not, so a fresh Fedora showed one tile and left the reader to guess
+    # whether that was all there is (persona-report §3.2). Same shape, same
+    # promise, different noun.
+    "icons-only-one": (
+        "Only one icon set is installed on this computer. More can be added "
+        "from your software app, and a Look can bring one with it."
+    ),
+    "icons-none": (
+        "gtheme could not find any icon sets on this computer, which is "
+        "unusual. The ones in use still work."
     ),
     "pointer-group": "Mouse pointer",
     "pointer-description": (
@@ -164,6 +178,7 @@ def icon_grid(
     entries: list[IconThemeEntry],
     *,
     sample: Any = None,
+    noun: str = "icon set",
 ) -> tuple[Gtk.FlowBox, Any]:
     """A grid of tiles, one per installed set, with the current one checked.
 
@@ -173,6 +188,10 @@ def icon_grid(
         entries: what is installed, in the order to show.
         sample: builds the picture part of a tile from an entry. Defaults to
             that set's own icons.
+        noun: what one tile *is*, for somebody who cannot see the grid it is
+            in. A tile called "Papirus" tells a screen reader nothing about
+            what choosing it would do; "Papirus icon set" does. The group
+            heading carries that word for everyone else.
 
     Returns:
         ``(grid, refresh)``, so the grid can be refreshed like any row when the
@@ -197,15 +216,21 @@ def icon_grid(
     def choose(name: str) -> None:
         if guard["busy"]:
             return
-        try:
-            backend.set(key, quote(name))
-        except BackendError:
+        if not write_value(
+            backend, key, quote(name), widget=grid, refresh=refresh, component=row.id
+        ):
             return
         refresh()
 
     for entry in entries:
         content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        content.append(build_sample(entry))
+        pictures = build_sample(entry)
+        # The sample icons are the tile's picture, not its name: four pictures
+        # announced one after another ("folder, text, audio, settings") in front
+        # of every tile would bury the one word that distinguishes them. The
+        # tile itself carries the name, below.
+        a11y.hide_from_screen_readers(pictures)
+        content.append(pictures)
         content.append(
             Gtk.Label(
                 label=entry.display_name,
@@ -219,6 +244,10 @@ def icon_grid(
             css_classes=["flat", "gtheme-icon-tile"],
             tooltip_text=entry.display_name,
         )
+        # The visible label is ellipsised at sixteen characters, and a tooltip
+        # is a *description* to a screen reader, never a name — so a tile whose
+        # name did not fit had no readable name at all (persona-report §2.10).
+        a11y.name(button, f"{entry.display_name} {noun}")
         if first is None:
             first = button
         else:
@@ -252,6 +281,7 @@ def _grid_group(
     entries: list[IconThemeEntry],
     *,
     sample: Any = None,
+    noun: str = "icon set",
 ) -> Adw.PreferencesGroup | None:
     """A titled group holding one grid, with the row's own explainer above it.
 
@@ -265,7 +295,7 @@ def _grid_group(
     if row is None:  # pragma: no cover - the corpus always has these
         return None
     group = shell.group(title, description)
-    grid, refresh = icon_grid(shell.backend, row, entries, sample=sample)
+    grid, refresh = icon_grid(shell.backend, row, entries, sample=sample, noun=noun)
     label_row = Adw.ActionRow(title=row.title, subtitle=row.subtitle)
     group.add(label_row)
     group.add(Adw.PreferencesRow(activatable=False, focusable=False, child=grid))
@@ -278,6 +308,21 @@ def _grid_group(
 # --------------------------------------------------------------------------
 # the page
 # --------------------------------------------------------------------------
+
+
+def icon_set_description(count: int) -> str:
+    """What the icon-set group says, given how many sets are installed.
+
+    The same courtesy the pointer group has always paid: a grid with one tile
+    in it looks broken, and on a bare Arch or a fresh Fedora one tile is the
+    normal state. Saying so is the difference between "this app cannot see my
+    icon sets" and "this computer has one".
+    """
+    if count == 0:
+        return COPY["icons-none"]
+    if count == 1:
+        return f"{COPY['icons-description']} {COPY['icons-only-one']}"
+    return COPY["icons-description"]
 
 
 def pointer_description(count: int) -> str:
@@ -334,13 +379,14 @@ def build(window: Any) -> Gtk.Widget:
     )
     entries = scan_icon_themes(default_icon_roots())
     pointers = cursor_themes(entries)
+    sets = icon_sets(entries)
 
     _grid_group(
         shell,
         ICON_THEME_ID,
         COPY["icons-group"],
-        COPY["icons-description"],
-        icon_sets(entries),
+        icon_set_description(len(sets)),
+        sets,
     )
 
     pointer_group = _grid_group(
@@ -350,6 +396,7 @@ def build(window: Any) -> Gtk.Widget:
         pointer_description(len(pointers)),
         pointers,
         sample=lambda _entry: _pointer_sample(),
+        noun="pointer style",
     )
     if pointer_group is not None:
         shell.add_descriptor_row(pointer_group, "org.gnome.desktop.interface:cursor-size")

@@ -23,7 +23,9 @@ Three properties the cleanup keeps, each of them a v1 lesson:
   keeps its record, its stored copy *and the ledger entry that claims it*, so
   the Undo page can still recover it and the next switch tries again. A cleanup
   that cannot finish must degrade to "you can still undo this", never to "that
-  is gone now".
+  is gone now". A claim with *no* recording behind it is the other case and not
+  the same one: nothing was ever changed there, so there is nothing to change
+  back, and the claim is simply dropped.
 * **The user's own edits are not a previous Look.** The ``__manual__`` entry
   records what somebody changed from a page. Switching Looks walks past it.
 """
@@ -161,6 +163,17 @@ def switch_cleanup(
         orphan_settings = [s for s in owned.get("settings", []) if s not in incoming_settings]
         kept_files: list[str] = []
         kept_settings: list[str] = []
+        # What the pristine recording actually holds, before this pass forgets
+        # anything. A claim with no recording behind it is not something that
+        # failed to revert — it is something that was never changed: the Look
+        # asked for a value the desktop already had, so the write was a no-op
+        # and no old value was ever saved. Treating it as un-revertable put it
+        # in ``kept``, rewrote the outgoing Look's entry instead of dropping
+        # it, and re-processed the same key identically on every future switch,
+        # warning each time that it "could not be changed back automatically"
+        # (review-report M2). Nothing to change back is a finished job.
+        recorded_files = set(baseline.files)
+        recorded_settings = set(baseline.settings)
 
         if orphan_files:
             outcome = baseline.restore_only_files(orphan_files)
@@ -172,7 +185,11 @@ def switch_cleanup(
             baseline.forget_files([*outcome.done, *outcome.dead])
             done = set(outcome.done)
             dead = set(outcome.dead)
-            kept_files = [key for key in orphan_files if key not in done and key not in dead]
+            kept_files = [
+                key
+                for key in orphan_files
+                if key in recorded_files and key not in done and key not in dead
+            ]
             report.dead += sum(1 for key in orphan_files if key in dead)
 
         if orphan_settings:
@@ -182,7 +199,11 @@ def switch_cleanup(
             baseline.forget_settings([*outcome.done, *outcome.dead])
             done = set(outcome.done)
             dead = set(outcome.dead)
-            kept_settings = [key for key in orphan_settings if key not in done and key not in dead]
+            kept_settings = [
+                key
+                for key in orphan_settings
+                if key in recorded_settings and key not in done and key not in dead
+            ]
             report.dead += sum(1 for key in orphan_settings if key in dead)
 
         report.kept += len(kept_files) + len(kept_settings)

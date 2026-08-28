@@ -16,9 +16,12 @@ What this file can prove, and what it cannot:
   same ``BackendErrorKind`` for a missing schema and for a missing key. That is
   the property callers branch on — the AS8 skip depends on it.
 * **Writes are not tested here.** A write through the Gio or subprocess backend
-  goes to the machine's own settings store. The write-parity leg runs inside
-  the sandbox tier against a private dconf (DESIGN.md step 10, Agent F), which
-  is the only place it can run honestly.
+  goes to the machine's own settings store. The write-parity leg lives in
+  ``tests/sandbox/test_dconf_roundtrip.py`` and runs against a private dconf
+  inside a private bus (DESIGN.md step 10, Agent F), which is the only place it
+  can run honestly. That file is marked ``dconf``, not ``sandbox``: it needs no
+  shell, so it runs in a plain ``pytest`` and in CI alongside this one — which
+  it did not before review-report M20.
 """
 
 from __future__ import annotations
@@ -27,6 +30,7 @@ import shutil
 
 import pytest
 
+from gtheme.core.backends import is_missing
 from gtheme.core.settings_backend import (
     BackendError,
     BackendErrorKind,
@@ -131,9 +135,18 @@ def test_the_router_sends_each_address_to_a_backend_that_can_handle_it():
         assert auto.get(key) == GioBackend().get(key)
     # A location with no description reaches the subprocess backend, which
     # answers honestly that nothing has ever been written there.
+    #
+    # That answer is UNSET, not NO_KEY. The assertion here used to read NO_KEY,
+    # which is the H7 defect written down as an expectation: NO_KEY means "not
+    # on this machine", ``is_missing`` is true of it, and the engine therefore
+    # skipped every write to a never-written dconf path — which left the path
+    # never-written, so the next apply skipped it again. "Nothing has been
+    # written here" and "there is nowhere to write" are different answers and
+    # the backend now says which one it means.
     with pytest.raises(BackendError) as caught:
         auto.get("dconf:/org/gtheme/definitely/never/written")
-    assert caught.value.kind is BackendErrorKind.NO_KEY
+    assert caught.value.kind is BackendErrorKind.UNSET
+    assert not is_missing(caught.value)
 
 
 @pytest.mark.parametrize(

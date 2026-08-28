@@ -5,6 +5,12 @@ D-Bus session and drives it. It is excluded from a plain ``pytest`` run by
 ``addopts = -m "not sandbox"`` and never runs in CI; ``verify.sh --full`` opts
 in explicitly.
 
+One module in this directory is not in that tier: ``test_dconf_roundtrip.py``
+is marked ``dconf``, builds a bus-only session and runs everywhere, CI
+included. The canary below wraps it too — it is autouse over the directory, not
+over the marker, which is the reason that module can live here and stay as
+closely watched as the rest.
+
 Two data modes exist, per DESIGN.md F6, and choosing between them is a safety
 decision, not a performance one:
 

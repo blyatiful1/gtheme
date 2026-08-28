@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from ...core.backends import get_backend
+from ...core.gvariant import quote, unquote
 from ...core.settings_backend import BackendError
 from ...panels.descriptor import Choice, Row, WidgetKind
 from ...panels.schema_probe import SchemaProbe
@@ -109,21 +110,14 @@ def installed_sound_sets(roots: list[Path] | None = None) -> list[str]:
     return sorted(found)
 
 
-def _quoted(value: str) -> str:
-    """The stored form of a name. Values are settings text, always quoted."""
-    return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
-
-
 def _current_sound_set(backend: Any, row: Row) -> str | None:
     from ..widgets.rows import key_for
 
     try:
-        raw = backend.get(key_for(row)).strip()
+        raw = backend.get(key_for(row))
     except BackendError:
         return None
-    if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in "'\"":
-        return raw[1:-1]
-    return raw or None
+    return unquote(raw) or None
 
 
 def sound_set_row(row: Row, backend: Any, *, sets: list[str] | None = None) -> Row:
@@ -136,9 +130,9 @@ def sound_set_row(row: Row, backend: Any, *, sets: list[str] | None = None) -> R
     current = _current_sound_set(backend, row)
     if current and current not in names and current != CUSTOM_SOUND_SET:
         names.append(current)
-    choices = [Choice(value=_quoted(name), label=name) for name in sorted(names)]
+    choices = [Choice(value=quote(name), label=name) for name in sorted(names)]
     if current == CUSTOM_SOUND_SET:
-        choices.append(Choice(value=_quoted(CUSTOM_SOUND_SET), label=COPY["custom-label"]))
+        choices.append(Choice(value=quote(CUSTOM_SOUND_SET), label=COPY["custom-label"]))
     return row.model_copy(update={"kind": WidgetKind.CHOICE, "choices": choices})
 
 

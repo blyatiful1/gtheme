@@ -15,6 +15,20 @@ It is **local only**. `addopts = -m "not sandbox"` keeps it out of a plain
 
 A red sandbox is a red check. `verify.sh` never wraps it in `|| true`.
 
+## One file here is not in that tier
+
+`test_dconf_roundtrip.py` carries the **`dconf`** marker instead, and runs
+everywhere a plain `pytest` does — including both CI jobs. It needs the private
+bus and the dconf-service that bus activates, and nothing else: no shell, no
+compositor, no seat. `SandboxSession.start_bus_only()` is that session.
+
+It lives here because everything it borrows lives here — `sandboxlib`, the
+backend probe, and above all the canary, which wraps it exactly as it wraps the
+rest of the directory. Keeping the write-parity and round-trip assertions in
+the local-only tier meant CI proved the two settings backends agreed on *reads*
+and nothing more, while the write halves went unrun for months
+(review-report M20).
+
 ## Why any of this is safe
 
 `XDG_CONFIG_HOME=<tmp>` on its own does **nothing**. A `gsettings set` goes over
@@ -72,7 +86,7 @@ tell you anything about shell chrome, extensions or screenshots.
 | `probes/` | scripts run *inside* the sandbox: the sidebar walker, the settings-backend driver |
 | `test_isolation.py` | the canary write, and proof the canary can fail |
 | `test_runtime_load.py` | the A5 verdict, pinned as a permanent regression |
-| `test_dconf_roundtrip.py` | GVariant goldens against a real dconf, plus backend parity |
+| `test_dconf_roundtrip.py` | GVariant goldens against a real dconf, plus backend write parity — marked `dconf`, bus only, **runs in CI** |
 | `test_boot_smoke.py` | gtheme starts, maps a window, lists fifteen pages, can be photographed |
 | `test_broadway.py` | the offscreen variant, marked `gtk` so CI runs it |
 

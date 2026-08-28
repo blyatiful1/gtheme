@@ -65,6 +65,10 @@ __all__ = [
 
 PAGE_ID = "more"
 
+#: The one-shot explainer key in ``prefs.json``. Listed in
+#: :data:`gtheme.prefs.KNOWN_BANNERS`, like every other one.
+BANNER_ID = "first-visit-more"
+
 COPY: dict[str, str] = {
     "banner": (
         "This page holds everything that did not fit anywhere else. Most of it is "
@@ -518,12 +522,19 @@ def build(window: Any, *, backend: Any = None, probe: SchemaProbe | None = None)
         groups.append(group)
 
     # -- the floor itself.
+    # Which groups hold which other groups, for the filter. The floor's own
+    # heading and blurb are a group whose children are groups, and only its
+    # children were ever hidden — so a search matching nothing in the floor
+    # left "Described by your desktop" and its three-line explanation sitting
+    # over an empty space (review-report L5).
+    nested: dict[int, list[Any]] = {}
     floor = floor_keys(scanner, corpus=corpus)
     if floor:
         group = Adw.PreferencesGroup(
             title=escape_markup(COPY["floor-title"]),
             description=escape_markup(COPY["floor-description"]),
         )
+        nested[id(group)] = []
         for schema_id in sorted({entry.schema_id for entry in floor}):
             expander = Adw.ExpanderRow(
                 title=escape_markup(
@@ -537,32 +548,22 @@ def build(window: Any, *, backend: Any = None, probe: SchemaProbe | None = None)
                     filterable.append((widget, f"{entry.title} {entry.subtitle} {entry.key}".lower(), expander))
             group.add(expander)
             groups.append(expander)
+            nested[id(group)].append(expander)
         page.add(group)
+        groups.append(group)
 
     probe_built_rows(page, scanner, built, backend=settings)
 
-    header = _filter_bar(Gtk, Adw, filterable, groups)
+    header = _filter_bar(Gtk, Adw, filterable, groups, nested)
+    from ..widgets.explainer import first_visit_banner
+
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, vexpand=True)
-    if prefs is not None and prefs.should_show_banner("first-visit-more"):
-        box.append(_banner(Adw, prefs))
+    banner = first_visit_banner(prefs, BANNER_ID, COPY["banner"])
+    if banner is not None:
+        box.append(banner)
     box.append(header)
     box.append(page)
     return box
-
-
-def _banner(Adw: Any, prefs: Any) -> Any:
-    from ..search import BANNER_DISMISS
-
-    banner = Adw.Banner(
-        title=escape_markup(COPY["banner"]), button_label=BANNER_DISMISS, revealed=True
-    )
-
-    def dismiss(*_args: Any) -> None:
-        banner.set_revealed(False)
-        prefs.mark_banner_seen("first-visit-more")
-
-    banner.connect("button-clicked", dismiss)
-    return banner
 
 
 def _floor_widget(
@@ -643,13 +644,27 @@ def _readonly_row(window: Any, entry: FloorKey, backend: Any, expander: Any) -> 
     return row
 
 
-def _filter_bar(Gtk: Any, Adw: Any, filterable: list[tuple[Any, str, Any]], groups: list[Any]) -> Any:
+def _filter_bar(
+    Gtk: Any,
+    Adw: Any,
+    filterable: list[tuple[Any, str, Any]],
+    groups: list[Any],
+    nested: dict[int, list[Any]] | None = None,
+) -> Any:
     """A box that narrows two hundred rows to the ones being looked for.
 
     The app-wide Ctrl+F search takes a person to a row on any page; this is the
     other half — once you are *on* the page with two hundred rows, you need to
     narrow it without leaving.
+
+    Args:
+        filterable: ``(widget, haystack, owner)`` per row; the owner is the
+            group whose count that row is part of.
+        groups: everything that hides when nothing inside it matches.
+        nested: which of those groups hold other groups, so a heading over
+            twenty-eight closed expanders hides when every one of them does.
     """
+    holds = nested or {}
     entry = Gtk.SearchEntry(
         search_delay=150,
         placeholder_text=COPY["search-placeholder"],
@@ -668,9 +683,12 @@ def _filter_bar(Gtk: Any, Adw: Any, filterable: list[tuple[Any, str, Any]], grou
             widget.set_visible(visible)
             shown[id(owner)] = shown.get(id(owner), 0) + (1 if visible else 0)
         for group in groups:
-            group.set_visible(bool(shown.get(id(group), 0)))
+            matched = shown.get(id(group), 0) + sum(
+                shown.get(id(child), 0) for child in holds.get(id(group), ())
+            )
+            group.set_visible(bool(matched))
             if needle and hasattr(group, "set_expanded"):
-                group.set_expanded(bool(shown.get(id(group), 0)))
+                group.set_expanded(bool(matched))
 
     entry.connect("search-changed", apply_filter)
     clamp = Adw.Clamp(maximum_size=640, child=entry)

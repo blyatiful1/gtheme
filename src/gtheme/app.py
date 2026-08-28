@@ -25,12 +25,15 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 
-from . import APP_ID  # noqa: E402
+from . import APP_ID, __version__  # noqa: E402
+from .core import applog  # noqa: E402
 from .prefs import Prefs  # noqa: E402
 from .ui import onboarding  # noqa: E402
 from .window import Window  # noqa: E402
 
 __all__ = ["Application", "run"]
+
+_log = applog.logger(__name__)
 
 
 class Application(Adw.Application):
@@ -54,6 +57,11 @@ class Application(Adw.Application):
         # finished or skipped it, this is a no-op forever.
         if isinstance(window, Window) and window.verdict.ok:
             GLib.idle_add(_present_onboarding, window)
+            # After the introduction, deliberately: on the one launch where
+            # both could happen, the introduction is what the person is in the
+            # middle of and this notice sits on top of it, which is the right
+            # way round for something that says a change did not finish.
+            GLib.idle_add(_present_unfinished, window)
 
     def _action(self, name: str, callback: Callable[..., Any], accels: list[str] | None = None) -> None:
         action = Gio.SimpleAction.new(name, None)
@@ -73,8 +81,29 @@ def _present_onboarding(window: Window) -> bool:
     return GLib.SOURCE_REMOVE
 
 
+def _present_unfinished(window: Window) -> bool:
+    """Say so when the last change was interrupted (persona-report §3.3, E6).
+
+    Wrapped, because this reads the temporary directory and the lock file: a
+    launch is never the moment to find out that a directory listing can raise.
+    """
+    try:
+        if window.present_unfinished_notice() is not None:
+            _log.info("a change from a previous run did not finish")
+    except Exception:  # noqa: BLE001 - a notice is never worth the window
+        _log.exception("could not check for an unfinished change")
+    return GLib.SOURCE_REMOVE
+
+
 def run(argv: list[str] | None = None) -> int:
     """Open the app. Returns the process exit code."""
+    # Before anything graphical: a GTK signal handler that raises prints its
+    # traceback through sys.excepthook, and the launcher sets Terminal=false,
+    # so without this the traceback goes to a console nobody is watching.
+    applog.start()
+    _log.info("opening gtheme %s", __version__)
     Adw.init()
     Gtk.init()
-    return Application().run(argv or [])
+    code = Application().run(argv or [])
+    _log.info("the app closed with %s", code)
+    return code

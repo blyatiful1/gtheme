@@ -10,7 +10,10 @@ which has the real ``XDG_CONFIG_HOME``, and the write lands in the real store.
 Isolation comes from ``dbus-run-session``: a fresh bus activates a *fresh*
 dconf-service that inherits the sandbox environment. Both are required, and the
 environment has to be set **on the ``dbus-run-session`` invocation itself**,
-not exported inside it.
+not exported inside it. Note what that rule does *not* require: a shell. A
+settings write is isolated by the bus alone, so :meth:`SandboxSession.
+start_bus_only` gives the dconf tier the same guarantee without booting
+GNOME — which is why that tier runs in CI and this one never will.
 
 **The overview.** A headless shell has no seat, so nothing ever produces the
 interaction that dismisses the startup Overview, and every screenshot shows
@@ -58,6 +61,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 __all__ = [
+    "BUS_ONLY_TOOLS",
     "DataMode",
     "EXT_ROOT",
     "SANDBOX_EXT_UUID",
@@ -86,6 +90,16 @@ USER_EXT_DIR = Path.home() / ".local/share/gnome-shell/extensions"
 FIXTURE_EXT_DIR = REPO_ROOT / "tests/fixtures/schemas"
 
 REQUIRED_TOOLS = ("dbus-run-session", "gnome-shell", "gdbus", "gsettings", "dconf")
+
+#: What :meth:`SandboxSession.start_bus_only` needs — no shell, no compositor,
+#: no seat. A private bus plus a private dconf is the whole isolation story for
+#: a settings *write*, and every one of these exists in the Arch CI container,
+#: which is why the ``dconf`` tier can run there while the sandbox tier cannot.
+BUS_ONLY_TOOLS = ("dbus-run-session", "gsettings", "dconf", "glib-compile-schemas")
+
+#: How long a bus-only session's placeholder process lives if nobody stops it.
+#: Teardown kills it by pid; this is only the backstop for a crashed run.
+BUS_ONLY_LIFETIME = 3600
 
 #: Measured on this box: bus 200ms, shell Ping 0-200ms, window listed 400ms,
 #: frame geometry 4-6s. The caps are generous multiples, not expectations.
@@ -245,11 +259,19 @@ class SandboxSession:
 
     # -- lifecycle ---------------------------------------------------------
 
-    def prepare(self) -> None:
-        """Lay out the private roots. Safe to call before :meth:`start`."""
+    def prepare(self, *, for_shell: bool = True) -> None:
+        """Lay out the private roots. Safe to call before :meth:`start`.
+
+        Args:
+            for_shell: whether a GNOME Shell is going to be booted in these
+                roots. When it is not — :meth:`start_bus_only` — the extension
+                corpus and ``window-calls`` are pointless, and demanding them
+                would make the bus-only tier skip on every machine that has no
+                ``window-calls`` installed, CI included.
+        """
         for sub in ("config", "cache", "state", "share/glib-2.0/schemas"):
             (self.root / sub).mkdir(parents=True, exist_ok=True)
-        if self.mode is DataMode.PRIVATE:
+        if self.mode is DataMode.PRIVATE and for_shell:
             self.extensions_dir.mkdir(parents=True, exist_ok=True)
             self._copy_window_calls()
             if self.seed_fixture_extensions:
@@ -361,6 +383,49 @@ exec gnome-shell --headless --virtual-monitor 1920x1080 \
         try:
             self._wait_for_bus()
             self._wait_for_shell()
+        except Exception:
+            self.stop()
+            raise
+
+    def start_bus_only(self) -> None:
+        """Boot the private bus, and nothing else. No shell, no compositor.
+
+        A settings write is isolated by the bus, not by the environment: the
+        fresh bus activates a fresh dconf-service that inherits this session's
+        ``XDG_CONFIG_HOME``, so the write lands in ``root/config/dconf/user``
+        and nowhere else. A headless GNOME Shell adds nothing to that guarantee
+        — it costs sixty seconds and a machine that has one.
+
+        Splitting it out is what lets the dconf round-trip and the backend
+        write-parity tests run in a plain ``pytest`` and in CI (the ``dconf``
+        marker) while the tests that genuinely need a shell stay local-only
+        (the ``sandbox`` marker). See docs/testing.md.
+        """
+        require_tools(BUS_ONLY_TOOLS)
+        self.prepare(for_shell=False)
+
+        # `echo $$` before `exec` records the pid of the process that *becomes*
+        # the placeholder, so stop() reaps it exactly the way it reaps a shell.
+        # dbus-run-session tears its bus down when that child exits.
+        script = f"""
+set -u
+printf '%s' "$DBUS_SESSION_BUS_ADDRESS" > {self.root}/bus.addr.tmp
+mv {self.root}/bus.addr.tmp {self.root}/bus.addr
+echo "$$" > {self.root}/shell.pid
+exec sleep {BUS_ONLY_LIFETIME}
+"""
+        env = sandbox_env(root=self.root, mode=self.mode, bus=None, wayland_display=None)
+        log = self.log_path.open("wb")
+        self._wrapper = subprocess.Popen(  # noqa: S603
+            ["dbus-run-session", "--", "sh", "-c", script],
+            env=env,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        self._started = True
+        try:
+            self._wait_for_bus()
         except Exception:
             self.stop()
             raise
@@ -608,6 +673,30 @@ exec gnome-shell --headless --virtual-monitor 1920x1080 \
         """Leave the Overview a headless shell would otherwise never leave."""
         answer = self.shell_eval("Main.overview.hide(); Main.overview.visible")
         return "true" in answer and "'false'" in answer
+
+    def silence_notifications(self) -> bool:
+        """Take the desktop's own banners off the screen before anything is photographed.
+
+        This harness turns on ``unsafe_mode`` on purpose — ``Eval`` and the
+        screenshot call both need it — and GNOME answers that by raising a
+        banner reading "Apps now have unrestricted access". It is not
+        transient: it sat across the app's header bar in a picture shipped in
+        the README (audit closure sweep, DOCS-SWEEP).
+
+        Two moves, because either alone leaves a picture with a banner in it:
+        stop new banners appearing, and destroy the source of the one already
+        up. Both are the session's own settings and the session's own tray —
+        nothing here reaches outside the private bus.
+
+        Returns:
+            Whether the tray is empty afterwards.
+        """
+        self.gsettings("set", "org.gnome.desktop.notifications", "show-banners", "false")
+        answer = self.shell_eval(
+            "Main.messageTray.getSources().forEach(source => source.destroy()); "
+            "Main.messageTray.getSources().length"
+        )
+        return "'0'" in answer
 
     def screenshot(self, path: Path) -> Path:
         """Capture the session to a PNG. Tries both proven routes.

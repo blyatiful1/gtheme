@@ -34,7 +34,7 @@ from gtheme.core.restorepoints import (
     prune,
     read_v1_current,
 )
-from gtheme.core.settings_backend import MemoryBackend
+from gtheme.core.settings_backend import BackendError, BackendErrorKind, MemoryBackend
 from gtheme.core.transaction import FileWrite, SettingWrite
 
 SCHEMA_XML = """<?xml version="1.0" encoding="UTF-8"?>
@@ -364,7 +364,15 @@ def test_a_v1_file_that_did_not_exist_is_carried_across_as_absent(tmp_path, poin
 
 def test_what_cannot_be_imported_is_named_rather_than_dropped_silently(tmp_path, points):
     """A silent gap in the one recording of somebody's original desktop is the
-    worst failure available here. Everything skipped says so."""
+    worst failure available here. Everything skipped says so.
+
+    (This test used to assert two warnings, one of them for a symlink record
+    carrying a perfectly good target. That expectation was the H10 defect
+    written down: such a record is importable and is now imported. The link
+    case kept here is the genuinely unimportable one — a link v1 recorded
+    without its target — so the "everything skipped is named" property is still
+    pinned, on records that really are skipped.)
+    """
     v1 = _v1_store(
         tmp_path / "gtheme.v1-backup",
         settings={},
@@ -372,7 +380,7 @@ def test_what_cannot_be_imported_is_named_rather_than_dropped_silently(tmp_path,
             "/home/someone/.config/ghostty": {
                 "existed": True,
                 "symlink": True,
-                "target": "/home/someone/nightbloom/ghostty",
+                "target": "",
                 "backup": None,
                 "component": "terminal",
                 "theme": "nightbloom",
@@ -392,6 +400,215 @@ def test_what_cannot_be_imported_is_named_rather_than_dropped_silently(tmp_path,
     assert len(point.warnings) == 2
     assert any("shortcut" in warning for warning in point.warnings)
     assert any("missing" in warning for warning in point.warnings)
+
+
+# -- H10: "we cannot restore this" must never compile to "delete it" --------
+
+
+def _file_ops(point) -> dict[str, object]:
+    """``dest -> op`` for the file operations this moment would carry out."""
+    from gtheme.core.transaction import FileLink, FileRemove, FileWrite
+
+    return {
+        op.dest: op
+        for op in point.to_transaction().ops
+        if isinstance(op, FileWrite | FileRemove | FileLink)
+    }
+
+
+def test_a_v1_symlink_is_imported_as_the_link_it_was(tmp_path, points):
+    """review-report H10, half one. Fails on the old importer.
+
+    v1 recorded ``~/.config/ghostty`` as a link into the user's own dotfiles
+    repository, target and all. The importer mapped it to ``None`` — which is
+    not "not covered", it is *absence*, and ``to_transaction`` compiles absence
+    to ``FileRemove``. So pressing the nuclear "Before gtheme" undo deleted the
+    user's own shortcut and left a hole, while the warning attached to it said
+    that one was not covered here. ``capture()`` has recorded links as
+    ``{"link": target}`` since the same bug was fixed on that side.
+    """
+    from gtheme.core.transaction import FileLink
+
+    link = "/home/someone/.config/ghostty"
+    v1 = _v1_store(
+        tmp_path / "gtheme.v1-backup",
+        settings={},
+        files={
+            link: {
+                "existed": True,
+                "symlink": True,
+                "target": "/home/someone/nightbloom/ghostty",
+                "backup": None,
+                "component": "terminal",
+                "theme": "nightbloom",
+            }
+        },
+        blobs={},
+    )
+    point = import_v1_baseline(v1, root=points)
+
+    assert point.files[link] == {"link": "/home/someone/nightbloom/ghostty"}
+    assert link not in point.files_to_remove, "the user's own link is not a deletion"
+    op = _file_ops(point)[link]
+    assert isinstance(op, FileLink), f"restoring it puts the link back, not {op!r}"
+    assert op.target == "/home/someone/nightbloom/ghostty"
+
+
+def test_a_v1_record_whose_saved_copy_is_gone_is_left_alone_not_deleted(tmp_path, points):
+    """review-report H10, half two. Fails on the old importer.
+
+    A record whose blob has been lost says "we cannot put this back". The
+    importer recorded it as ``None``, which says "this was not here" — and the
+    restore then deleted the file whose only saved copy is the thing that went
+    missing. The warning stays; the destination is left out of the moment
+    entirely, so the restore does not touch it.
+    """
+    lost = "/home/someone/.config/lost.conf"
+    v1 = _v1_store(
+        tmp_path / "gtheme.v1-backup",
+        settings={},
+        files={
+            lost: {
+                "existed": True,
+                "symlink": False,
+                "target": None,
+                "backup": "9999",
+                "component": "terminal",
+                "theme": "shoji",
+            }
+        },
+        blobs={},
+    )
+    point = import_v1_baseline(v1, root=points)
+
+    assert lost not in point.files
+    assert point.files_to_remove == []
+    assert _file_ops(point) == {}
+    assert any("missing" in warning for warning in point.warnings), (
+        "still said out loud — a silent gap here is the worst failure available"
+    )
+
+
+def test_an_imported_v1_baseline_removes_only_what_v1_said_was_absent(tmp_path, points):
+    """The whole H10 story in one moment, as a v1 upgrader really has it."""
+    v1 = _v1_store(
+        tmp_path / "gtheme.v1-backup",
+        settings={},
+        files={
+            "/home/someone/.config/ghostty": {
+                "existed": True,
+                "symlink": True,
+                "target": "/home/someone/dotfiles/ghostty",
+                "backup": None,
+                "component": "terminal",
+                "theme": "shoji",
+            },
+            "/home/someone/.config/lost.conf": {
+                "existed": True,
+                "symlink": False,
+                "target": None,
+                "backup": "9999",
+                "component": "terminal",
+                "theme": "shoji",
+            },
+            "/home/someone/.config/installed-by-a-look": {
+                "existed": False,
+                "symlink": False,
+                "target": None,
+                "backup": None,
+                "dirs": [],
+                "component": "terminal",
+                "theme": "shoji",
+            },
+        },
+        blobs={},
+    )
+    point = import_v1_baseline(v1, root=points)
+    assert point.files_to_remove == ["/home/someone/.config/installed-by-a-look"], (
+        "only a file v1 recorded as not existing may be deleted by going back"
+    )
+
+
+def test_a_file_whose_copy_failed_is_left_out_of_the_moment_not_recorded_as_absent(
+    points, backend, tmp_path, monkeypatch
+):
+    """review-report H10, in ``capture()`` rather than in the importer.
+
+    The importer was fixed and its sibling was not. A file that demonstrably
+    *exists* but whose copy failed — a full disk, a file that became unreadable
+    between the check and the read — was recorded as ``None``, which does not
+    mean "not covered", it means *absence*, and ``to_transaction`` compiles
+    absence to ``FileRemove``. Both the automatic moment taken before every
+    apply and a hand-saved one go through this loop, so one transient copy
+    failure left a permanently wrong moment: pressing Undo afterwards deleted a
+    file the moment was taken to protect, and reported success.
+    """
+    import errno
+    import shutil
+
+    precious = tmp_path / "precious.conf"
+    precious.write_text("years of tuning", encoding="utf-8")
+
+    def full_disk(src, dst, *args, **kwargs):
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(shutil, "copy2", full_disk)
+    point = capture([], [str(precious)], label="Before", backend=backend, root=points)
+
+    assert str(precious) not in point.files, "a file that was there is not absence"
+    assert point.files_to_remove == []
+    assert _file_ops(point) == {}, "a failed copy must not compile to a deletion"
+    assert any("precious.conf" in warning for warning in point.warnings), (
+        "still said out loud — the gap is real, it is just not a deletion"
+    )
+    assert precious.read_text(encoding="utf-8") == "years of tuning"
+
+
+def test_a_shortcut_that_could_not_be_read_is_left_out_of_the_moment(
+    points, backend, tmp_path, monkeypatch
+):
+    """The same rule for the link half of the loop.
+
+    ``~/.config/ghostty`` pointing into somebody's dotfiles repository is the
+    shipped example. If ``readlink`` fails, what the moment knows is "there was
+    a shortcut here and we could not read where it pointed" — which is not
+    "there was nothing here", and only one of those two deletes the link.
+    """
+    import errno
+    import os
+
+    link = tmp_path / "ghostty"
+    target = tmp_path / "dotfiles-ghostty"
+    target.mkdir()
+    link.symlink_to(target)
+
+    def denied(path, *args, **kwargs):
+        raise OSError(errno.EACCES, "Permission denied")
+
+    monkeypatch.setattr(os, "readlink", denied)
+    point = capture([], [str(link)], label="Before", backend=backend, root=points)
+
+    assert str(link) not in point.files
+    assert point.files_to_remove == []
+    assert _file_ops(point) == {}
+    assert any("ghostty" in warning for warning in point.warnings)
+    assert link.is_symlink(), "and the link is still the user's own"
+
+
+def test_a_file_that_really_was_absent_still_restores_as_a_removal(points, backend, tmp_path):
+    """The other side of H10, so the fix cannot be "never remove anything".
+
+    Absence is two thirds of a pristine moment and it has to keep compiling to
+    a deletion; the distinction the fix draws is between "it was not here" and
+    "we could not read it", not between "delete" and "do nothing".
+    """
+    from gtheme.core.transaction import FileRemove
+
+    missing = tmp_path / "installed-by-a-look.conf"
+    point = capture([], [str(missing)], label="Before", backend=backend, root=points)
+
+    assert point.files[str(missing)] is None
+    assert isinstance(_file_ops(point)[str(missing)], FileRemove)
 
 
 def test_the_v1_store_is_never_written_to(tmp_path, points):
@@ -600,31 +817,196 @@ def test_restoring_absence_goes_through_the_transaction(
     del before
 
 
+class _RefusesOneKey(MemoryBackend):
+    """A memory backend that refuses to write one named key.
+
+    The refusal is a ``COMMIT_FAILED`` — the dconf failure the engine may not
+    treat as "that part of your desktop isn't installed here" — so a write to
+    it is a real transaction failure and not a skip.
+    """
+
+    def __init__(self, schema_source, doomed: str, *, then_everything: bool = False) -> None:
+        super().__init__(schema_source)
+        self._doomed = doomed
+        #: After the doomed key has been refused, refuse every further write —
+        #: which is what a store that has actually gone away looks like, and
+        #: the only way to reach a rollback that could not finish.
+        self._then_everything = then_everything
+        self._broken = False
+        #: Off while the test arranges the desktop it is going to restore, so
+        #: the setup writes the same way any other test's would.
+        self.armed = False
+
+    def set(self, key: str, value: str) -> None:
+        if self.armed and (key == self._doomed or self._broken):
+            if key == self._doomed and self._then_everything:
+                self._broken = True
+            raise BackendError(
+                BackendErrorKind.COMMIT_FAILED, "the store refused it", key=key
+            )
+        super().set(key, value)
+
+
+def _moment_to_go_back_to(points, backend, tmp_dest_root):
+    """A moment covering one file and two settings, then a desktop dirtied since.
+
+    Returns ``(point, config_file)``. Everything the moment covers has been
+    changed since it was taken, so restoring it is a real change to every one
+    of the three — which is what makes a failure partway through observable.
+    """
+    config = tmp_dest_root / "config"
+    config.write_text("the content the moment saved", encoding="utf-8")
+    backend.set(LIST, "['from the moment']")
+    backend.set(WORD, "'from the moment'")
+
+    point = capture(
+        [LIST, WORD], [str(config)], label="Before", backend=backend, root=points
+    )
+
+    config.write_text("changed since the moment", encoding="utf-8")
+    backend.set(LIST, "['changed since']")
+    backend.set(WORD, "'changed since'")
+    backend.armed = True
+    return point, config
+
+
 def test_a_restore_that_fails_partway_puts_everything_back(
-    points, backend, tmp_dest_root, state_dir
+    points, schema_source_factory, tmp_dest_root, state_dir
 ):
-    """All-or-nothing now covers absence too, because absence is in the batch."""
+    """All-or-nothing covers a restore too — including what it already wrote.
+
+    The failure happens *after* something has landed, which is the only
+    arrangement that tests anything: the file is written back first, then the
+    list setting, and only then does the word setting's write get refused. The
+    rollback has to undo the two that succeeded, and the proof it did is that
+    both hold the values the desktop had a moment ago rather than the moment's
+    own.
+
+    (Written this way after review-report M18. The previous version failed on
+    the transaction's *first* operation — the restore's source blob was deleted,
+    so ``_rendered`` raised before anything was written — and then asserted that
+    a file which had never been touched still held its old text, plus a closing
+    ``assert TransactionError is not None`` that a module object can never
+    fail. Deleting the entire settings leg of ``_roll_back`` left it green.)
+    """
     from gtheme.core import backends
     from gtheme.core.transaction import TransactionError
 
-    doomed = tmp_dest_root / "doomed"
-    doomed.write_text("here before the undo", encoding="utf-8")
-    point = capture([WORD], [str(doomed)], label="Before", backend=backend, root=points)
-    # The saved copy of the file is deleted, so the FileWrite that restores it
-    # cannot find its source and the whole transaction has to unwind.
-    for saved in (point.path / "files").iterdir():
-        saved.unlink()
-    point.files[str(doomed)] = None  # and this one has to be removed
-    restorepoints._write(point)
-    point.files[str(doomed)] = "doomed"
-    restorepoints._write(point)
+    backend = _RefusesOneKey(schema_source_factory(SCHEMA_XML), WORD)
+    point, config = _moment_to_go_back_to(points, backend, tmp_dest_root)
 
-    backend.set(WORD, "'changed since'")
+    transaction = point.to_transaction()
+    transaction.dest_root = str(tmp_dest_root)
+    transaction.backend = backend
+    with backends.use_backend(backend), pytest.raises(TransactionError) as caught:
+        transaction.apply()
+
+    assert "could not change" in str(caught.value)
+    assert WORD in str(caught.value), "the failure names the setting it was about"
+    assert caught.value.rolled_back is True
+
+    assert backend.get(LIST) == "['changed since']", (
+        "the setting the restore had already written must come back to what the "
+        "desktop held a moment ago, not stay at the moment's value"
+    )
+    assert backend.get(WORD) == "'changed since'", "the refused write never landed"
+    assert config.read_text(encoding="utf-8") == "changed since the moment", (
+        "and the file the restore had already written back comes back too"
+    )
+
+
+def test_a_failed_restore_reports_whether_the_desktop_came_back(
+    points, schema_source_factory, tmp_dest_root, state_dir
+):
+    """review-report L1. Fails on the old ``RestoreResult``, which had no answer.
+
+    ``apply_point`` knew whether the engine's rollback finished — the
+    ``TransactionError`` says so — and dropped it, so the Undo page could only
+    ever say "that did not work". A half-written *undo* is the one failure the
+    app must be able to describe: "nothing was changed" and "part of that
+    moment was written and part was not" are different sentences.
+    """
+    from gtheme.core import backends
+
+    backend = _RefusesOneKey(schema_source_factory(SCHEMA_XML), WORD)
+    point, config = _moment_to_go_back_to(points, backend, tmp_dest_root)
+
     with backends.use_backend(backend):
         result = restorepoints.apply_point(
             point.id, root=points, backend=backend, dest_root=str(tmp_dest_root)
         )
 
     assert result.warnings, "a restore that could not finish must say so"
-    assert doomed.read_text(encoding="utf-8") == "here before the undo"
-    assert TransactionError is not None
+    assert result.rolled_back is True
+    assert backend.get(LIST) == "['changed since']"
+    assert config.read_text(encoding="utf-8") == "changed since the moment"
+
+
+def test_a_restore_whose_rollback_could_not_finish_does_not_claim_it_did(
+    points, schema_source_factory, tmp_dest_root, state_dir
+):
+    """The serious half of L1: the desktop is somewhere in between, and says so.
+
+    The store stops accepting writes altogether partway through the restore, so
+    the rollback cannot put back the setting the restore had already changed.
+    ``rolled_back`` is False, and a page that reads it may not print "Your
+    desktop is exactly as it was".
+    """
+    from gtheme.core import backends
+
+    backend = _RefusesOneKey(
+        schema_source_factory(SCHEMA_XML), WORD, then_everything=True
+    )
+    point, _config = _moment_to_go_back_to(points, backend, tmp_dest_root)
+
+    with backends.use_backend(backend):
+        result = restorepoints.apply_point(
+            point.id, root=points, backend=backend, dest_root=str(tmp_dest_root)
+        )
+
+    assert result.warnings
+    assert result.rolled_back is False, (
+        "the rollback could not put the list setting back, and saying otherwise "
+        "is the lie the whole failure-copy design exists to prevent"
+    )
+
+
+# -- what a hand-saved moment covers ----------------------------------------
+
+
+def test_a_hand_saved_moment_covers_what_the_ownership_ledger_claims(
+    points, backend, state_dir
+):
+    """review-report M14. Fails on the old ``capture``.
+
+    A manual moment's key list came from the descriptor corpus, which is derived
+    from GNOME's own schemas and holds no third-party add-on keys at all — while
+    the four shipped Looks write between 15 and 24 such keys each. "How my whole
+    desktop looked" could not put any of them back. The ownership ledger knows
+    exactly which ones gtheme has touched, so a manual moment unions them in.
+    """
+    from gtheme.core import ledger as ledger_store
+
+    backend.set(LIST, "['what the look wrote']")
+    ledger_store.write_entry("MAGMA", [], [LIST])
+
+    point = capture([WORD], label="My desktop", kind="manual", backend=backend, root=points)
+
+    assert point.settings[LIST] == "['what the look wrote']"
+    assert point.settings[WORD] == "'default'", "and what was asked for is still there"
+
+
+def test_an_automatic_moment_covers_exactly_what_its_change_touches(
+    points, backend, state_dir
+):
+    """The union is deliberately manual-only.
+
+    An automatic moment is built from a transaction's diff and already covers
+    what is about to change; widening it to the whole ledger would make every
+    apply save (and prune, and copy) far more than the change it protects.
+    """
+    from gtheme.core import ledger as ledger_store
+
+    ledger_store.write_entry("MAGMA", [], [LIST])
+    point = capture([WORD], label="Before your last change", backend=backend, root=points)
+    assert LIST not in point.settings

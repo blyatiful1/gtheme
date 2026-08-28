@@ -30,6 +30,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
+from terminal_write_helper import land
 
 from gtheme.terminal import apply_all
 from gtheme.terminal.alacritty import AlacrittyAdapter, render_colors_toml
@@ -126,9 +127,9 @@ def test_the_colours_a_real_look_ships_are_all_accepted():
 
 def test_a_palette_refused_this_way_is_reported_not_raised(tmp_dest_root: Path):
     """apply_all turns the refusal into a sentence, one program at a time."""
-    outcome = apply_all(smuggle("background", STARSHIP_PAYLOAD), [GhosttyAdapter()])
-    assert outcome["ghostty"] is not None
-    assert "settings file" in outcome["ghostty"]
+    report = apply_all(smuggle("background", STARSHIP_PAYLOAD), [GhosttyAdapter()])
+    assert report.problems["ghostty"] is not None
+    assert "settings file" in report.problems["ghostty"]
 
 
 # -- layer 2: the writers cannot be made to emit it ------------------------
@@ -141,7 +142,7 @@ def test_starship_never_grows_a_table_even_from_an_unvalidated_value(tmp_dest_ro
     config.parent.mkdir(parents=True)
     config.write_text("# mine\nadd_newline = false\n", encoding="utf-8")
 
-    StarshipAdapter().apply(smuggle("background", STARSHIP_PAYLOAD))
+    land(StarshipAdapter(), smuggle("background", STARSHIP_PAYLOAD))
 
     text = config.read_text(encoding="utf-8")
     assert not _opens_a_table(text), "the payload became a table of its own"
@@ -186,7 +187,7 @@ def test_cava_refuses_a_value_carrying_its_own_apostrophe(tmp_dest_root: Path):
     config.write_text("[color]\ngradient = 0\n", encoding="utf-8")
     payload = "#fff'\nforeground = 'red"
     with pytest.raises(ValueError, match="settings file"):
-        CavaAdapter().apply(smuggle("ansi", (payload,) * 16))
+        land(CavaAdapter(), smuggle("ansi", (payload,) * 16))
     assert "custom" not in config.read_text(encoding="utf-8")
 
 

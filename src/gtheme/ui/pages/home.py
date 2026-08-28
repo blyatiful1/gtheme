@@ -22,7 +22,8 @@ here.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+import threading
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
@@ -32,12 +33,18 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 
-from gi.repository import Adw, Gdk, Gtk  # noqa: E402
+from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
 
 from ...core.backends import get_backend, has_session_bus  # noqa: E402
+from ...core.gvariant import unquote as unquote_variant  # noqa: E402
 from ...core.settings_backend import BackendError, SettingsBackend  # noqa: E402
 from ..applyrunner import ApplyRunner  # noqa: E402
+from ..widgets import a11y  # noqa: E402
+from ..widgets.actions import action_row  # noqa: E402
+from ..widgets.explainer import first_visit_banner  # noqa: E402
+from . import colors as colors_page  # noqa: E402
 from . import restore as restore_page  # noqa: E402
+from .wallpaper import readable_name  # noqa: E402
 
 __all__ = [
     "ACCENT_COLOURS",
@@ -69,34 +76,14 @@ KEYS: dict[str, str] = {
     "text": "gsettings:org.gnome.desktop.interface font-name",
 }
 
-#: The nine highlight colours GNOME offers, and nothing else — the setting is a
-#: fixed list with no custom value, and saying so is more honest than offering a
-#: colour picker that silently rounds to the nearest of these.
-ACCENT_NAMES: dict[str, str] = {
-    "blue": "Blue",
-    "teal": "Teal",
-    "green": "Green",
-    "yellow": "Yellow",
-    "orange": "Orange",
-    "red": "Red",
-    "pink": "Pink",
-    "purple": "Purple",
-    "slate": "Grey",
-}
-
-#: What each of them looks like, so the dot on the card is the colour itself
-#: rather than the name of a colour.
-ACCENT_COLOURS: dict[str, str] = {
-    "blue": "#3584e4",
-    "teal": "#2190a4",
-    "green": "#3a944a",
-    "yellow": "#c88800",
-    "orange": "#ed5b00",
-    "red": "#e62d42",
-    "pink": "#d56199",
-    "purple": "#9141ac",
-    "slate": "#6f8396",
-}
+#: The highlight colours GNOME offers, named and painted. Both are *views* of
+#: the one table on the Colours & Style page — the page that actually offers
+#: them — because this card is a mirror and a mirror that has its own idea of
+#: what the desktop supports is not a mirror (review-report L15). A colour this
+#: version has never heard of still gets a readable name and an honest grey dot
+#: rather than falling off the end of a dictionary.
+ACCENT_NAMES: dict[str, str] = colors_page.ACCENT_LABELS
+ACCENT_COLOURS: dict[str, str] = colors_page.ACCENT_HEXES
 
 _LIGHT_OR_DARK: dict[str, str] = {
     "prefer-dark": "Dark",
@@ -131,6 +118,10 @@ COPY: dict[str, str] = {
     "unknown": "Not set",
     "unreadable": "Could not read this one",
     "addons-unavailable": "Can't check right now",
+    # Shown while the answer is still being fetched. Counting the add-ons means
+    # asking GNOME, and GNOME can take its time — so the row says what it is
+    # doing instead of the window waiting for it (review-report M26).
+    "addons-checking": "Counting…",
     "link-looks": "Pick a whole look",
     "link-looks-subtitle": "Background picture, colours, icons and add-ons, all at once.",
     "link-wallpaper": "Change the background picture",
@@ -142,20 +133,17 @@ COPY: dict[str, str] = {
     "link-restore": "Go back to how it was",
     "link-restore-subtitle": "Every moment gtheme has saved for you.",
     "undo-button": "Undo last change",
+    # What the card's picture is called for somebody who cannot see it. The
+    # card is the app's opening statement — "this is how your desktop looks
+    # right now" — and the picture in it carried no text of any kind.
+    "picture-alt": "Your background picture: {name}",
+    "picture-none": "No background picture is set",
 }
 
 
 # --------------------------------------------------------------------------
 # reading the desktop
 # --------------------------------------------------------------------------
-
-
-def _unquote_variant(text: str) -> str:
-    """``"'Papirus-Dark'"`` -> ``Papirus-Dark``. Values arrive as stored text."""
-    stripped = text.strip()
-    if len(stripped) >= 2 and stripped[0] == stripped[-1] and stripped[0] in "'\"":
-        return stripped[1:-1]
-    return stripped
 
 
 def read(backend: SettingsBackend, name: str) -> str | None:
@@ -169,7 +157,7 @@ def read(backend: SettingsBackend, name: str) -> str | None:
     if key is None:
         return None
     try:
-        return _unquote_variant(backend.get(key))
+        return unquote_variant(backend.get(key))
     except BackendError:
         return None
 
@@ -183,7 +171,7 @@ def describe_light_or_dark(value: str | None) -> str:
 def describe_accent(value: str | None) -> str:
     if value is None:
         return COPY["unreadable"]
-    return ACCENT_NAMES.get(value, value.capitalize())
+    return colors_page.accent_label(value) or COPY["unknown"]
 
 
 def summarise_setting(value: str | None) -> str:
@@ -246,9 +234,19 @@ def addon_summary(shell: Any | None = None) -> str:
 
 
 def _load_extensions(shell: Any | None) -> dict[str, Any] | None:
-    """The installed add-ons, or None when the desktop cannot be asked."""
+    """The installed add-ons, or None when the desktop cannot be asked.
+
+    A connection that has already listed once is *read*, not asked again.
+    ``ShellExtensions`` says in its own docstring that it reads the full list
+    once and then follows ``ExtensionStateChanged`` — so its cached map is the
+    live answer, and calling ``load()`` a second time is a ``ListExtensions``
+    round trip on the main loop for information already in hand
+    (review-report M26).
+    """
     if shell is not None:
         try:
+            if getattr(shell, "loaded", False):
+                return shell.all
             return shell.load()
         except Exception:  # noqa: BLE001 - an unavailable desktop is not an error
             return None
@@ -302,9 +300,16 @@ def dot_pixels(colour: str, size: int = DOT_SIZE) -> bytes:
 
 
 def _accent_dot(accent: str | None) -> Gtk.Widget:
-    """A filled circle in the highlight colour. The colour *is* the label."""
-    colour = ACCENT_COLOURS.get(accent or "", "#77767b")
+    """A filled circle in the highlight colour.
+
+    The colour is the label — for anybody who can see it. The row it sits in
+    already reads "Highlight colour: Blue", so for anybody who cannot, the dot
+    is a picture of a word that has already been said, and it stays out of the
+    way rather than being announced as an unnamed image (persona-report §2.10).
+    """
+    colour = colors_page.accent_hex(accent)
     image = Gtk.Image(valign=Gtk.Align.CENTER, pixel_size=DOT_SIZE)
+    a11y.hide_from_screen_readers(image)
     try:
         from gi.repository import GLib
 
@@ -343,13 +348,26 @@ class HomePage(Adw.Bin):
         self.shell = shell
         self.root = root
         self._want_thumbnails = thumbnails
+        #: Whether the add-on count has been asked for yet. The desktop is
+        #: never asked from the constructor — see :meth:`_refresh_addons`.
+        self._addons_asked = False
+        #: The last answer the deferred count delivered, so a later re-read of
+        #: the card shows it rather than going back to "Counting…".
+        self._addons_text: str | None = None
 
         self._page = Adw.PreferencesPage()
         self.set_child(self._page)
+        # The card's picture is the first thing the app shows anybody, and it
+        # was the largest unnamed image in the tree: a bare Gtk.Picture with no
+        # alternative text at all (persona-report §2.10). The text is set again
+        # in :meth:`_load_picture` once the picture's name is known; this is
+        # what it says while there is nothing to show, and if the desktop has no
+        # background picture at all it is the whole truth.
         self._picture = Gtk.Picture(
             height_request=180,
             content_fit=Gtk.ContentFit.COVER,
             css_classes=["card"],
+            alternative_text=COPY["picture-none"],
         )
         self._rows: dict[str, Adw.ActionRow] = {}
         self._build()
@@ -357,7 +375,9 @@ class HomePage(Adw.Bin):
     # -- construction ------------------------------------------------------
 
     def _build(self) -> None:
-        banner = self._banner()
+        banner = first_visit_banner(
+            getattr(self.window, "prefs", None), BANNER_ID, COPY["banner"]
+        )
         if banner is not None:
             group = Adw.PreferencesGroup()
             group.add(banner)
@@ -386,7 +406,7 @@ class HomePage(Adw.Bin):
             title=COPY["safety-title"], description=COPY["safety-description"]
         )
         safety.add(
-            self._action_row(
+            action_row(
                 restore_page.COPY["save-title"],
                 restore_page.COPY["save-subtitle"],
                 restore_page.COPY["save-button"],
@@ -395,7 +415,7 @@ class HomePage(Adw.Bin):
             )
         )
         safety.add(
-            self._action_row(
+            action_row(
                 restore_page.COPY["undo-title"],
                 restore_page.COPY["undo-subtitle"],
                 restore_page.COPY["undo-button"],
@@ -417,37 +437,6 @@ class HomePage(Adw.Bin):
 
         self.refresh()
 
-    def _banner(self) -> Adw.Banner | None:
-        prefs = getattr(self.window, "prefs", None)
-        if prefs is None or not prefs.should_show_banner(BANNER_ID):
-            return None
-        banner = Adw.Banner(title=COPY["banner"], button_label="Got it", revealed=True)
-
-        def dismiss(*_args: Any) -> None:
-            banner.set_revealed(False)
-            prefs.mark_banner_seen(BANNER_ID)
-
-        banner.connect("button-clicked", dismiss)
-        return banner
-
-    def _action_row(
-        self,
-        title: str,
-        subtitle: str,
-        button_label: str,
-        callback: Callable[[], Any],
-        *,
-        suggested: bool = False,
-    ) -> Adw.ActionRow:
-        row = Adw.ActionRow(title=title, subtitle=subtitle)
-        button = Gtk.Button(label=button_label, valign=Gtk.Align.CENTER)
-        if suggested:
-            button.add_css_class("suggested-action")
-        button.connect("clicked", lambda *_a: callback())
-        row.add_suffix(button)
-        row.set_activatable_widget(button)
-        return row
-
     def _link_row(self, page_id: str, title: str, subtitle: str) -> Adw.ActionRow:
         row = Adw.ActionRow(title=title, subtitle=subtitle, activatable=True)
         row.add_suffix(Gtk.Image(icon_name="go-next-symbolic"))
@@ -466,7 +455,7 @@ class HomePage(Adw.Bin):
         self._set("icons", summarise_setting(read(self.backend, "icons")))
         self._set("pointer", summarise_setting(read(self.backend, "pointer")))
         self._set("text", summarise_setting(read(self.backend, "text")))
-        self._set("addons", addon_summary(self.shell))
+        self._refresh_addons()
 
         highlight = self._rows.get("highlight")
         if highlight is not None:
@@ -478,6 +467,88 @@ class HomePage(Adw.Bin):
             self._dot = dot
 
         self._load_picture()
+
+    def _refresh_addons(self) -> None:
+        """The add-on line, without a D-Bus round trip in the constructor.
+
+        Counting add-ons means ``ListExtensions``, a blocking call with GDBus's
+        25-second default timeout. Home is the page the window opens first, so
+        doing it here did it inside ``Window.__init__`` — before ``present()``,
+        which is the very freeze review-report M26 is about: the version half
+        was fixed and the count half kept the stall.
+
+        A connection that was handed in is already open and is read straight
+        away; there is nothing slow left in it. With no connection the row says
+        it is counting and the asking is deferred to :meth:`_start_addon_probe`
+        on an idle, so it happens *after* the window is on the screen — and the
+        asking itself is on a worker thread, so a desktop that takes its time
+        does not stop the app from repainting.
+        """
+        if self.shell is not None:
+            self._set("addons", addon_summary(self.shell))
+            return
+        self._set("addons", self._addons_text or COPY["addons-checking"])
+        if self._addons_asked:
+            return
+        self._addons_asked = True
+        GLib.idle_add(self._start_addon_probe)
+
+    def _start_addon_probe(self) -> bool:
+        """Ask the desktop for its add-ons, off the main loop. Runs once."""
+
+        def worker() -> None:
+            answer = self._connect_for_addons()
+
+            def deliver() -> bool:
+                self._addons_found(answer)
+                return GLib.SOURCE_REMOVE
+
+            GLib.idle_add(deliver)
+
+        threading.Thread(target=worker, name="gtheme-addon-count", daemon=True).start()
+        return GLib.SOURCE_REMOVE
+
+    def _connect_for_addons(self) -> Any:
+        """The slow half. No widgets — this runs off the main loop.
+
+        The *window's* connection is the one asked for, not a second one of
+        this page's own: two connections to the same service mean two
+        subscriptions to the same signal and two answers to "is it running",
+        which is how this page and the Add-ons page end up disagreeing.
+        """
+        shell = getattr(self.window, "shell", None)
+        if shell is None:
+            if not has_session_bus():
+                return None
+            try:
+                from ...ego.shelldbus import GDBusShellProxy, ShellExtensions
+
+                shell = ShellExtensions(GDBusShellProxy())
+            except Exception:  # noqa: BLE001 - no desktop to ask: an ordinary state
+                return None
+        # Listing happens *here*, on this thread. The window's connection is
+        # handed back unlisted when the desktop answered with an error, and
+        # leaving it that way would only move the blocking call to the line
+        # where the summary is built.
+        try:
+            if not getattr(shell, "loaded", False):
+                shell.load()
+        except Exception:  # noqa: BLE001 - the same
+            return None
+        return shell
+
+    def _addons_found(self, shell: Any | None) -> None:
+        """Back on the main loop with whatever the desktop said."""
+        if shell is None:
+            # Not remembered as final: the desktop may be there next time the
+            # card is re-read, exactly as it was when this was a plain call.
+            self._addons_asked = False
+            self._addons_text = COPY["addons-unavailable"]
+            self._set("addons", self._addons_text)
+            return
+        self.shell = shell
+        self._addons_text = None
+        self._set("addons", addon_summary(shell))
 
     def _set(self, name: str, text: str) -> None:
         row = self._rows.get(name)
@@ -496,7 +567,11 @@ class HomePage(Adw.Bin):
         path = current_wallpaper(self.backend)
         if path is None:
             self._picture.set_paintable(None)
+            self._picture.set_alternative_text(COPY["picture-none"])
             return
+        self._picture.set_alternative_text(
+            COPY["picture-alt"].format(name=readable_name(path))
+        )
         if not self._want_thumbnails:
             self._picture.set_filename(str(path))
             return
@@ -565,8 +640,7 @@ class HomePage(Adw.Bin):
         return point
 
     def _save_failed(self, error: Exception) -> None:
-        detail = getattr(error, "strerror", None) or error
-        self._toast(f"Could not save how your desktop looks: {detail}")
+        self._toast(restore_page.save_failed_sentence(error))
 
     def undo_last_change(self) -> Any:
         """Go back to the most recent saved moment. Backs the header button."""
@@ -578,9 +652,24 @@ class HomePage(Adw.Bin):
             heading=restore_page.COPY["working-heading"],
             starting=restore_page.COPY["working"],
             on_done=self._undo_finished,
-            on_failed=lambda _error: self._toast(restore_page.COPY["failed"]),
+            on_failed=self._undo_failed,
         )
         return None
+
+    def _undo_failed(self, error: BaseException) -> None:
+        """Say which of the two very different failures just happened.
+
+        This handler used to throw the error away and toast "Nothing was
+        changed. Your desktop is exactly as it was." — the one sentence that
+        must never be said over a desktop nobody can vouch for. An unknown
+        failure is an unknown desktop unless the error itself says otherwise
+        (review-report H2), which is what ``rolled_back`` is for.
+        """
+        self._toast(
+            restore_page.failure_sentence(
+                str(error), rolled_back=bool(getattr(error, "rolled_back", False))
+            )
+        )
 
     def _undo(self, narrate: Any = None) -> Any:
         """The engine half of going back. Runs off the main loop, or inline."""
@@ -600,9 +689,21 @@ class HomePage(Adw.Bin):
             self._toast(restore_page.COPY["undo-nothing"])
             return None
         if result is not None and result.warnings and result.transaction is None:
-            self._toast(result.warnings[0] or restore_page.COPY["failed"])
+            # Whether the desktop came back with the failed undo is the
+            # engine's answer to give, and the result carries it now
+            # (review-report L1). The Undo page says the same two sentences
+            # through the same function.
+            self._toast(
+                restore_page.failure_sentence(
+                    result.warnings[0], rolled_back=result.rolled_back
+                )
+            )
             return result
-        self._toast(restore_page.COPY["done"])
+        # Named, through the Undo page's own sentence. This card has no list of
+        # moments under it, so "back the way it was" answered a question the
+        # person had not asked and left the one they had — back to *when*? —
+        # unanswered (U8).
+        self._toast(restore_page.done_sentence(point))
         self._changed()
         return result
 
@@ -636,15 +737,25 @@ def header_button(page: HomePage) -> Gtk.Button:
     return button
 
 
-def build(window: Any | None = None, *, shell: Any = None, **kwargs: Any) -> Gtk.Widget:
+def build(window: Any | None = None, **kwargs: Any) -> Gtk.Widget:
     """Factory named by ``ui.registry``: the Home page.
 
-    ``shell`` is named rather than left to ``**kwargs`` because that is how the
-    window knows it can hand one over: it offers what it owns one of, and a
-    factory takes what it names. Left out, the add-on line asks the desktop
-    itself, which is what every test that builds this page relies on.
+    ``shell`` is deliberately **not** named here, and that is load-bearing.
+    ``Window._offer`` hands a factory exactly what it names — so naming
+    ``shell`` made *building* this page build the shared desktop connection,
+    whose ``load()`` is the blocking ``ListExtensions``. Home is the page the
+    window opens first, so that call landed inside ``Window.__init__``, before
+    ``present()``: the second half of review-report M26, left over after the
+    version half was fixed.
+
+    A connection can still be handed in — ``build(window, shell=…)`` and
+    ``HomePage(window, shell=…)`` both work, through ``**kwargs`` — and
+    ``Window.adopt_shell`` still gives the page the window's one when the
+    Add-ons page re-probes. What has gone away is the window *offering* it at
+    construction time. Left out, the add-on line asks for it after the window
+    is on the screen, on a worker thread (:meth:`HomePage._refresh_addons`).
     """
-    return HomePage(window, shell=shell, **kwargs)
+    return HomePage(window, **kwargs)
 
 
 def copy_strings() -> Iterable[tuple[str, str]]:

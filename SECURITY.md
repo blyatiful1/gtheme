@@ -15,9 +15,13 @@ running a command, and there is no code anywhere in gtheme that could run one:
   recognise, so a Look with a `[[hooks]]` section — the section version 1 of
   this project had, which really did run scripts — fails to load rather than
   being ignored;
-- the layer that applies changes understands exactly four kinds of operation:
-  write a file, write a setting, switch an add-on on, install an add-on. There
-  is no fifth;
+- a Look compiles to exactly four kinds of operation: write a file, write a
+  setting, switch an add-on on, install an add-on. There is no fifth a Look can
+  reach. The layer underneath knows three more — delete a file, put a symbolic
+  link back, clear a setting — and those exist so that *undoing* can restore an
+  absence: they are produced only by a restore point or by the undo path, never
+  by anything a Look says. Seven in total, the set is closed, and **not one of
+  the seven runs anything**;
 - version 1 Looks are converted, not accepted. The converter drops each script
   and prints a warning naming what that script used to do. Nothing survives the
   conversion silently.
@@ -30,8 +34,8 @@ cannot.
 ## What a Look can still do, and what stops it going further
 
 A Look can copy files into your home folder and change your desktop's
-settings. Two boundaries constrain that, and both are checked before the first
-byte is written, not as it goes:
+settings. Three boundaries constrain that, and all of them are checked before
+the first byte is written, not as it goes:
 
 **Where files may land.** Every destination is resolved — following `..` and
 following symbolic links — and must come out below your home folder. A Look
@@ -43,14 +47,36 @@ anything has happened, rather than partway through.
 inside the Look's own folder, so a Look cannot use a symbolic link as a siphon
 to copy your private keys out into somewhere it can publish them.
 
+**What may be written, not only where.** Inside your home folder there are
+places where putting a file *is* arranging for a program to run, and settings
+that decide what your desktop runs. A Look may not touch either: the autostart,
+background-service and command folders, the start-up files of a command window,
+anything named `.desktop` or `.service`, the command behind a keyboard
+shortcut, which program opens when your desktop needs one, and any raw settings
+location outside the add-on areas a decorative Look legitimately reaches into.
+A Look asking for one of these does not apply at all — not "minus that part" —
+and the reason is named before anything happens. The list is one documented
+file, `src/gtheme/core/policy.py`, so it can be read and argued with.
+
+The same list has a second half, for a case where refusing would be wrong: a
+Look may theme your command window by writing that program's own settings file,
+and some of those formats can also name a command for that program to run —
+`~/.config/starship.toml` is the example, and three of the six Looks shipped
+with gtheme write it. Those are allowed and are **named one by one** in the
+preview, never folded into "23 files". Being able to see them is what makes
+allowing them reasonable.
+
 **Everything is recorded first.** Before gtheme changes anything, it records
 what was there. Any Look can be completely undone, including one that turns out
 to be malicious rather than merely ugly.
 
 **Nothing is silently overwritten through a link.** If the place a file would
 land is a symbolic link into some other project, gtheme replaces the link
-rather than writing through it — and for the specific case of a settings folder
-managed by another tool, it refuses to write at all until you say otherwise.
+rather than writing through it. One card in the app goes further than that:
+the Ghostty terminal card checks whether that program's settings folder belongs
+to another tool and refuses to write until you say otherwise. That check is
+Ghostty's alone today — no other card makes it, and neither does applying a
+whole Look, which is the honest state the app's own page says out loud.
 
 ## Add-ons are a different matter, and we say so
 
@@ -61,9 +87,20 @@ changes that.
 
 What gtheme does about it:
 
-- **Installing goes through GNOME's own confirmation box.** gtheme asks the
-  desktop to install an add-on; the desktop shows you its own dialog, naming
-  the add-on, and you approve it there. gtheme cannot install one behind that.
+- **Nothing is installed unless you ask for it, and it can only come from one
+  place.** There are two ways an add-on arrives, and they are not the same.
+  Adding one from the Add-ons page asks the desktop to do it: GNOME shows you
+  its own confirmation box, naming the add-on, and gtheme cannot install one
+  behind that box. Adding the add-ons a Look asks for works differently —
+  gtheme downloads them itself from extensions.gnome.org and hands each one to
+  the desktop's own installer program, with **no** GNOME confirmation box in
+  between. On that path the button you press is the confirmation: nothing is
+  fetched until you press it, extensions.gnome.org is the only address gtheme
+  ever downloads an add-on from, and a Look can therefore only ask for add-ons
+  that are already published there. The button is also pressed under a list:
+  the preview names every add-on it would fetch — what it is called, who wrote
+  it and where it comes from — before a single byte is downloaded, so the thing
+  you are agreeing to is those add-ons and not a number.
 - **A Look never carries add-on code.** It can name an add-on it would like,
   and gtheme offers to fetch that add-on from extensions.gnome.org — the same
   place GNOME's own website installs from. A Look that names a private add-on
@@ -92,11 +129,52 @@ you send it anywhere.
 
 ## Where gtheme keeps things
 
+Everything gtheme writes for itself is in one of these. There is nothing
+outside your home folder.
+
 | | |
 |---|---|
-| `~/.local/state/gtheme/v2/` | the record of what your desktop looked like, the list of what gtheme currently owns, and your saved moments |
-| `~/.local/state/gtheme.v1-backup/` | a copy of version 1's records, **read-only, always**. It holds the only surviving record of this desktop before gtheme ever ran, and nothing in version 2 writes to it |
+| `~/.local/state/gtheme/v2/` | the record of what your desktop looked like, the list of what gtheme currently owns, which Look is applied, your saved moments, and the lock file that stops two copies changing things at once |
+| `~/.local/state/gtheme.v1-backup/` | a copy of version 1's records, **read-only, always**. It holds the only surviving record of this desktop before gtheme version 1 ever ran, and nothing in version 2 writes to it |
 | `~/.config/gtheme/prefs.json` | the app's own preferences (window size, which one-off notices you have dismissed) |
+| `~/.local/share/gtheme/v2/themes/` | Looks you saved or downloaded. The six that ship with gtheme are not here — they are inside the installed program |
+| `~/.local/share/backgrounds/gtheme/` | copies of background pictures you added yourself, so that moving the original later cannot break your desktop |
+| `~/.local/share/gnome-background-properties/gtheme.xml` | the names of those same pictures. This is the desktop-wide list every wallpaper picker on the machine reads, GNOME's own included, and writing there on purpose is what makes a picture you chose findable outside this app. The file holds names and file paths and nothing else |
+| `~/.cache/gtheme/ego/` | the last few answers from extensions.gnome.org, so the Add-ons page does not re-ask for the same list. Deleting it costs nothing |
+| `~/.local/share/gnome-shell/extension-updates/` | GNOME's own folder for an add-on update waiting to be moved into place at your next login. gtheme writes an update there rather than over a running add-on |
+
+The last two rows are the only ones that are *yours* rather than gtheme's: the
+picture you picked and the name it goes by. Neither is written down in the
+ownership ledger, so `gtheme rescue` puts your background setting back but
+leaves the copy and its entry where they are. That is deliberate — a rescue is
+for undoing what gtheme changed, not for deleting a picture you added — and it
+means those two are the one thing on this page you have to remove by hand. The
+README says where, under [Removing gtheme](README.md#removing-gtheme).
+
+Two more places belong to somebody else:
+`~/.local/share/gnome-shell/extensions/` and `/usr/share/gnome-shell/extensions/`,
+where the add-ons on this computer live. gtheme reads them, and it also puts
+add-ons into the first one — by handing the downloaded package to GNOME's own
+`gnome-extensions install` command rather than unpacking files there itself.
+Whether you are shown GNOME's own confirmation box first depends on the route:
+the **Add-ons** page asks the desktop to install, so the desktop shows you its
+dialog; the add-ons a **Look** fetches, when you press
+its "Get them and use this look" button, are installed from the package without
+that dialog. Nothing in `/usr/share/gnome-shell/extensions/` is ever written —
+that one is read-only to gtheme, and would need administrator rights it never
+asks for.
+
+Files a Look writes are a separate matter: those go where the Look says, which
+may be anywhere below your home folder (`~/.config/alacritty/alacritty.toml`,
+for instance) and never anywhere else — that is the boundary above. Every one
+of them is written down in the ownership ledger first, which is what makes
+`gtheme rescue` able to find them again.
+
+If you have moved your home folders with the `XDG_*` variables, the paths above
+follow them.
+
+The launcher and app-list entry the installer adds are listed in the README,
+under [Removing gtheme](README.md#removing-gtheme).
 
 gtheme runs entirely as you. It never asks for administrator rights, and
 nothing it does needs them.

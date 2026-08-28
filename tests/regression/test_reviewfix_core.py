@@ -301,7 +301,11 @@ def test_a_tidy_up_that_really_happened_is_never_reported_as_nothing_changed(
     victim = bench.root / ".config" / "demo" / "old.css"
     assert victim.is_file()
 
-    monkeypatch.setattr(transaction_module, "has_session_bus", lambda: False)
+    # "No desktop session" is now staged as a backend that says it cannot
+    # write, because the AS5 gate asks the backend instead of reading
+    # DBUS_SESSION_BUS_ADDRESS (review-report M16). Same condition, honest
+    # mechanism.
+    monkeypatch.setattr(transaction_module, "can_write_settings", lambda _backend: False)
     seen: list[tuple[Progress, str]] = []
     with pytest.raises(TransactionError) as caught:
         Transaction(

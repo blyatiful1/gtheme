@@ -64,7 +64,14 @@ def test_the_committed_index_keeps_every_v1_field(repo_root: Path):
 def test_every_bundled_look_is_in_the_index(repo_root: Path):
     document = json.loads((repo_root / "themes" / "index.json").read_text(encoding="utf-8"))
     names = {entry["name"] for entry in document["themes"]}
-    assert names == {"magma", "netrunner", "hyperclass", "nightbloom"}
+    assert names == {
+        "daybreak",
+        "hearth",
+        "hyperclass",
+        "magma",
+        "netrunner",
+        "nightbloom",
+    }
 
 
 def test_every_indexed_screenshot_exists(repo_root: Path):
@@ -107,7 +114,7 @@ def test_a_look_with_add_ons_says_so(tmp_path):
         ),
         extensions=ExtensionsBlock(enable=["x@y"]),
     )
-    assert "addons" in entry_for(preset).components
+    assert "addons" in entry_for(preset, provenance="community").components
 
 
 # ── reading a fetched index ──────────────────────────────────────────────
@@ -116,7 +123,14 @@ def test_a_look_with_add_ons_says_so(tmp_path):
 def test_parse_round_trips_what_build_writes(repo_root: Path):
     text = (repo_root / "themes" / "index.json").read_text(encoding="utf-8")
     entries = parse_index(text)
-    assert [e.name for e in entries] == ["hyperclass", "magma", "netrunner", "nightbloom"]
+    assert [e.name for e in entries] == [
+        "daybreak",
+        "hearth",
+        "hyperclass",
+        "magma",
+        "netrunner",
+        "nightbloom",
+    ]
     assert all(e.format == 2 for e in entries)
 
 

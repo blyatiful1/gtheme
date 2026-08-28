@@ -118,11 +118,19 @@ def test_AS5_no_desktop_session_skips_the_whole_settings_phase_once(
 ):
     """apply.py:691 — one sentence, not forty identical failures.
 
-    With no session to write into, every settings write fails the same way.
-    v1 learned to say so once rather than flooding the output.
+    With nowhere to write settings into, every settings write fails the same
+    way. v1 learned to say so once rather than flooding the output.
+
+    The *simulation* changed with review-report M16 and the invariant did not.
+    This used to unset ``DBUS_SESSION_BUS_ADDRESS``, because the gate read that
+    variable — which meant an environment variable could switch off a backend
+    that never touches a bus, and the suite's verdict depended on the shell it
+    was launched from. The gate now asks the backend, so the honest way to
+    stage "no desktop session" is a backend that says it cannot write. The test
+    below pins the other half: unsetting the variable no longer silences a
+    backend that can.
     """
-    monkeypatch.delenv("DBUS_SESSION_BUS_ADDRESS", raising=False)
-    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path / "no-bus-here"))
+    monkeypatch.setattr(type(engine.backend), "can_write", lambda _self: False, raising=False)
 
     source = _look(tmp_path, "file", "content")
     tx = Transaction(

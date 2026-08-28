@@ -272,12 +272,22 @@ def test_templating_something_that_is_not_text_fails_before_it_truncates(bench):
 
 
 def test_permissions_are_honoured_and_privilege_bits_are_stripped(bench):
-    """A Look may choose permissions. It may not hand itself privileges."""
-    source = bench.add_file("script", "#!/bin/sh\n")
-    _tx(bench, [FileWrite(src=source, dest="~/bin/script", mode="4755")]).apply(
-        restore_point=False
-    )
-    assert (bench.root / "bin" / "script").stat().st_mode & 0o7777 == 0o755
+    """A Look may choose permissions. It may not hand itself privileges.
+
+    The destination used to be ``~/bin/script``, with a ``#!/bin/sh`` body —
+    which review-report C1 cited as the repository's own proof that a Look
+    could write a program onto the command path and have the suite call it
+    correct. A Look may no longer write there at all (the test below pins
+    that), so this one keeps what it was really about — the mode bits — at a
+    destination a Look legitimately owns.
+    """
+    source = bench.add_file("emblem.svg", "<svg/>\n")
+    _tx(
+        bench,
+        [FileWrite(src=source, dest="~/.local/share/gtheme/assets/emblem.svg", mode="4755")],
+    ).apply(restore_point=False)
+    written = bench.root / ".local" / "share" / "gtheme" / "assets" / "emblem.svg"
+    assert written.stat().st_mode & 0o7777 == 0o755
 
 
 def test_a_look_that_is_missing_one_of_its_own_files_fails_before_writing(bench):

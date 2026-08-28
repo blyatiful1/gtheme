@@ -3,7 +3,7 @@
 All notable changes to gtheme are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
-## v2.0.0 (26 August 2026) — the rebuild
+## v2.0.0 (28 August 2026) — the rebuild
 
 gtheme was a command-line tool. It is now an app: a GTK4/libadwaita window for
 GNOME, written for someone whose first Linux computer is the one in front of
@@ -70,8 +70,9 @@ tag; nothing from it is lost, and the state it wrote is never touched.
   `min_shell` and `provenance`.
 - **The interactive text menu is gone.** So are `new`, `build`, `capture` and
   `export` as commands: capturing and sharing a desktop are now buttons in the
-  app. The `gtheme` command keeps exactly three subcommands — `gui` (the
-  default), `rescue`, and `validate <folder>` for Look authors.
+  app. The `gtheme` command keeps four subcommands — `gui` (the default),
+  `rescue`, `validate <folder>` for Look authors, and `apply <name-or-folder>`
+  for using a Look without opening the window.
 - **v2 state lives under `~/.local/state/gtheme/v2/`.** v1's files in
   `~/.local/state/gtheme/` are never written to and never deleted, and a
   read-only copy of them is what materialises the "Before gtheme" restore
@@ -81,18 +82,26 @@ tag; nothing from it is lost, and the state it wrote is never touched.
 
 ### Looks
 
-- **Four bundled**: HYPERCLASS (Gilded Void), MAGMA (Obsidian Flow), NETRUNNER
-  and NIGHTBLOOM (the glasshouse after dark). The first three are conversions
-  of their v1 originals; NIGHTBLOOM is new. Wallpapers ship in the repository
-  rather than being fetched, so applying one needs no internet connection.
+- **Six bundled**: HYPERCLASS (Gilded Void), MAGMA (Obsidian Flow), NETRUNNER,
+  NIGHTBLOOM (the glasshouse after dark), DAYBREAK (light) and HEARTH (warm).
+  The first three are conversions of their v1 originals; NIGHTBLOOM is new, and
+  DAYBREAK and HEARTH were written during the audit pass below, because four
+  dark Looks is not a choice. Wallpapers ship in the repository rather than
+  being fetched, so applying one needs no internet connection.
 - Each Look's folder carries a `README.md` naming what did not survive
   conversion.
 
 ### Add-ons
 
-- **Search, install, configure and update from inside the app.** Installing
-  goes through GNOME's own confirmation box; gtheme never installs one behind
-  it.
+- **Search, install, configure and update from inside the app.** Two paths, and
+  they differ: adding one **from the Add-ons page** asks the desktop to install
+  it, so GNOME shows its own confirmation box naming the add-on and gtheme
+  cannot install one behind it. The add-ons **a whole Look** asks for are
+  fetched by gtheme itself from extensions.gnome.org and handed to
+  `gnome-extensions install`, with no GNOME box in between — there the button
+  you press is the confirmation, and the Look's preview names every add-on it
+  would fetch, who wrote it and where it comes from, before a byte is
+  downloaded.
 - **Twenty-four hand-written settings panels** for popular add-ons, so their
   options are explained in the same voice as the rest of the app. Everything
   else gets a generic panel, honestly labelled.
@@ -115,13 +124,119 @@ tag; nothing from it is lost, and the state it wrote is never touched.
 - Controls are data: every row in the app is an entry in a `.toml` file, with a
   mandatory plain-language subtitle and search synonyms next to the setting it
   describes.
-- Three test tiers — 1157 unit and regression tests, 381 widget tests, and 69
-  that boot a real headless GNOME Shell on a private session bus and prove
-  after every one of them that the live desktop was untouched. The thirty
-  screenshots in the README are produced by that last tier and then checked for
-  being pictures of actually different things.
+- Four test tiers — about 1,880 unit and regression tests, 42 that talk to a
+  real dconf over a private session bus, about 660 widget tests, and 29 that
+  boot a real headless GNOME Shell on that private bus and prove after every
+  one of them that the live desktop was untouched. The thirty screenshots in
+  the README are produced by that last tier and then checked for being pictures
+  of actually different things.
 - Packaging is pure `pyproject.toml` plus a `PKGBUILD` and an `install.sh`; no
   meson, and no `curl | bash` anywhere in the project.
+
+### The audit pass
+
+Before any of the above was called finished, the rebuild was read back against
+its own promises — every page, every path that writes to your computer, every
+sentence in the documentation — and what did not hold up was fixed. Most of it
+is invisible if nothing goes wrong, which is the point. What changed:
+
+- **A Look can only change the way things look, and that is now enforced rather
+  than intended.** One written policy decides where a Look may write, checked
+  when it is compiled and again before it is applied. Anything that could make
+  your computer *run* something is refused outright and by name: autostart
+  entries, systemd units, `environment.d`, shell start-up files, `.desktop` and
+  `.service` files anywhere, the media-key commands, the default-application
+  entries, and any settings tree not on the allow-list. A second, milder tier —
+  your shell prompt, your terminal configs, fastfetch — is allowed but listed
+  individually before you apply, instead of disappearing into "and 12 files".
+  The refusal is decided on the fully resolved path as well as the written one,
+  so a symlink cannot be used to step around it, and a Look's own source files
+  are confined to its folder at render time rather than trusted from its
+  manifest.
+- **Rollback covers every way an apply can fail**, not only the ones that were
+  anticipated. Any exception during a change now rolls the whole thing back,
+  puts the ownership record back as it was, and re-raises something that says
+  whether your desktop was restored. The writes that happen *after* the last
+  change lands are guarded too — an error there used to escape while the app
+  was still saying nothing had happened. Where the app genuinely cannot tell
+  whether your desktop was put back, it now says that, instead of guessing in
+  its own favour.
+- **Changes you make on the individual pages are recorded and undoable.** This
+  is the largest single correction. Flipping a switch on Fonts or Top Bar used
+  to change your desktop without leaving a trace: only whole Looks were
+  recorded, so "Before gtheme", Undo and `gtheme rescue` all had a blind spot
+  exactly where a cautious person experiments. Every row in the app now writes
+  through a recording layer that saves what was there first, claims the key in
+  the ownership record, and takes **one** restore point per burst of edits
+  rather than one per switch.
+- **Applying a Look shows you exactly what it will change** before it does
+  anything: an expander listing every setting as before → after, every file it
+  will write by destination, and every add-on by name. It also warns you when
+  the Look asks for an icon set, pointer, app style or font this computer does
+  not have, when it would turn on two add-ons known to fight each other, and
+  when it would write over an accessibility setting you have deliberately
+  switched on (high contrast, larger text, reduced motion).
+- **Add-ons are named before anything is downloaded.** The confirmation lists
+  each missing add-on's title, author and source, worked out from data already
+  on your computer — opening the preview does not go online. Installing still
+  goes through GNOME's own machinery, and the honest answer about logging out
+  is unchanged.
+- **A long apply shows its progress and can be stopped.** The steps appear as
+  they happen, and a Stop button is offered once there is something to stop;
+  pressing it rolls back what had already landed.
+- **"Before gtheme" is real on a computer that never ran version 1.** It used
+  to be materialised only from v1's files, so on a fresh install the row
+  promised something it could not deliver. The first time the app opens, it now
+  saves your desktop exactly as it is — unless something has already been
+  changed on this machine, in which case the row is left out rather than
+  labelled with a date that would be a lie.
+- **Terminals are themed through the same transaction as everything else** —
+  one snapshot, one ownership claim, one restore point, one rollback — instead
+  of each terminal writing on its own and half-succeeding in silence. **GNOME
+  Terminal and Console are supported** alongside Ptyxis, Alacritty and Ghostty
+  (and the prompt and readouts around them: starship, fish, btop, cava,
+  fastfetch). Two honest exceptions: fish keeps its variables in a
+  store only fish can write, so it is updated after the transaction under the
+  same lock with its old values recorded first (`gtheme rescue` reaches it,
+  Undo does not); and Ghostty's "take them over" button still moves a folder
+  outside the transaction. The GNOME Terminal and Console adapters were written
+  on a computer that had neither installed, so each key is probed against your
+  computer's own settings description before it is written.
+- **`gtheme apply <name-or-folder>`** uses a Look without opening the window,
+  takes a restore point first like the app does, and has a `--dry-run` that
+  prints what would change and writes nothing.
+- **Saving your desktop as a Look captures the whole desktop**, not the subset
+  the app happened to know about, and tells you what it could not take —
+  grouped by kind — instead of quietly leaving it out. Export writes a
+  `.gtheme.zip` through a hidden partial file that is renamed only once it is
+  complete, so a failed export never leaves half a file behind.
+- **`install.sh` checks before it installs.** It refuses on GNOME older than 49
+  or libadwaita older than 1.9 instead of installing an app that cannot run; it
+  validates a virtual environment it finds already there (Python version, and a
+  real `import gi` probe) rather than reusing it on faith; it prints your
+  distribution's own command when the environment cannot be built; and
+  `--uninstall` refuses while gtheme still owns settings on this computer,
+  including settings changed only on the individual pages. A second
+  `PKGBUILD-git` builds from a checkout, for Arch users not waiting on a tag.
+- **Keyboard, screen-reader and contrast work.** Ctrl+? opens a shortcuts
+  window; picture tiles carry alternative text or are hidden from screen
+  readers when they are decoration; the window is clamped to the usable area of
+  your screen so it cannot open larger than the display; and `gtheme validate`
+  now warns a Look's author when its text-on-background contrast fails WCAG AA.
+  The launcher entry is findable in German, Spanish, French and Brazilian
+  Portuguese. The interface itself is English only, and Orca has never been
+  tested against this app — both are now stated in the README rather than left
+  to be discovered.
+- **When something goes wrong, you can say what.** A rotating log at
+  `~/.local/state/gtheme/v2/gtheme.log`, an uncaught-error hook that writes to
+  it, and "Copy details for a bug report" in the main menu — versions plus the
+  last forty lines of that log, and no setting values. The same details are one
+  click away in About. And if a change was interrupted hard enough to leave its
+  rollback journal behind, the next launch says so and offers to put things
+  back; the answer is remembered and the question is not asked twice.
+- **The documentation was swept against the code**, sentence by sentence, and
+  the claims that had drifted were corrected rather than softened — including
+  several that this pass itself had made false.
 
 ### Documentation
 
@@ -130,9 +245,12 @@ tag; nothing from it is lost, and the state it wrote is never touched.
   the app changes and why it is safe to try, numbered install steps, and a "your
   first five minutes" walkthrough. The fifteen-page tour and the questions
   people ask are folded into collapsible sections so the page can be read in a
-  minute or explored in ten.
+  minute or explored in ten. Every sentence in it was checked against the code
+  by the audit pass above, and the checkable half — every command the page tells
+  you to type — is checked by a test on every run.
 - Uninstalling now documents `./install.sh --uninstall` rather than asking you
-  to delete files by hand, and the page ends with where to get help
+  to delete files by hand, and names the five things it takes back from outside
+  the folder it was unpacked into; the page ends with where to get help
   (Discussions, issues, the glossary, the start-here guide).
 
 ## [Unreleased] (v1)

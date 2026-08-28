@@ -10,6 +10,7 @@ only a temporary Looks folder.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -282,7 +283,19 @@ def test_a_typed_name_becomes_a_folder_name_a_look_can_have():
     assert looks.slugify("") == ""
 
 
-def test_capture_covers_every_setting_the_app_can_describe():
+def test_capture_covers_every_setting_the_app_can_describe(tmp_path):
+    """A link row holds no value, so it produces no key.
+
+    ``directory`` is now passed as well as ``corpus``. This test hands
+    ``capture_keys`` a two-row synthetic corpus and asserts on the whole
+    answer, and the answer has a second source in it since review-report H13 —
+    the coverage manifest, which is where light-or-dark lives and which the
+    Looks-side capture never read. Pointing the manifest at an empty directory
+    is what keeps the assertion about *this* corpus rather than about the 341
+    shipped keys as well; that the manifest half really does arrive is asserted
+    in ``tests/unit/test_looks_capture_mirrors_moments.py``, which is where the
+    gap this argument is about actually lives.
+    """
     corpus = Corpus(
         domains=[
             DomainDescriptor(
@@ -306,7 +319,7 @@ def test_capture_covers_every_setting_the_app_can_describe():
             )
         ]
     )
-    keys = looks.capture_keys(corpus)
+    keys = looks.capture_keys(corpus, directory=tmp_path)
     assert keys == ["gsettings:org.gnome.desktop.background picture-uri"]
 
 
@@ -373,7 +386,10 @@ def test_the_first_visit_explainer_shows_once_and_stays_dismissed(config_dir, th
     page = looks.build(window)
     assert page._banner.get_revealed()
 
-    page._on_banner_dismissed(page._banner)
+    # The button, not the handler behind it: the dismissal is wired by the one
+    # shared explainer widget now, so pressing it is the only thing that proves
+    # this page's banner is wired at all (review-report M28).
+    page._banner.emit("button-clicked")
     assert not page._banner.get_revealed()
     assert prefs.banner_seen(looks.BANNER_ID)
 
@@ -460,10 +476,63 @@ def test_a_community_tile_is_held_to_the_same_width_and_ellipsis(
     assert entry.description in (tile.get_tooltip_text() or "")
 
 
+def test_security_md_quotes_the_button_that_is_really_on_screen():
+    """The one gesture that consents to downloading third-party shell code.
+
+    SECURITY.md is the document somebody opens to find out exactly what they
+    are agreeing to and where. It named "Get the missing ones" after the button
+    had been relabelled, so it pointed at a control that is not there — and a
+    consent gesture quoted wrongly is worse than one not quoted at all.
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    security = " ".join((repo_root / "SECURITY.md").read_text(encoding="utf-8").split())
+
+    assert f'"{looks.COPY["get-addons"]}"' in security, (
+        "SECURITY.md quotes a button label the app does not use"
+    )
+
+
+def test_opening_a_preview_asks_the_network_for_nothing(
+    config_dir, themes_dir, backend, monkeypatch
+):
+    """The third silent request that was not in the two the docs list.
+
+    README says gtheme "only goes online if you ask it to look for new add-ons
+    or new Looks, and it says so when it does", and SECURITY.md names the two
+    requests it ever makes. A version of this page looked every missing add-on
+    up on extensions.gnome.org as the preview opened — one request each, to
+    swap an identifier for a nicer title, with nothing on screen saying so.
+    """
+    import gtheme.ego.client as client_module
+
+    reached: list[object] = []
+
+    def watched(*args, **_kwargs):
+        # Recorded rather than merely refused: every layer between here and the
+        # preview catches ``Exception``, so a probe that only raises proves
+        # nothing about whether it was called.
+        reached.append(args)
+        raise RuntimeError("there is no network in a test")
+
+    monkeypatch.setattr(client_module, "SoupTransport", watched)
+    write_look(themes_dir, name="wantsaddons", title="Wants add-ons", source="ego")
+    window = FakeWindow(Prefs())
+    window.shell = object()  # there is a desktop to add add-ons to
+    page = looks.build(window)
+    tile = next(tile for tile in page._tiles if tile.title == "Wants add-ons")
+    plan = looks.plan_apply(tile, installed=[], enabled=[])
+    assert plan.missing, "the case that used to reach for the library"
+
+    page._show_preview(tile, plan)
+
+    assert reached == [], "opening a preview reached for extensions.gnome.org"
+    assert plan.addon_lines, "and the names H6 asked for are here without it"
+
+
 def test_the_second_button_still_just_opens_the_add_ons_page(
     config_dir, themes_dir, backend
 ):
-    """"Get the missing ones" is the offer; "Open Add-ons" is still there."""
+    """"Get them and use this look" is the offer; "Open Add-ons" is still there."""
     window = FakeWindow(Prefs())
     page = looks.build(window)
     tile = page._tiles[0]

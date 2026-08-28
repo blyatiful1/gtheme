@@ -476,6 +476,18 @@ def probe_built_rows(
 ADVANCED_TITLE = "More options"
 ADVANCED_SUBTITLE = "Settings most people never need to change."
 
+#: What the dismiss button on a first-visit explainer says. One word for the
+#: same button on all eleven of them.
+#:
+#: These three live here, in the module with no toolkit import, because they are
+#: the app's *standing wording* rather than any one page's: the plain-language
+#: lint already reads this module, and both page scaffolds and the shared
+#: explainer widget take them from here. The scaffolds each used to carry their
+#: own copy of the first two — both copies documented as "one wording so the
+#: tier means the same thing everywhere" — and a third page hardcoded a fourth
+#: (review-report M29).
+BANNER_DISMISS = "Got it"
+
 
 @dataclass(frozen=True)
 class GroupSpec:
@@ -540,7 +552,7 @@ def settings_page(
 
     gi.require_version("Gtk", "4.0")
     gi.require_version("Adw", "1")
-    from gi.repository import Adw, Gtk
+    from gi.repository import Adw
 
     page = Adw.PreferencesPage(vexpand=True)
     built: list[tuple[Row, Any]] = []
@@ -600,35 +612,15 @@ def settings_page(
     if banner is None:
         return page
     banner_id, text = banner
-    if prefs is not None and not prefs.should_show_banner(banner_id):
-        return page
-    return _with_banner(page, banner_id, text, prefs, Adw, Gtk)
+    from .widgets.explainer import with_first_visit_banner
+
+    return with_first_visit_banner(page, prefs, banner_id, text)
 
 
 def _in_a_group(Adw: Any, widget: Any) -> Any:
     group = Adw.PreferencesGroup()
     group.add(widget)
     return group
-
-
-#: What the dismiss button on a first-visit explainer says.
-BANNER_DISMISS = "Got it"
-
-
-def _with_banner(page: Any, banner_id: str, text: str, prefs: Any, Adw: Any, Gtk: Any) -> Any:
-    """A page with a one-shot explainer above it, dismissible for good."""
-    banner = Adw.Banner(title=escape_markup(text), button_label=BANNER_DISMISS, revealed=True)
-
-    def dismiss(*_args: Any) -> None:
-        banner.set_revealed(False)
-        if prefs is not None:
-            prefs.mark_banner_seen(banner_id)
-
-    banner.connect("button-clicked", dismiss)
-    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, vexpand=True)
-    box.append(banner)
-    box.append(page)
-    return box
 
 
 # ---------------------------------------------------------------------------

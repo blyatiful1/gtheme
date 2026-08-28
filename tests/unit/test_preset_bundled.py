@@ -1,4 +1,4 @@
-"""The four Looks that ship with gtheme.
+"""The Looks that ship with gtheme.
 
 These are the app's shop window: if a bundled Look does not load, does not
 compile, or promises a file it does not carry, the first thing a new user
@@ -26,7 +26,7 @@ from gtheme.preset.compile import compile_preset
 from gtheme.preset.loader import load
 from gtheme.preset.model import Preset
 
-BUNDLED = ("hyperclass", "magma", "netrunner", "nightbloom")
+BUNDLED = ("daybreak", "hearth", "hyperclass", "magma", "netrunner", "nightbloom")
 #: The v1 tree the bundled Looks were converted from. It is a checkout that
 #: may or may not exist on the machine running this, so the conversion tests
 #: that need only the v1 *manifests* read them from a frozen copy committed
@@ -282,7 +282,7 @@ def test_reconverting_magma_still_produces_what_is_committed(repo_root: Path, tm
 # ── the whole set ────────────────────────────────────────────────────────
 
 
-def test_all_four_are_present(repo_root: Path):
+def test_every_bundled_look_is_present(repo_root: Path):
     found = {
         p.name for p in (repo_root / "themes").iterdir() if (p / "theme.toml").is_file()
     }

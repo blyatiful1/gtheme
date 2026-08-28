@@ -32,11 +32,11 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gtk, Pango  # noqa: E402
 
-from ...core.settings_backend import BackendError, SettingsBackend  # noqa: E402
+from ...core.settings_backend import SettingsBackend  # noqa: E402
 from ...core.transaction import Op, SettingWrite  # noqa: E402
 from ...panels.descriptor import Row  # noqa: E402
 from ...system.fontscan import parse_font_description  # noqa: E402
-from ..widgets.rows import attach_reset, key_for  # noqa: E402
+from ..widgets.rows import attach_reset, key_for, write_value  # noqa: E402
 from ._style_common import (  # noqa: E402
     PageShell,
     apply_ops,
@@ -244,11 +244,10 @@ def _font_row(
         value = font_choice(current(), chosen)
         if write is not None:
             write(value)
-        else:
-            try:
-                backend.set(key, quote(value))
-            except BackendError:
-                return
+        elif not write_value(
+            backend, key, quote(value), widget=widget, refresh=refresh, component=row.id
+        ):
+            return
         state[0]()
 
     button.connect("clicked", lambda *_a: _ask_for_a_font(button, row, current(), store))

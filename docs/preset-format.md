@@ -201,8 +201,11 @@ component = "terminal"
 
 If a token cannot be resolved on the machine applying the Look, that one
 operation is **skipped with a sentence explaining why** — never written
-half-resolved, and never a crash. A path with an empty component
-(`/Profiles//palette`) is exactly the kind of damage the check exists to stop.
+half-resolved, and never a crash. That holds for a token in the `value` just as
+much as one in the `key`: a mistyped `{{ hoem }}` in a wallpaper location skips
+the setting rather than pointing the desktop at a file with braces in its name.
+A path with an empty component (`/Profiles//palette`) is exactly the kind of
+damage the check exists to stop.
 
 Templating a file that is not text is an error rather than a mangled write.
 Leave `template` off for pictures.
@@ -245,8 +248,13 @@ uuid = "my-private-thing@example.local"
 source = "local-only"        # never offered for download; may not be bundled
 ```
 
-- `source = "ego"` — gtheme offers to fetch it from extensions.gnome.org
-  through the desktop's own installer, with the desktop's own confirmation box.
+- `source = "ego"` — gtheme offers to fetch it from extensions.gnome.org, and
+  from nowhere else. Accepting that offer is an explicit button in the Look's
+  preview; nothing is downloaded before it is pressed. The download is gtheme's
+  own — the zip is handed to the desktop's `gnome-extensions install` tool, so
+  the add-on's settings descriptions are compiled properly, but **no** GNOME
+  confirmation box appears on this path. (Adding a single add-on from the
+  Add-ons page does go through that box; these are two different paths.)
 - `source = "local-only"` — a private add-on. If it is not already installed,
   the Look is applied without it and the user is told, in plain words, which
   part will therefore not work. **A Look must never ship add-on code.** That is
@@ -297,7 +305,42 @@ Nothing is dropped silently.
   and through symbolic links — and refused if it escapes, before anything is
   written.
 - Read outside its own folder. Sources are resolved the same way, so a symbolic
-  link cannot be used as a siphon.
+  link cannot be used as a siphon — checked when the Look is compiled *and*
+  again before the bytes are read.
+- Write somewhere that arranging a file *is* arranging for a program to run.
+  The list lives in `src/gtheme/core/policy.py` and is refused outright:
+  `~/.config/autostart`, `~/.config/systemd`, `~/.config/environment.d`,
+  `~/.local/bin`, `~/bin`, `~/.local/share/gnome-shell/extensions`, the shell
+  start-up files (`.bashrc`, `.zshrc`, `.profile`, `config.fish`, fish's
+  `conf.d`), and anything ending `.desktop` or `.service` anywhere.
+
+  The list is applied to the destination *as written* and to the destination
+  with every symbolic link followed, and the worse of the two answers wins.
+  `~/.bashrc` is refused on a machine where it is a link into a dotfiles
+  repository, and `~/somewhere-innocent/x` is refused when that folder turns
+  out to be a link to `~/.local/bin`.
+- Change a setting that decides what the desktop *runs*: a custom shortcut's
+  `command` or `binding`, `org.gnome.desktop.default-applications.*.exec`,
+  `org.gnome.desktop.session session-name`, a `keyfile:` key (which would name
+  the file to write into), or a `dconf:` location outside the add-on trees —
+  `/org/gnome/shell/extensions/`, `/org/gnome/Ptyxis/` and
+  `/io/github/jeffshee/hanabi-extension/`.
+
+  Three keys *inside* the Ptyxis tree are refused too, by name:
+  `custom-command`, `use-custom-command` and `login-shell` under
+  `/org/gnome/Ptyxis/Profiles/<uuid>/` (and the same keys addressed as
+  `gsettings-path:org.gnome.Ptyxis.Profile:…`). That tree is open for the
+  terminal's colours; a profile's *command* is not a colour, and setting it
+  would run a program of the Look's choosing in every terminal window opened
+  afterwards.
+
+  A Look asking for any of these does not apply at all — not "minus that
+  entry". Each one is named in the preview before anything happens.
+- Hide a file that can start a program inside a count. A Look **may** write a
+  program's own settings file whose format can also name a command —
+  `~/.config/starship.toml` is the shipped example, and three of the six
+  bundled Looks write it — but every such destination is listed by name in the
+  preview instead of being folded into "23 files".
 - Give itself privileges. A `mode` is honoured with the setuid, setgid and
   sticky bits masked off.
 - Be applied without a record being taken first, or survive its own failure —
@@ -343,7 +386,7 @@ see rather than a line that is quietly ignored.
 | `description` | string | yes | One or two sentences; shown on the tile. |
 | `author` | string | yes | |
 | `version` | string | yes | Your own versioning; gtheme only compares it for updates. |
-| `min_shell` | string or absent | no (default absent) | Lowest GNOME major version this was built against, as a string (`"49"`). Compared numerically. It never *blocks* — gtheme warns that parts may not apply. |
+| `min_shell` | string or absent | no (default absent) | Lowest GNOME major version this was built against, as a string (`"49"`). Compared numerically against the version this desktop reports. It never *blocks*: the Look is compiled with the warning "this Look was made for a newer version of GNOME … parts of it may not apply" alongside its other warnings. On a desktop whose version cannot be read, nothing is claimed either way. |
 | `screenshots` | array of strings | no (default empty) | Paths relative to the Look's folder. Empty is allowed here and refused at publish time. |
 
 ### `[[files]]`
@@ -423,6 +466,8 @@ file first, or the selection names something that is not there yet.
   collection.
 - [docs/architecture.md](architecture.md) — what happens to a Look after it
   loads.
-- The four bundled Looks under [`themes/`](../themes) are the best worked
-  examples there are, and each has its own `README.md` naming anything from the
-  original that did not survive the conversion.
+- The bundled Looks under [`themes/`](../themes) are the best worked examples
+  there are, and each has its own `README.md` naming anything from the original
+  that did not survive the conversion. `daybreak` and `hearth` are the two
+  smallest — one picture and a handful of settings each — and the place to
+  start if you are writing your first one.

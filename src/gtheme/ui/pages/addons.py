@@ -80,7 +80,8 @@ from ...panels.schema_probe import SchemaProbe, probe_rows_idle  # noqa: E402
 from ...panels.widgets import build_row, set_link_handler  # noqa: E402
 from ...prefs import Prefs  # noqa: E402
 from ..jargon import translate  # noqa: E402
-from ..widgets.rows import UnsupportedRowKind, warn_banner  # noqa: E402
+from ..widgets.explainer import first_visit_banner  # noqa: E402
+from ..widgets.rows import UnsupportedRowKind, unquote, warn_banner  # noqa: E402
 
 __all__ = [
     "CATEGORY_ORDER",
@@ -99,6 +100,15 @@ __all__ = [
 ]
 
 
+#: The two one-shot explainers this page can show. Both are listed in
+#: :data:`gtheme.prefs.KNOWN_BANNERS`, and both are built by the one shared
+#: :func:`~gtheme.ui.widgets.explainer.first_visit_banner` — the dismiss button
+#: says what it says on every other page rather than out of this page's own
+#: copy table (review-report M28).
+BANNER_ID = "first-visit-addons"
+AUTHOR_SETTINGS_BANNER_ID = "addon-settings-are-the-authors"
+
+
 #: Every sentence this page says, in one place so the wording can be read as a
 #: whole and linted as a whole. Sentences that already exist in
 #: :mod:`gtheme.ego.install` or :mod:`gtheme.ego.updates` are used from there
@@ -113,14 +123,27 @@ COPY: dict[str, str] = {
         "These are add-ons — small extras that add features to your desktop. "
         "You can turn any of them off again."
     ),
-    "dismiss": "Got it",
     # -- no desktop to talk to
     "no-desktop-title": "Add-ons are not reachable right now",
+    # This used to end "give it a moment and open this page again", which could
+    # not work: the desktop connection is made once per window and this page's
+    # widgets are kept, so leaving the page and coming back showed the same
+    # answer from the same failed attempt until the app was quit
+    # (persona-report §3.3, E10). The sentence now names a button that really
+    # does ask again.
     "no-desktop-body": (
         "Add-ons are run by GNOME itself, and it is not answering. Everything "
         "else in this app still works. If you have just logged in, give it a "
-        "moment and open this page again."
+        "moment and then ask again."
     ),
+    "no-desktop-retry": "Ask again",
+    "reprobe-heading": "Looking for your add-ons",
+    "reprobe-starting": "Asking GNOME again…",
+    "reprobe-failed": (
+        "Still no answer. If you have just logged in, wait a few seconds and "
+        "ask again."
+    ),
+    "reprobe-worked": "Found them.",
     # -- installed
     "installed-empty-title": "No add-ons yet",
     "installed-empty-body": (
@@ -340,10 +363,7 @@ def _clean_summary(text: str) -> str:
 
 def _humanise(value: str) -> str:
     """``"'top-left'"`` -> ``"Top left"``. For options nobody wrote labels for."""
-    text = value.strip()
-    if len(text) >= 2 and text[0] == text[-1] and text[0] in "'\"":
-        text = text[1:-1]
-    text = text.replace("-", " ").replace("_", " ").strip()
+    text = unquote(value).replace("-", " ").replace("_", " ").strip()
     return text[:1].upper() + text[1:] if text else value
 
 
@@ -544,6 +564,9 @@ class AddonsPage(Adw.Bin):
         self._search_text = ""
         self._sort = SORTS[0][0]
         self._rebuild_queued = False
+        #: True while "Ask again" is waiting for the desktop, so a second press
+        #: cannot start a second connection attempt beside the first.
+        self._reprobing = False
 
         self._build_ui()
         if self.shell is not None:
@@ -605,17 +628,8 @@ class AddonsPage(Adw.Bin):
     def _build_ui(self) -> None:
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
 
-        banner_id = "first-visit-addons"
-        if self.prefs.should_show_banner(banner_id):
-            banner = Adw.Banner(
-                title=COPY["first-visit"], button_label=COPY["dismiss"], revealed=True
-            )
-
-            def _dismiss(_banner: Adw.Banner) -> None:
-                banner.set_revealed(False)
-                self.prefs.mark_banner_seen(banner_id)
-
-            banner.connect("button-clicked", _dismiss)
+        banner = first_visit_banner(self.prefs, BANNER_ID, COPY["first-visit"])
+        if banner is not None:
             outer.append(banner)
 
         self.stack = Adw.ViewStack(vexpand=True)
@@ -655,12 +669,106 @@ class AddonsPage(Adw.Bin):
         )
 
     def _unavailable_page(self) -> Adw.StatusPage:
-        return Adw.StatusPage(
+        """The "GNOME is not answering" screen, with the way out on it.
+
+        The button is the whole point (E10): the sentence beside it used to
+        tell people to come back to a page that would give the same answer
+        forever, because the connection is memoised for the life of the window.
+        """
+        page = Adw.StatusPage(
             icon_name="application-x-addon-symbolic",
             title=COPY["no-desktop-title"],
             description=COPY["no-desktop-body"],
             vexpand=True,
         )
+        button = Gtk.Button(
+            label=COPY["no-desktop-retry"],
+            halign=Gtk.Align.CENTER,
+            css_classes=["pill", "suggested-action"],
+        )
+        button.connect("clicked", lambda *_a: self.ask_again())
+        page.set_child(button)
+        return page
+
+    # -- asking the desktop again ------------------------------------------
+
+    def ask_again(self) -> None:
+        """Make a new connection to the desktop and rebuild what depends on it.
+
+        The slow half — building a proxy and listing what is installed — runs
+        on the shared runner, because it is a blocking call that can take as
+        long as the desktop takes to answer, and doing it in a click handler is
+        the freeze this app has a runner to avoid.
+
+        The answer is handed to the window as well as kept here: the window's
+        connection is the one the Home page's add-on line reads, and a page
+        that recovered on its own would leave the rest of the app reporting a
+        desktop that answered fine ten seconds ago.
+        """
+        if self._reprobing:
+            return
+        self._reprobing = True
+        runner = self._apply_runner()
+        if runner is None:
+            self._reconnected(self._reconnect())
+            return
+        runner.run(
+            lambda _narrate: self._reconnect(),
+            heading=COPY["reprobe-heading"],
+            starting=COPY["reprobe-starting"],
+            on_done=self._reconnected,
+            on_failed=lambda _error: self._reconnected((None, False)),
+        )
+
+    def _reconnect(self) -> tuple[ShellExtensions | None, bool]:
+        """The slow half. No widgets — this runs off the main loop."""
+        return self._connect_desktop(None)
+
+    def _reconnected(self, answer: tuple[ShellExtensions | None, bool]) -> None:
+        """Take the new connection, or say plainly that there still is none."""
+        self._reprobing = False
+        shell, available = answer
+        if shell is None or not available:
+            self._toast(COPY["reprobe-failed"])
+            return
+
+        previous = self.shell
+        if previous is not None:
+            previous.disconnect(self._on_extension_changed)
+        adopt = getattr(self.window, "adopt_shell", None)
+        if callable(adopt):
+            adopt(shell)
+            # The window owns the shared connection, so this page must not
+            # close it — the same rule the borrowed connection has always had.
+            self._owns_shell = False
+        elif previous is not None and self._owns_shell:
+            try:
+                previous.close()
+            except Exception:  # noqa: BLE001 - it was already unreachable
+                pass
+
+        self.shell = shell
+        self.available = available
+        self.shell.connect(self._on_extension_changed)
+        if self.client is None:
+            self.client = self._build_client()
+        self.installer = ExtensionInstaller(self.shell, self.client)
+        self.checker = (
+            UpdateChecker(self.client, self.shell) if self.client is not None else None
+        )
+
+        self._fill_installed()
+        self._fill_updates_idle_state()
+        if self.client is not None:
+            self._run_query(page=1)
+        self._toast(COPY["reprobe-worked"])
+
+    def _apply_runner(self) -> Any:
+        """The window's runner, or None when this page is not in a window."""
+        from ..applyrunner import ApplyRunner
+
+        runner = getattr(self.window, "runner", None)
+        return runner if isinstance(runner, ApplyRunner) else None
 
     # -- installed ---------------------------------------------------------
 
@@ -745,7 +853,14 @@ class AddonsPage(Adw.Bin):
         return row
 
     def _on_switch_toggled(self, row: Adw.SwitchRow, _param: Any, uuid: str) -> None:
-        if uuid in self._suppress or self.shell is None:
+        # A switch the page moved itself is not a request. The claim is taken
+        # here rather than lifted by whoever made it, because the notification
+        # does not always arrive while they are still running — see
+        # :meth:`_set_switch`.
+        if uuid in self._suppress:
+            self._suppress.discard(uuid)
+            return
+        if self.shell is None:
             return
         if row.get_active():
             other = self._conflicting_enabled(uuid)
@@ -760,21 +875,48 @@ class AddonsPage(Adw.Bin):
                 self._toast(COPY["turn-off-failed"])
 
     def _turn_on(self, uuid: str) -> None:
+        """Switch an add-on on, and leave the switch showing what happened.
+
+        The desktop can refuse. When it does, ``turn_on`` says so in a toast
+        and returns — and the switch was left reading ON over an add-on that
+        is off, with no ``ExtensionStateChanged`` signal coming to correct it,
+        because nothing changed (review-report M5). A switch is a statement
+        about the desktop, so it is moved back to what the desktop actually
+        did.
+
+        ``NEEDS_RELOGIN`` is the one failure-looking outcome where ON is
+        honest: the add-on *is* enabled, and starts doing its job at the next
+        log-in. Turning the switch off there would be the lie in the other
+        direction.
+        """
         if self.installer is None:
             return
         report = self.installer.turn_on(uuid)
         self._toast(report.message)
+        self._set_switch(
+            uuid, report.outcome in (InstallOutcome.ACTIVE, InstallOutcome.NEEDS_RELOGIN)
+        )
 
     def _set_switch(self, uuid: str, active: bool) -> None:
-        """Move a switch without pretending the user did it."""
+        """Move a switch without pretending the user did it.
+
+        The claim is left standing for ``notify::active`` to take, rather than
+        lifted in a ``finally`` here, because the notification does not always
+        arrive inside this call: moving a switch from *inside* another
+        ``notify::active`` handler — which is exactly what putting a refused
+        switch back does — queues the new notification until the outer one has
+        finished. Lifting the claim here left nothing to suppress by then, so
+        the page read its own correction as the user switching the add-on off
+        and asked the desktop to disable it again, with a toast saying so.
+
+        The value is compared first, so a claim is only ever made when a
+        notification is really coming.
+        """
         row = self._installed_rows.get(uuid)
         if row is None or row.get_active() == active:
             return
         self._suppress.add(uuid)
-        try:
-            row.set_active(active)
-        finally:
-            self._suppress.discard(uuid)
+        row.set_active(active)
 
     # -- conflicts and hazards --------------------------------------------
 
@@ -811,8 +953,10 @@ class AddonsPage(Adw.Bin):
             if response == "replace" and self.shell is not None:
                 self.shell.disable(other)
                 self._set_switch(other, False)
+            # The switch comes back on inside ``_turn_on``, and only if the
+            # desktop really did switch the add-on on. Setting it here as well
+            # is what used to put it back on over a refusal.
             self._turn_on(uuid)
-            self._set_switch(uuid, True)
 
         dialog.connect("response", _answered)
         self._present(dialog)
@@ -941,19 +1085,10 @@ class AddonsPage(Adw.Bin):
             rows, skipped = (
                 auto_rows(self.probe, schema_id) if schema_id else ([], 0)
             )
-            banner_id = "addon-settings-are-the-authors"
-            if self.prefs.should_show_banner(banner_id):
-                banner = Adw.Banner(
-                    title=COPY["author-settings"],
-                    button_label=COPY["dismiss"],
-                    revealed=True,
-                )
-
-                def _dismiss(_banner: Adw.Banner) -> None:
-                    banner.set_revealed(False)
-                    self.prefs.mark_banner_seen(banner_id)
-
-                banner.connect("button-clicked", _dismiss)
+            banner = first_visit_banner(
+                self.prefs, AUTHOR_SETTINGS_BANNER_ID, COPY["author-settings"]
+            )
+            if banner is not None:
                 content.append(banner)
 
         seen_warnings: list[str] = []
@@ -1208,15 +1343,10 @@ class AddonsPage(Adw.Bin):
     def _run_query(self, *, page: int) -> None:
         """One page of results. Paging follows the page count, never a hunch."""
         if self.client is None or not self.available:
-            self._show_status(
-                self.discover_stack,
-                Adw.StatusPage(
-                    icon_name="application-x-addon-symbolic",
-                    title=COPY["no-desktop-title"],
-                    description=COPY["no-desktop-body"],
-                    vexpand=True,
-                ),
-            )
+            # The same screen as the other two tabs, button and all: whichever
+            # tab somebody is looking at when the desktop goes quiet is the tab
+            # they need the way out on.
+            self._show_status(self.discover_stack, self._unavailable_page())
             return
         if page == 1:
             self.discover_stack.set_visible_child_name("spinner")

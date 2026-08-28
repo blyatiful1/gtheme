@@ -7,6 +7,7 @@ written to.
 
 from __future__ import annotations
 
+import errno
 from typing import Any
 
 import pytest
@@ -20,12 +21,23 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk  # noqa: E402
 
 from gtheme.core.backends import use_backend  # noqa: E402
+from gtheme.core.baseline import Baseline  # noqa: E402
+from gtheme.core.settings_backend import (  # noqa: E402
+    BackendError,
+    BackendErrorKind,
+    MemoryBackend,
+)
+from gtheme.core.transaction import SettingWrite  # noqa: E402
 from gtheme.panels.descriptor import Row, WidgetKind  # noqa: E402
 from gtheme.prefs import Prefs  # noqa: E402
 from gtheme.ui import registry  # noqa: E402
 from gtheme.ui.pages import _style_common as common  # noqa: E402
 from gtheme.ui.rowindex import RowIndex  # noqa: E402
-from gtheme.ui.widgets.rows import key_for  # noqa: E402
+from gtheme.ui.widgets.rows import (  # noqa: E402
+    PUT_BACK_DEFAULT,
+    PUT_BACK_RECORDED,
+    key_for,
+)
 
 pytestmark = pytest.mark.gtk
 
@@ -169,8 +181,11 @@ def test_picker_carries_the_put_this_back_button(memory_settings):
     row = _picker_row_descriptor()
     widget, _refresh = common.picker_row(memory_settings, row, [("adw-gtk3", "adw-gtk3")])
     buttons = [w for w in _walk(widget) if isinstance(w, Gtk.Button)]
+    # Either wording is the reset button; which one it says depends on whether
+    # gtheme has a pristine value recorded for this setting yet, and a picker
+    # built against a store nobody has touched has none (review-report H3).
     assert any(
-        b.get_tooltip_text() == "Put this back the way it was" for b in buttons
+        b.get_tooltip_text() in (PUT_BACK_RECORDED, PUT_BACK_DEFAULT) for b in buttons
     ), "a hand-built picker must get the same reset button every other row gets"
 
 
@@ -269,3 +284,246 @@ def test_apply_ops_with_nothing_to_do_changes_nothing_and_says_nothing(tmp_path)
     window = make_window(tmp_path)
     assert common.apply_ops(window, [], done="never shown") is True
     assert window.said == []
+
+
+# --------------------------------------------------------------------------
+# apply_ops, driven for real
+# --------------------------------------------------------------------------
+#
+# review-report M17: the only test this function had passed ``[]`` and returned
+# at the ``if not ops`` guard, before the transaction, before the toast, and
+# before the failure branch — so the two controls that go through it (the dark
+# mode switch and the window-heading lettering) were covered by nothing at all.
+# These four drive the real ``Transaction``: one change that lands, and the two
+# halves of the sentence a change that did not land is allowed to say.
+
+APPLY_SCHEMA_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="io.github.blyatiful1.GthemeApplyOps"
+          path="/io/github/blyatiful1/gtheme-apply-ops/">
+    <key name="first" type="s"><default>'one'</default></key>
+    <key name="second" type="s"><default>'two'</default></key>
+  </schema>
+</schemalist>
+"""
+
+APPLY_ID = "io.github.blyatiful1.GthemeApplyOps"
+FIRST = f"gsettings:{APPLY_ID} first"
+SECOND = f"gsettings:{APPLY_ID} second"
+
+#: The half-sentence the failure branch adds when the desktop is NOT known to
+#: be as it was. Written out here rather than imported so that changing the
+#: wording in the page has to be a deliberate edit in both places.
+MAYBE_CHANGED = "Some of it may have been changed anyway."
+
+
+class RefusesEveryWrite(MemoryBackend):
+    """A locked-down store: reads fine, refuses every write, from op one."""
+
+    def set(self, key: str, value: str) -> None:
+        raise BackendError(BackendErrorKind.COMMIT_FAILED, f"refused {key}", key=key)
+
+
+class RefusesAfterTheFirstWrite(MemoryBackend):
+    """Lets one write through, then refuses — the rollback included.
+
+    This is the shape of the failure the second half of the sentence exists
+    for: op one landed, op two did not, and putting op one back was refused as
+    well, so the desktop is genuinely half-changed and nobody may say it is not.
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.writes = 0
+
+    def seed(self, key: str, value: str) -> None:
+        """Put a starting value in without spending the one allowed write."""
+        super().set(key, value)
+
+    def set(self, key: str, value: str) -> None:
+        self.writes += 1
+        if self.writes == 1:
+            super().set(key, value)
+            return
+        raise BackendError(BackendErrorKind.COMMIT_FAILED, f"refused {key}", key=key)
+
+
+@pytest.mark.mutating
+def test_a_compound_change_really_moves_the_settings_and_says_it_did(
+    tmp_path, tmp_dest_root, state_dir, schema_source_factory
+):
+    """The success path, end to end: two keys, one transaction, both moved."""
+    backend = MemoryBackend(schema_source=schema_source_factory(APPLY_SCHEMA_XML))
+    backend.set(FIRST, "'one'")
+    backend.set(SECOND, "'two'")
+    window = make_window(tmp_path)
+
+    with use_backend(backend):
+        done = common.apply_ops(
+            window,
+            [
+                SettingWrite(key=FIRST, value="'moved'", component="colours"),
+                SettingWrite(key=SECOND, value="'also moved'", component="colours"),
+            ],
+            done="Changed.",
+        )
+
+    assert done is True
+    assert backend.get(FIRST) == "'moved'"
+    assert backend.get(SECOND) == "'also moved'"
+    assert window.said == ["Changed."]
+
+
+@pytest.mark.mutating
+def test_a_refused_change_is_reported_and_nothing_is_left_behind(
+    tmp_path, tmp_dest_root, state_dir, schema_source_factory
+):
+    """Refused at op one: the desktop really is untouched, so nothing hedges."""
+    backend = RefusesEveryWrite(schema_source=schema_source_factory(APPLY_SCHEMA_XML))
+    window = make_window(tmp_path)
+
+    with use_backend(backend):
+        done = common.apply_ops(
+            window,
+            [SettingWrite(key=FIRST, value="'moved'", component="colours")],
+            done="never shown",
+        )
+
+    assert done is False, "the page must know the change did not happen"
+    assert window.said, "and the person must be told"
+    said = window.said[-1]
+    assert "could not be made" in said
+    assert MAYBE_CHANGED not in said, (
+        "the desktop was never written to; hedging here teaches a person to "
+        "distrust the one sentence that means something"
+    )
+
+
+@pytest.mark.mutating
+def test_a_half_applied_change_admits_the_desktop_may_have_moved(
+    tmp_path, tmp_dest_root, state_dir, schema_source_factory
+):
+    """The other half of M17: ``rolled_back`` False must reach the sentence."""
+    backend = RefusesAfterTheFirstWrite(
+        schema_source=schema_source_factory(APPLY_SCHEMA_XML)
+    )
+    backend.seed(FIRST, "'one'")
+    backend.seed(SECOND, "'two'")
+    window = make_window(tmp_path)
+
+    with use_backend(backend):
+        done = common.apply_ops(
+            window,
+            [
+                SettingWrite(key=FIRST, value="'moved'", component="colours"),
+                SettingWrite(key=SECOND, value="'also moved'", component="colours"),
+            ],
+            done="never shown",
+        )
+
+    assert done is False
+    said = window.said[-1]
+    assert "could not be made" in said
+    assert MAYBE_CHANGED in said, (
+        "op one landed and could not be put back — saying nothing about that "
+        "is the failure this clause exists to prevent"
+    )
+    assert backend.get(FIRST) == "'moved'", "the premise of the test: it is still there"
+
+
+def test_a_change_that_cannot_even_start_is_reported_without_a_state_claim(tmp_path):
+    """``OSError`` out of the lock file, from before the guarded section.
+
+    Kept next to its siblings because it is the same branch seen from the third
+    side: a failure that is not a ``TransactionError`` at all.
+
+    This assertion was rewritten by the Wave B review-fix pass, deliberately
+    and not to get anything green. It used to require the words "exactly as it
+    was" — a *state claim* — from a branch that is reached by substituting a
+    fake ``Transaction`` raising before it does anything, so it pinned the
+    wording without proving the wording true. The sibling test below drives the
+    real engine to the same branch after an op has landed, which is where that
+    wording became a lie. What this branch may promise is therefore only what
+    it can know: that it failed, and why.
+    """
+    window = make_window(tmp_path)
+
+    class _NoRoom:
+        def __init__(self, ops) -> None:
+            self.ops = ops
+
+        def apply(self, *_args: Any, **_kwargs: Any) -> None:
+            raise PermissionError(13, "Permission denied")
+
+    original = common.Transaction
+    common.Transaction = _NoRoom
+    try:
+        done = common.apply_ops(
+            window, [SettingWrite(key=FIRST, value="'moved'")], done="never shown"
+        )
+    finally:
+        common.Transaction = original
+
+    assert done is False
+    said = window.said[-1]
+    assert "could not be made" in said
+    assert "Permission denied" in said, "the reason M3 exists to surface"
+    assert "exactly as it was" not in said, (
+        "this arm cannot see whether anything landed, so it may not say"
+    )
+
+
+@pytest.mark.mutating
+def test_a_change_that_lands_and_then_cannot_be_recorded_never_claims_it_did_not(
+    tmp_path, tmp_dest_root, state_dir, schema_source_factory, monkeypatch
+):
+    """The real engine, out of room at the *last* write of the apply.
+
+    The M3 arm above used to end "Your desktop is exactly as it was." on the
+    strength of an argument that an ``OSError`` can only escape ``apply()``
+    from before the guarded section. It cannot: ``_apply_locked`` calls
+    ``baseline.save()`` and writes the closing ledger entry **after** every op
+    has landed and outside every ``except``, so a full ``~/.local/state``
+    raised a bare ``OSError`` over a desktop that really had changed — the
+    exact H2 sentence, on the dark-mode switch and the window-heading
+    lettering. B4's fake-``Transaction`` test could not see it.
+
+    So this one uses no fakes below the page: a real ``Transaction``, a real
+    ``MemoryBackend`` with a compiled schema, and one ``Baseline`` that runs
+    out of room when it is asked to record what just happened.
+    """
+    backend = MemoryBackend(schema_source=schema_source_factory(APPLY_SCHEMA_XML))
+    backend.set(FIRST, "'one'")
+    window = make_window(tmp_path)
+
+    real_save = Baseline.save
+
+    def no_room(self):
+        # The rollback journal is a Baseline too, pointed at its own temporary
+        # directory. It has to keep working, or this would be testing a
+        # different failure than the one being reproduced.
+        if "gtheme-rollback-" in str(self.dir):
+            return real_save(self)
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(Baseline, "save", no_room)
+
+    with use_backend(backend):
+        done = common.apply_ops(
+            window,
+            [SettingWrite(key=FIRST, value="'moved'", component="colours")],
+            done="never shown",
+        )
+
+    assert done is False
+    assert backend.get(FIRST) == "'moved'", (
+        "the premise of the test: the op really landed before the recording failed"
+    )
+    said = window.said[-1]
+    assert "could not be made" in said
+    assert "exactly as it was" not in said, (
+        "the setting moved; this is the one sentence the whole wave exists to remove"
+    )
+    assert MAYBE_CHANGED in said, (
+        "nothing was rolled back, so the honest half-sentence is owed here"
+    )

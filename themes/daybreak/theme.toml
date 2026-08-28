@@ -1,0 +1,144 @@
+# DAYBREAK — the light Look.
+#
+# Written for people whose first run of gtheme found four dark rices and
+# nothing else. It is deliberately the smallest Look in the collection: one
+# picture and a handful of settings, no add-ons, no terminal files, no fonts
+# or icon themes that are not already on a stock GNOME desktop. Applying it on
+# a machine with nothing installed does the whole of what it promises.
+#
+# README.md in this folder says what it does and, more usefully, what it does
+# not.
+
+format = 2
+
+[meta]
+name = "daybreak"
+title = "DAYBREAK — first light"
+description = "A light desk: warm white surfaces, palest sage underfoot, and a leaf-green highlight. Sunrise through a glasshouse roof. It uses only what a stock GNOME desktop already has — no add-ons, no downloads, nothing to install."
+author = "blyatiful1"
+version = "1.0.0"
+min_shell = "49"
+screenshots = ["wallpaper/daybreak-first-light.png"]
+
+# Named colours. gtheme does not interpret these; they are here so the app can
+# show swatches and so the Terminal page can offer to put the same colours in
+# your command window. This Look does not write a terminal file itself — see
+# README.md — so the sixteen below are an offer, not a change.
+[palette]
+paper = "#FBF6EC"
+linen = "#F2EADB"
+mist = "#EFF3E9"
+sage = "#CBDAC1"
+leaf = "#6E9B62"
+moss = "#4E8043"
+bark = "#3A3F38"
+stone = "#6E7468"
+sun = "#F7E2B4"
+clay = "#B24B3E"
+bg = "#FBF6EC"
+fg = "#3A3F38"
+cursor = "#6E9B62"
+ansi_black = "#3A3F38"
+ansi_red = "#B24B3E"
+ansi_green = "#4E8043"
+ansi_yellow = "#A9761B"
+ansi_blue = "#3A6EA5"
+ansi_magenta = "#8A5A9B"
+ansi_cyan = "#2F7F76"
+ansi_white = "#E6E1D4"
+ansi_bright_black = "#6E7468"
+ansi_bright_red = "#C9604F"
+ansi_bright_green = "#5E9A50"
+ansi_bright_yellow = "#C08A22"
+ansi_bright_blue = "#4A82BE"
+ansi_bright_magenta = "#A06CB4"
+ansi_bright_cyan = "#3D9B90"
+ansi_bright_white = "#FBF6EC"
+
+# ---------------------------------------------------------------- files
+# One picture. That is the whole of it.
+
+[[files]]
+src = "wallpaper/daybreak-first-light.png"
+dest = "~/.local/share/backgrounds/daybreak/daybreak-first-light.png"
+
+# ------------------------------------------------------------- settings
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background picture-uri"
+value = "'file://{{ home }}/.local/share/backgrounds/daybreak/daybreak-first-light.png'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background picture-uri-dark"
+value = "'file://{{ home }}/.local/share/backgrounds/daybreak/daybreak-first-light.png'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background picture-options"
+value = "'zoom'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.background primary-color"
+value = "'#FBF6EC'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.screensaver picture-uri"
+value = "'file://{{ home }}/.local/share/backgrounds/daybreak/daybreak-first-light.png'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.screensaver picture-options"
+value = "'zoom'"
+component = "wallpaper"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface color-scheme"
+value = "'prefer-light'"
+component = "colors"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface accent-color"
+value = "'green'"
+component = "colors"
+
+# Adwaita, not adw-gtk3: the stock theme is already installed on every GNOME
+# desktop, and naming a theme that is not there is a Look that half-applies.
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface gtk-theme"
+value = "'Adwaita'"
+component = "colors"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface icon-theme"
+value = "'Adwaita'"
+component = "icons"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface cursor-theme"
+value = "'Adwaita'"
+component = "cursor"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface font-name"
+value = "'Adwaita Sans 11'"
+component = "fonts"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface document-font-name"
+value = "'Adwaita Sans 11'"
+component = "fonts"
+
+[[settings]]
+key = "gsettings:org.gnome.desktop.interface monospace-font-name"
+value = "'Adwaita Mono 11'"
+component = "fonts"
+
+# The warmth Night Light uses, if you use Night Light. This does not switch it
+# on and does not switch it off — see README.md.
+[[settings]]
+key = "gsettings:org.gnome.settings-daemon.plugins.color night-light-temperature"
+value = "uint32 4200"
+component = "night-light"

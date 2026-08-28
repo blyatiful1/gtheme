@@ -2,6 +2,48 @@
   "version": 2,
   "themes": [
     {
+      "name": "daybreak",
+      "title": "DAYBREAK — first light",
+      "description": "A light desk: warm white surfaces, palest sage underfoot, and a leaf-green highlight. Sunrise through a glasshouse roof. It uses only what a stock GNOME desktop already has — no add-ons, no downloads, nothing to install.",
+      "author": "blyatiful1",
+      "version": "1.0.0",
+      "components": [
+        "wallpaper",
+        "colors",
+        "icons",
+        "cursor",
+        "fonts",
+        "night-light"
+      ],
+      "format": 2,
+      "screenshots": [
+        "wallpaper/daybreak-first-light.png"
+      ],
+      "min_shell": "49",
+      "provenance": "bundled"
+    },
+    {
+      "name": "hearth",
+      "title": "HEARTH — banked embers",
+      "description": "A warm desk: cream surfaces, amber light low in the frame, terracotta highlight. Turns on Night Light so the evening matches the picture. It uses only what a stock GNOME desktop already has — no add-ons, no downloads, nothing to install.",
+      "author": "blyatiful1",
+      "version": "1.0.0",
+      "components": [
+        "wallpaper",
+        "colors",
+        "icons",
+        "cursor",
+        "fonts",
+        "night-light"
+      ],
+      "format": 2,
+      "screenshots": [
+        "wallpaper/hearth-firelight.png"
+      ],
+      "min_shell": "49",
+      "provenance": "bundled"
+    },
+    {
       "name": "hyperclass",
       "title": "HYPERCLASS — Gilded Void",
       "description": "First class aboard a starliner crossing the void: champagne brass on deep-space ink, ivory starlight, one vein of ice. A brass hairline round the focused window and an airlock-iris animation when it opens.",

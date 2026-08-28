@@ -2,20 +2,28 @@
 
 Two different problems live here, and they are kept apart deliberately.
 
-**Either/or pairs.** Four pairs of curated add-ons do the same job in
-incompatible ways: two docks, two clipboard histories, two system monitors, two
-desktop-icon implementations. Turning the second one on does not produce an
-error — it produces a desktop with two docks, or a top bar with everything in
-it twice, and a person who has no idea which of the forty things they turned on
-did it. So the app never lets both be chosen silently: picking one offers to
+**Either/or pairs.** Some add-ons do the same job in incompatible ways: two
+docks, two clipboard histories, two system monitors, two desktop-icon
+implementations, two window tilers. Turning the second one on does not produce
+an error — it produces a desktop with two docks, or a top bar with everything
+in it twice, and a person who has no idea which of the forty things they turned
+on did it. So the app never lets both be chosen silently: picking one offers to
 turn the other off, in those words.
 
+Not every add-on in that table is one gtheme offers. Ubuntu and its relatives
+ship a dock and a tiler already switched on, and those are exactly the ones a
+person is most likely to end up with two of — they did not choose the first one,
+so they have no reason to connect it to the second. A pair is listed here
+because both halves can be *on*, not because gtheme installs both.
+
 **Hazardous combinations.** Both add-ons are legitimate, both may be wanted, and
-together they break something. This machine has exactly one known case, and it
-is a bad one: blurring the top bar while the top bar is set to hide starves
-every screen-capture route on the machine — screen recording and screen sharing
-stop working, with no error anywhere. That is a sentence the user gets to read
-*before* it happens, phrased as what will happen.
+together they break something. This machine has one known case, and it is a bad
+one: blurring the top bar while the top bar is set to hide starves every
+screen-capture route on the machine — screen recording and screen sharing stop
+working, with no error anywhere. That is a sentence the user gets to read
+*before* it happens, phrased as what will happen. It is listed once per top bar
+that hides, because the breakage is caused by the hiding and not by any one
+add-on's name.
 
 Both tables are code rather than data because they are cross-cutting: they are
 about pairs, and a panel file describes one add-on. Panels may still declare
@@ -31,6 +39,7 @@ from dataclasses import dataclass
 __all__ = [
     "CONFLICTS",
     "HAZARDS",
+    "TOP_BAR_HIDERS",
     "Conflict",
     "Hazard",
     "active_conflicts",
@@ -69,7 +78,7 @@ class Conflict:
         return None
 
 
-#: The four pairs from the research, plus whatever the panels declare.
+#: The pairs from the research, plus whatever the panels declare.
 CONFLICTS: tuple[Conflict, ...] = (
     Conflict(
         "dash-to-dock@micxgx.gmail.com",
@@ -95,6 +104,31 @@ CONFLICTS: tuple[Conflict, ...] = (
         "These are two versions of the same thing — icons on the desktop — and "
         "running both draws them on top of each other.",
     ),
+    # Ubuntu and the systems built on it ship their own dock, already on, and
+    # it is a fork of Dash to Dock — so the person who adds either of the two
+    # gtheme offers ends up with two docks and no idea where the first one came
+    # from. Neither of these is a panel gtheme installs; both can be running.
+    Conflict(
+        "ubuntu-dock@ubuntu.com",
+        "dash-to-dock@micxgx.gmail.com",
+        "These are two versions of the same strip of app icons, and having both "
+        "on gives you two of them.",
+    ),
+    Conflict(
+        "ubuntu-dock@ubuntu.com",
+        "dash-to-panel@jderose9.github.com",
+        "Both put your apps along an edge of the screen, so having both on shows "
+        "you the same icons twice.",
+    ),
+    # Same story for tiling: several distributions preinstall Tiling Assistant,
+    # and two things deciding where a window goes fight over every window.
+    Conflict(
+        "tiling-assistant@leleat-on-github",
+        "tilingshell@ferrarodomenico.com",
+        "Both decide where a window goes when you drag it to the edge of the "
+        "screen, and having both on makes windows land somewhere you did not "
+        "aim for.",
+    ),
 )
 
 
@@ -115,19 +149,33 @@ class Hazard:
 
 
 #: Known on this machine and reproduced from the notes rather than guessed.
-HAZARDS: tuple[Hazard, ...] = (
+#:
+#: One entry per add-on that hides the top bar, because what breaks capture is
+#: a blurred bar that is also hidden — not the name of the thing hiding it.
+#: NIGHTBLOOM's own auto-hiding top bar does the same job as hidetopbar under a
+#: different name, and pins the blur off for exactly this reason; before it was
+#: listed here the running app could not see the combination its own data files
+#: were written to avoid.
+_CAPTURE_BREAKING_BLUR = (
+    "Blurring the bar at the top while the bar is also set to hide can stop "
+    "screen recording and screen sharing from working, with no error to tell "
+    "you why. Turn the blur off if recording stops working."
+)
+
+#: The add-ons that hide the top bar. Both are real, and either one plus the
+#: panel blur is the same breakage.
+TOP_BAR_HIDERS: tuple[str, ...] = (
+    "hidetopbar@mathieu.bidon.ca",
+    "intellibar@nightbloom.local",
+)
+
+HAZARDS: tuple[Hazard, ...] = tuple(
     Hazard(
-        uuids=(
-            "blur-my-shell@aunetx",
-            "hidetopbar@mathieu.bidon.ca",
-        ),
+        uuids=("blur-my-shell@aunetx", hider),
         requires=("org.gnome.shell.extensions.blur-my-shell.panel:blur",),
-        explain=(
-            "Blurring the bar at the top while the bar is also set to hide can stop "
-            "screen recording and screen sharing from working, with no error to tell "
-            "you why. Turn the blur off if recording stops working."
-        ),
-    ),
+        explain=_CAPTURE_BREAKING_BLUR,
+    )
+    for hider in TOP_BAR_HIDERS
 )
 
 

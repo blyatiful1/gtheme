@@ -13,6 +13,7 @@ import hashlib
 from pathlib import Path
 
 import pytest
+from terminal_write_helper import land
 
 from gtheme.terminal.ghostty import FOREIGN_NOTICE, GhosttyAdapter, slugify
 from gtheme.terminal.model import Palette, ReloadSemantics
@@ -87,7 +88,7 @@ def test_reload_semantics_are_honest():
 
 @pytest.mark.mutating
 def test_apply_writes_a_theme_file_and_selects_it(local_ghostty: GhosttyAdapter):
-    local_ghostty.apply(LOOK)
+    land(local_ghostty, LOOK)
     theme = local_ghostty.themes_dir / "nightbloom"
     assert theme.is_file()
     assert "palette = 0=#000000" in theme.read_text()
@@ -101,7 +102,7 @@ def test_apply_writes_a_theme_file_and_selects_it(local_ghostty: GhosttyAdapter)
 def test_apply_preserves_comments_and_keys_gtheme_never_heard_of(
     local_ghostty: GhosttyAdapter,
 ):
-    local_ghostty.apply(LOOK)
+    land(local_ghostty, LOOK)
     config = local_ghostty.config_path.read_text()
     for line in (
         "# ── NIGHTBLOOM — Ghostty ────────────────────────────────",
@@ -118,7 +119,7 @@ def test_apply_preserves_comments_and_keys_gtheme_never_heard_of(
 
 @pytest.mark.mutating
 def test_apply_replaces_rather_than_appends_a_known_key(local_ghostty: GhosttyAdapter):
-    local_ghostty.apply(LOOK)
+    land(local_ghostty, LOOK)
     config = local_ghostty.config_path.read_text()
     assert config.count("background-opacity") == 1
     assert "background-opacity = 0.9" not in config
@@ -126,7 +127,7 @@ def test_apply_replaces_rather_than_appends_a_known_key(local_ghostty: GhosttyAd
 
 @pytest.mark.mutating
 def test_current_round_trips_what_apply_wrote(local_ghostty: GhosttyAdapter):
-    local_ghostty.apply(LOOK)
+    land(local_ghostty, LOOK)
     read_back = local_ghostty.current()
     assert read_back is not None
     assert (read_back.background, read_back.foreground) == (LOOK.background, LOOK.foreground)
@@ -173,7 +174,7 @@ def test_apply_refuses_a_foreign_directory_and_changes_nothing(
     adapter, rice = foreign_ghostty
     before = _fingerprint(rice)
     with pytest.raises(PermissionError, match="managed by another tool"):
-        adapter.apply(LOOK)
+        land(adapter, LOOK)
     assert _fingerprint(rice) == before
     # Not even a stray temp file: an atomic write's tmp lands beside its target.
     assert not list(rice.glob(".gtheme-*"))
@@ -218,7 +219,7 @@ def test_after_take_over_apply_works_and_the_original_repo_stays_untouched(
     adapter, rice = foreign_ghostty
     before = _fingerprint(rice)
     adapter.take_over()
-    adapter.apply(LOOK)
+    land(adapter, LOOK)
     assert "theme = nightbloom" in adapter.config_path.read_text()
     assert _fingerprint(rice) == before
 
@@ -227,7 +228,7 @@ def test_after_take_over_apply_works_and_the_original_repo_stays_untouched(
 def test_undo_takeover_puts_the_link_back(foreign_ghostty: tuple[GhosttyAdapter, Path]):
     adapter, rice = foreign_ghostty
     adapter.take_over()
-    adapter.apply(LOOK)
+    land(adapter, LOOK)
 
     assert adapter.undo_takeover() is True
     assert adapter.config_dir.is_symlink()

@@ -93,6 +93,37 @@ def test_addon_summary_says_none_rather_than_zero_of_zero():
     assert home.addon_summary(FakeShell({})) == "None yet"
 
 
+class CountingShell(FakeShell):
+    """A connection that says whether it has listed, and counts the listings.
+
+    The real ``ShellExtensions`` keeps its map live off ``ExtensionStateChanged``
+    once it has listed, so asking it again is a ``ListExtensions`` round trip
+    for something already in hand (review-report M26).
+    """
+
+    def __init__(self, extensions: dict[str, FakeExtension] | None) -> None:
+        super().__init__(extensions)
+        self.listings = 0
+        self.loaded = False
+
+    @property
+    def all(self) -> dict[str, FakeExtension]:
+        return dict(self._extensions or {})
+
+    def load(self) -> dict[str, FakeExtension]:
+        self.listings += 1
+        answer = super().load()
+        self.loaded = True
+        return answer
+
+
+def test_a_connection_that_has_already_listed_is_read_rather_than_asked_again():
+    shell = CountingShell({"a": FakeExtension(True), "b": FakeExtension(False)})
+    assert home.addon_summary(shell) == "1 of 2 switched on"
+    assert home.addon_summary(shell) == "1 of 2 switched on"
+    assert shell.listings == 1, "the second read must cost no round trip"
+
+
 def test_the_accent_dot_is_a_filled_circle_of_the_right_colour():
     pixels = home.dot_pixels("#ff0000", size=16)
     assert len(pixels) == 16 * 16 * 4

@@ -56,7 +56,11 @@ jobs:
           python-version: "3.13"
 
       # The wheel is pure Python; only the launcher entry and the store listing
-      # need checking here, and neither needs a desktop.
+      # need checking here, and neither needs a desktop. Every tier that does —
+      # including `dconf`, which needs a private bus and the dconf-service that
+      # bus activates (M20) — ran in the `tests` job above, wrapped in
+      # dbus-run-session exactly as verify.sh wraps it (M16). Shipping a tag is
+      # the last place that should be deciding from a borrowed session bus.
       - name: Install the packaging checkers
         run: |
           sudo apt-get update

@@ -25,6 +25,13 @@ concurrency:
 #   * the page-walk screenshots, and the honesty gate over them.
 #   * that applying and undoing a look really moves a real desktop.
 #   * that the machine this was built on came out unchanged (F16).
+#
+# The `dconf` tier DOES run here — in the container job below, under
+# `dbus-run-session`, and it used not to run in CI at all: a private bus plus
+# the dconf-service it activates is all that tier needs, and that is exactly
+# what `dbus-run-session` provides. So a GioBackend that spells a written value
+# differently from the subprocess backend now fails here rather than waiting
+# for someone to run the local-only tier (review-report M20).
 # A change that is green here and has not been through ./verify.sh --full is
 # unverified. See docs/testing.md.
 #
@@ -52,7 +59,9 @@ jobs:
       # These three are what the packaging tests check the launcher entry, the
       # store listing and the icons with — without them those tests skip
       # themselves and prove nothing. No PyGObject here on purpose: nothing in
-      # this job may need a desktop.
+      # this job may need a desktop, and nothing here needs a session bus
+      # either — the tiers that do are all in the container job below, which
+      # wraps them in `dbus-run-session` (review-report M16).
       - name: Install the packaging checkers
         run: |
           sudo apt-get update
@@ -66,7 +75,10 @@ jobs:
         run: .venv/bin/ruff check .
       - name: pytest — packaging only
         # Builds a real wheel and looks inside it, validates the .desktop file
-        # and the metainfo, and checks what install.sh would put where.
+        # and the metainfo, and checks what install.sh would put where. These
+        # three files are named rather than selected by a marker on purpose:
+        # they are the only tests that mean anything without a desktop, and
+        # they run again in the container job as part of the whole suite.
         run: |
           .venv/bin/python -m pytest -q \
             tests/unit/test_packaging_wheel.py \
@@ -100,10 +112,17 @@ jobs:
         # gtk4-broadwayd is an offscreen GDK backend: no X server, no
         # compositor, no Xvfb needed. dbus-run-session gives the tests a
         # private session bus so nothing reaches a real one — and so that the
-        # transaction tests have a session to write into at all.
+        # transaction tests have a session to write into at all. It is the
+        # same wrapping verify.sh uses, for the same reason (M16): the settings
+        # phase decides whether to run from DBUS_SESSION_BUS_ADDRESS, so a run
+        # without a bus proves nothing and a run on a borrowed one is one
+        # mistake away from a real desktop.
         #
-        # -m "not sandbox" is both tiers at once: the sandbox tier is the only
-        # one this file refuses to run, and pyproject already deselects it.
+        # -m "not sandbox" is every tier at once — unit, regression, `dconf`
+        # and `gtk`. The sandbox tier is the only one this file refuses to run,
+        # and pyproject already deselects it. The `dconf` tier in particular
+        # needs exactly what is here and nothing more (a bus, a dconf-service,
+        # no shell and no seat), which is why it runs in CI at all (M20).
         run: |
           gtk4-broadwayd :5 &
           sleep 2

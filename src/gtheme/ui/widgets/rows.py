@@ -34,20 +34,51 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, GLib, Gtk  # noqa: E402
 
-from ...core.gvariant import bare_number  # noqa: E402
+from ...core.gvariant import bare_number, quote, unquote, values_equal  # noqa: E402
 from ...core.settings_backend import BackendError, BackendErrorKind, SettingsBackend  # noqa: E402
 from ...panels.descriptor import Row, WidgetKind  # noqa: E402
+from .recording import (  # noqa: E402
+    COPY,
+    NOT_CHANGED,
+    WriteRefused,
+    first_touch_value,
+    reason_for,
+    recording,
+)
 
 __all__ = [
+    "PUT_BACK_DEFAULT",
+    "PUT_BACK_RECORDED",
     "RowBuildError",
     "UnsupportedRowKind",
     "attach_reset",
     "build_row",
+    "clear_refusal",
     "key_for",
+    "quote",
     "register_kind",
+    "report_refusal",
+    "reset_value",
     "set_plain_text",
+    "unquote",
     "warn_banner",
+    "write_value",
 ]
+
+# GVariant string quoting is one pair of functions, in :mod:`gtheme.core
+# .gvariant` where the rest of the wire format lives, and re-exported here
+# because this is where the UI half imports its row helpers from — the same
+# arrangement ``key_for`` and ``set_plain_text`` already have. Nothing below
+# this line reimplements either of them, and neither does any page
+# (review-report L19: it was written out longhand eight times, once inside this
+# frozen library, where a fix would have missed the other seven).
+
+
+#: What the per-row put-back button says when gtheme knows what the setting held
+#: the first time it touched it, and when it does not. Two different promises,
+#: so they are two different sentences (review-report H3).
+PUT_BACK_RECORDED = "Put this back the way it was"
+PUT_BACK_DEFAULT = "Put this back to what this computer came with"
 
 
 class RowBuildError(Exception):
@@ -154,9 +185,9 @@ def warn_banner(text: str) -> Adw.Banner:
 def _unavailable(row: Row, exc: BackendError) -> Adw.ActionRow:
     """The honest greyed-out row for a setting that is not present here."""
     if exc.kind is BackendErrorKind.NO_SCHEMA:
-        reason = "This needs an add-on that isn't installed."
+        reason = COPY["no-add-on"]
     elif exc.kind is BackendErrorKind.NO_KEY:
-        reason = "The add-on on this computer is a different version and doesn't have this."
+        reason = COPY["different-version"]
     else:
         reason = "This setting can't be read on this computer."
     action = Adw.ActionRow(sensitive=False)
@@ -189,18 +220,145 @@ def _write(backend: SettingsBackend, row: Row, value: str) -> None:
     The ordering is the whole point: writing "sharper text" while the system is
     still choosing text rendering for itself produces a control that visibly
     moves and changes nothing.
+
+    Every write goes through :func:`~gtheme.ui.widgets.recording.recording`, so
+    a row edit is recorded exactly as a Look is: pristine value first, claimed
+    for the person rather than for a Look, and covered by one saved moment for
+    the whole burst of edits (review-report H3).
+
+    Raises:
+        BackendError: the settings store refused the write.
+        WriteRefused: gtheme refused it — the lock is held by an apply, or what
+            was there could not be written down first.
     """
+    recorder = recording(backend, component=row.id)
     for prerequisite in row.requires_first:
         key = f"gsettings:{prerequisite.schema_id} {prerequisite.key}"
         try:
-            if backend.get(key) != prerequisite.value:
-                backend.set(key, prerequisite.value)
+            if recorder.get(key) != prerequisite.value:
+                recorder.set(key, prerequisite.value)
         except BackendError:
             # The prerequisite key is missing on this system. Writing the main
             # key anyway is the lesser evil: it is what the user asked for, and
             # the prerequisite only exists on systems that have it.
+            #
+            # A WriteRefused is deliberately NOT swallowed here: "something
+            # else is changing your desktop" is true of the main key as well,
+            # so it travels out of this function and the pair is refused
+            # together, with one sentence, rather than half-written.
             pass
-    backend.set(key_for(row), value)
+    recorder.set(key_for(row), value)
+
+
+# --------------------------------------------------------------------------
+# saying what did not happen
+# --------------------------------------------------------------------------
+
+#: Where a row parks the subtitle it had before it had to explain itself.
+_PRIOR_SUBTITLE = "_gtheme_prior_subtitle"
+
+
+def report_refusal(widget: Any, reason: str) -> str:
+    """Say, where the person is looking, that the change did not happen.
+
+    A refused write used to be silent: the switch stayed flipped, the desktop
+    did not move, and nothing said so (review-report M7). This is the fix, and
+    it says it twice on purpose — as a passing message if there is a window to
+    say it in, and on the row itself, which is where somebody who looked away
+    will look.
+
+    Returns:
+        The sentence that was shown, so a caller can log or assert on it.
+    """
+    text = NOT_CHANGED.format(why=reason)
+    root = widget.get_root() if isinstance(widget, Gtk.Widget) else None
+    speak = getattr(root, "toast", None)
+    if callable(speak):
+        speak(text)
+    setter = getattr(widget, "set_subtitle", None)
+    if callable(setter):
+        if getattr(widget, _PRIOR_SUBTITLE, None) is None:
+            setattr(widget, _PRIOR_SUBTITLE, widget.get_subtitle() or "")
+        set_plain_text(widget, subtitle=text)
+    return text
+
+
+def clear_refusal(widget: Any) -> None:
+    """Put back the row's own words once a write has worked again."""
+    prior = getattr(widget, _PRIOR_SUBTITLE, None)
+    if prior is None:
+        return
+    setattr(widget, _PRIOR_SUBTITLE, None)
+    setter = getattr(widget, "set_subtitle", None)
+    if callable(setter):
+        set_plain_text(widget, subtitle=prior)
+
+
+def _refused(widget: Any, refresh: Callable[[], None] | None, exc: BaseException) -> bool:
+    """Put the widget back to the stored truth and say why. Always False."""
+    if refresh is not None:
+        refresh()
+    report_refusal(widget, reason_for(exc))
+    return False
+
+
+def write_value(
+    backend: SettingsBackend,
+    key: str,
+    value: str,
+    *,
+    widget: Any,
+    refresh: Callable[[], None] | None = None,
+    component: str = "",
+) -> bool:
+    """Write one setting through the recorder, honestly.
+
+    The one call every hand-built control makes instead of ``backend.set``: it
+    records what was there before the write, and on a refusal it puts the
+    control back to what the desktop really holds and says what happened.
+
+    Returns:
+        Whether the value was written.
+    """
+    try:
+        recording(backend, component=component).set(key, value)
+    except (BackendError, WriteRefused) as exc:
+        return _refused(widget, refresh, exc)
+    clear_refusal(widget)
+    return True
+
+
+def reset_value(
+    backend: SettingsBackend,
+    key: str,
+    *,
+    widget: Any,
+    refresh: Callable[[], None] | None = None,
+    component: str = "",
+) -> bool:
+    """Clear one setting through the recorder. The mirror of :func:`write_value`."""
+    try:
+        recording(backend, component=component).reset(key)
+    except (BackendError, WriteRefused) as exc:
+        return _refused(widget, refresh, exc)
+    clear_refusal(widget)
+    return True
+
+
+def _commit(
+    backend: SettingsBackend,
+    row: Row,
+    widget: Any,
+    refresh: Callable[[], None],
+    value: str,
+) -> bool:
+    """A descriptor row's write: recorded, and honest when it does not happen."""
+    try:
+        _write(backend, row, value)
+    except (BackendError, WriteRefused) as exc:
+        return _refused(widget, refresh, exc)
+    clear_refusal(widget)
+    return True
 
 
 # --------------------------------------------------------------------------
@@ -223,7 +381,7 @@ def _build_toggle(backend: SettingsBackend, row: Row) -> tuple[Adw.PreferencesRo
     def on_toggled(*_args: Any) -> None:
         if guard["busy"]:
             return
-        _write(backend, row, "true" if widget.get_active() else "false")
+        _commit(backend, row, widget, refresh, "true" if widget.get_active() else "false")
 
     refresh()
     widget.connect("notify::active", on_toggled)
@@ -259,7 +417,7 @@ def _build_slider(backend: SettingsBackend, row: Row) -> tuple[Adw.PreferencesRo
         value = min(max(widget.get_value(), row.clamp_min), row.clamp_max)
         # An integer key must not be handed "3.0" — GVariant rejects it.
         text = str(int(round(value))) if step >= 1 and float(step).is_integer() else repr(value)
-        _write(backend, row, text)
+        _commit(backend, row, widget, refresh, text)
 
     refresh()
     widget.connect("notify::value", on_changed)
@@ -312,7 +470,7 @@ def _build_choice(backend: SettingsBackend, row: Row) -> tuple[Adw.PreferencesRo
                 return
             if foreign["value"] != current:
                 drop_foreign()
-                labels.append(_unquote(current) + FOREIGN_CHOICE_SUFFIX)
+                labels.append(unquote(current) + FOREIGN_CHOICE_SUFFIX)
                 foreign["value"] = current
             widget.set_selected(len(values))
         finally:
@@ -323,7 +481,7 @@ def _build_choice(backend: SettingsBackend, row: Row) -> tuple[Adw.PreferencesRo
             return
         index = widget.get_selected()
         if index < len(values):
-            _write(backend, row, values[index])
+            _commit(backend, row, widget, refresh, values[index])
             refresh()
 
     refresh()
@@ -340,14 +498,14 @@ def _build_text(backend: SettingsBackend, row: Row) -> tuple[Adw.PreferencesRow,
         guard["busy"] = True
         try:
             raw = backend.get(key_for(row))
-            widget.set_text(_unquote(raw))
+            widget.set_text(unquote(raw))
         finally:
             guard["busy"] = False
 
     def on_apply(*_args: Any) -> None:
         if guard["busy"]:
             return
-        _write(backend, row, GLib.Variant("s", widget.get_text()).print_(True))
+        _commit(backend, row, widget, refresh, GLib.Variant("s", widget.get_text()).print_(True))
 
     refresh()
     widget.connect("apply", on_apply)
@@ -369,20 +527,12 @@ def _build_color(backend: SettingsBackend, row: Row) -> tuple[Adw.PreferencesRow
 
     def refresh() -> None:
         try:
-            label.set_text(_unquote(backend.get(key_for(row))))
+            label.set_text(unquote(backend.get(key_for(row))))
         except BackendError:
             label.set_text("")
 
     refresh()
     return widget, refresh
-
-
-def _unquote(variant_text: str) -> str:
-    """Strip GVariant string quoting for display. ``"'x'"`` -> ``x``."""
-    text = variant_text.strip()
-    if len(text) >= 2 and text[0] == text[-1] and text[0] in "'\"":
-        return text[1:-1]
-    return text
 
 
 RowBuilder = Callable[..., tuple[Adw.PreferencesRow, Callable[[], None]]]
@@ -485,30 +635,64 @@ def attach_reset(
     this for every ``reset`` row itself, so a builder only needs it directly
     when it is composing something :func:`build_row` does not drive.
 
+    **What "the way it was" means.** The button used to install the schema
+    default and call that putting it back — which is a different thing, and
+    wrong for anybody who had chosen something else before gtheme ever ran
+    (review-report H3). It now restores the value the pristine recording holds
+    for this setting when there is one, and only falls back to the default when
+    there is not — where it says so, because promising to put something back
+    and installing a stranger's value instead is the kind of small lie this app
+    is built to not tell.
+
     Returns a refresh callable that also updates the button, so the caller has
     one function that keeps the whole row consistent.
     """
     default = _default_text(backend, row)
+    key = key_for(row)
     button = Gtk.Button(
         icon_name="edit-undo-symbolic",
-        tooltip_text="Put this back the way it was",
+        tooltip_text=PUT_BACK_RECORDED,
         valign=Gtk.Align.CENTER,
         css_classes=["flat"],
     )
 
     def update_sensitivity() -> None:
+        # Read every time: the first touch of this setting happens *while the
+        # page is open*, so a row that had nothing recorded when it was built
+        # has something recorded one click later, and the button's promise has
+        # to change with it.
+        recorded, saved = first_touch_value(backend, key)
+        button.set_tooltip_text(PUT_BACK_RECORDED if recorded else PUT_BACK_DEFAULT)
+        if recorded and saved is not None:
+            # There is a real value to go back to, so the button is offered
+            # whether or not the schema default can be read at all.
+            button.set_visible(True)
+            try:
+                button.set_sensitive(not values_equal(backend.get(key), saved))
+            except BackendError:
+                button.set_sensitive(False)
+            return
         if default is None:
             button.set_visible(False)
             return
+        button.set_visible(True)
         try:
-            button.set_sensitive(backend.get(key_for(row)) != default)
+            button.set_sensitive(backend.get(key) != default)
         except BackendError:
             button.set_sensitive(False)
 
     def on_clicked(*_args: Any) -> None:
-        try:
-            backend.reset(key_for(row))
-        except BackendError:
+        recorded, saved = first_touch_value(backend, key)
+        if recorded and saved is not None:
+            done = write_value(
+                backend, key, saved, widget=widget, refresh=refresh, component=row.id
+            )
+        else:
+            # Nothing recorded, or nothing was there to record: both put back by
+            # clearing the setting, which is what "no value of your own" was.
+            done = reset_value(backend, key, widget=widget, refresh=refresh, component=row.id)
+        if not done:
+            update_sensitivity()
             return
         refresh()
         update_sensitivity()

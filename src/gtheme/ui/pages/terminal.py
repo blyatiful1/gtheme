@@ -1,7 +1,7 @@
 """Terminal — giving the command window, the prompt and the little tools a look.
 
-One card per program that is *actually on this computer*. A list of eight
-terminals with seven greyed out is a list of things the user cannot do, so
+One card per program that is *actually on this computer*. A list of ten
+terminals with nine greyed out is a list of things the user cannot do, so
 :func:`gtheme.terminal.installed` decides what appears and nothing else does.
 
 Three things this page refuses to fudge.
@@ -22,7 +22,16 @@ whether it fails would be exactly the write the refusal exists to prevent.
 
 **Where the colours come from.** A look's colours come from a Look. With no
 Look applied there is no palette, and the button says so and stays off rather
-than inventing one.
+than inventing one. A Look whose palette holds something that is not a colour
+is not a page that cannot be opened: the page falls back to the same "no
+colours from this Look" branch it already has (review-report M11).
+
+**Nothing is written from here.** The button collects what each program wants
+changed and hands all of it to one transaction, so the terminal look is
+recorded, claimed, undoable and rolled back as one thing like every other
+change in this app (review-report H8). It runs on the shared runner, because
+copying files and writing settings on the main loop is how a window stops
+repainting mid-change.
 """
 
 from __future__ import annotations
@@ -30,13 +39,15 @@ from __future__ import annotations
 import shutil
 from typing import Any
 
+from ...core import applog
 from ...core.backends import get_backend
+from ...core.gvariant import quote, unquote
 from ...core.settings_backend import BackendError
 from ...panels.descriptor import Choice, Row, WidgetKind
 from ...panels.schema_probe import SchemaProbe
-from ...terminal import apply_all, installed
+from ...terminal import ApplyReport, apply_all, installed
 from ...terminal.ghostty import FOREIGN_NOTICE, GhosttyAdapter
-from ...terminal.model import Palette
+from ...terminal.model import Palette, is_colour, read_palette
 from ..search import build_indexed_rows, escape_markup, page_rows, probe_built_rows
 
 __all__ = [
@@ -49,6 +60,9 @@ __all__ = [
 ]
 
 PAGE_ID = "terminal"
+
+#: The one-shot explainer key in ``prefs.json``.
+BANNER_ID = "first-visit-terminal"
 
 #: The setting that says which app opens when something needs a command window.
 TERMINAL_APP_ROW = "org.gnome.desktop.default-applications.terminal:exec"
@@ -74,6 +88,13 @@ COPY: dict[str, str] = {
     "using-unknown": "gtheme cannot tell which colours this is using.",
     "done": "Done. {when}",
     "failed": "Not changed. {why}",
+    "working-heading": "Giving these programs those colours",
+    "working": "gtheme is saving how things are now, then changing them.",
+    "some-changed": "{done} of {total} changed.",
+    "crashed": (
+        "gtheme could not make that change. Nothing on this page was changed. "
+        "The details are in gtheme's own log."
+    ),
     "take-over": "Take them over",
     "undo-take-over": "Put the folder link back",
     "taken-over": (
@@ -174,16 +195,21 @@ def _ansi(palette: dict[str, str]) -> tuple[str, ...]:
     even one of the sixteen yields none of them: a partial ANSI set written
     into a terminal is a terminal with eight of its colours from one look and
     eight from another.
+
+    One of the sixteen not being a colour gtheme can write counts as missing,
+    for the same reason and for one more: a Look's palette is unvalidated text,
+    and this rule is what keeps one unusable entry from costing the page the
+    fifteen good ones and the background with them.
     """
     found: list[str] = []
     for name in _ANSI_NAMES:
         colour = _pick(palette, f"ansi_{name}", name)
-        if colour is None:
+        if colour is None or not is_colour(colour):
             return ()
         found.append(colour)
     for name in _ANSI_NAMES:
         colour = _pick(palette, f"ansi_bright_{name}", f"bright_{name}")
-        if colour is None:
+        if colour is None or not is_colour(colour):
             return ()
         found.append(colour)
     return tuple(found)
@@ -206,6 +232,17 @@ def palette_from_look(preset: Any) -> Palette | None:
     text colour are looked for under the ordinary names first and fall back to
     the palette's own black and white, which every Look that describes a
     terminal has.
+
+    Built through :func:`~gtheme.terminal.model.read_palette`, which answers
+    None for anything that is not a palette instead of raising. A Look's
+    ``[palette]`` is unvalidated text — a v1 import folds every colour string
+    through untouched, and the Look preview parses colours with a reader that
+    accepts ``black`` — so a single colour spelled in a way gtheme cannot write
+    used to raise out of here, and the window *cached* the resulting error
+    placeholder: the whole Terminal page was unreachable for the rest of the
+    session (review-report M11). "gtheme has no set of colours to hand out" is
+    already what this page says when a Look describes none, and it is the right
+    answer for a Look whose colours it cannot use either.
     """
     colours = dict(getattr(preset, "palette", {}) or {})
     if not colours:
@@ -219,7 +256,7 @@ def palette_from_look(preset: Any) -> Palette | None:
         foreground = ansi[7]
     if not background or not foreground:
         return None
-    return Palette(
+    return read_palette(
         name=getattr(getattr(preset, "meta", None), "name", None) or "gtheme",
         background=background,
         foreground=foreground,
@@ -239,20 +276,14 @@ def installed_terminal_apps() -> list[tuple[str, str]]:
     return [(command, name) for command, name in KNOWN_TERMINAL_APPS if shutil.which(command)]
 
 
-def _quoted(value: str) -> str:
-    return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
-
-
 def _current_text(backend: Any, row: Row) -> str | None:
     from ..widgets.rows import key_for
 
     try:
-        raw = backend.get(key_for(row)).strip()
+        raw = backend.get(key_for(row))
     except BackendError:
         return None
-    if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in "'\"":
-        return raw[1:-1]
-    return raw or None
+    return unquote(raw) or None
 
 
 def terminal_app_row(row: Row, backend: Any, *, found: list[tuple[str, str]] | None = None) -> Row:
@@ -261,7 +292,7 @@ def terminal_app_row(row: Row, backend: Any, *, found: list[tuple[str, str]] | N
     current = _current_text(backend, row)
     if current and current not in {command for command, _ in apps}:
         apps.append((current, current))
-    choices = [Choice(value=_quoted(command), label=name) for command, name in apps]
+    choices = [Choice(value=quote(command), label=name) for command, name in apps]
     if not choices:
         return row
     return row.model_copy(update={"kind": WidgetKind.CHOICE, "choices": choices})
@@ -292,7 +323,10 @@ def build(window: Any, *, backend: Any = None, probe: SchemaProbe | None = None)
     scanner = probe if probe is not None else SchemaProbe()
     prefs = getattr(window, "prefs", None)
 
-    adapters = installed(settings)
+    # One detect() per adapter, and the answer travels with it: the card, the
+    # foreign-settings notice and the "is it here at all" question are all
+    # answered from this one scan (review-report L17).
+    found = installed(settings)
     look = applied_look()
     palette = palette_from_look(look.preset) if look is not None else None
 
@@ -302,45 +336,28 @@ def build(window: Any, *, backend: Any = None, probe: SchemaProbe | None = None)
 
     page.add(_colours_group(Adw, Gtk, look, palette))
 
-    if not adapters:
+    if not found:
         page.add(
             Adw.PreferencesGroup(
                 title=escape_markup(COPY["nothing-title"]),
                 description=escape_markup(COPY["nothing-body"]),
             )
         )
-    for adapter in adapters:
-        page.add(_adapter_group(Adw, Gtk, window, adapter, include, status))
+    for adapter, state in found:
+        page.add(_adapter_group(Adw, Gtk, window, adapter, state, include, status))
 
-    if adapters:
-        page.add(_apply_group(Adw, window, adapters, palette, include, status))
+    if found:
+        adapters = [adapter for adapter, _state in found]
+        page.add(_apply_group(Adw, window, adapters, palette, include, status, settings))
 
     built = _app_group(window, page, settings, scanner, Adw)
     page.add(_elsewhere_group(Adw))
 
     probe_built_rows(page, scanner, built, backend=settings)
 
-    if prefs is not None and prefs.should_show_banner("first-visit-terminal"):
-        return _banner_box(Adw, Gtk, page, prefs)
-    return page
+    from ..widgets.explainer import with_first_visit_banner
 
-
-def _banner_box(Adw: Any, Gtk: Any, page: Any, prefs: Any) -> Any:
-    from ..search import BANNER_DISMISS
-
-    banner = Adw.Banner(
-        title=escape_markup(COPY["banner"]), button_label=BANNER_DISMISS, revealed=True
-    )
-
-    def dismiss(*_args: Any) -> None:
-        banner.set_revealed(False)
-        prefs.mark_banner_seen("first-visit-terminal")
-
-    banner.connect("button-clicked", dismiss)
-    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, vexpand=True)
-    box.append(banner)
-    box.append(page)
-    return box
+    return with_first_visit_banner(page, prefs, BANNER_ID, COPY["banner"])
 
 
 def _colours_group(Adw: Any, Gtk: Any, look: Any, palette: Palette | None) -> Any:
@@ -396,6 +413,7 @@ def _adapter_group(
     Gtk: Any,
     window: Any,
     adapter: Any,
+    state: Any,
     include: dict[str, Any],
     status: dict[str, Any],
 ) -> Any:
@@ -404,8 +422,11 @@ def _adapter_group(
     The notes come from the adapter and are shown word for word. They are the
     honest answer to "when will I see this?", and rewording them here is how
     the honesty would get lost.
+
+    Takes the state it was found with rather than asking again: ``detect()``
+    walks ``PATH`` and re-parses that program's settings file, and doing it a
+    second time here made opening the page do the same work twice per card.
     """
-    state = adapter.detect()
     group = Adw.PreferencesGroup(
         title=escape_markup(adapter.name),
         description=escape_markup("\n".join(state.notes)) or None,
@@ -434,22 +455,23 @@ def _adapter_group(
     group.add(outcome)
 
     if isinstance(adapter, GhosttyAdapter) and state.foreign_root is not None:
-        group.set_header_suffix(_takeover_button(Adw, Gtk, window, adapter, switch))
+        group.set_header_suffix(_takeover_button(Adw, Gtk, window, adapter, state, switch))
     return group
 
 
-def _takeover_button(Adw: Any, Gtk: Any, window: Any, adapter: Any, switch: Any) -> Any:
+def _takeover_button(Adw: Any, Gtk: Any, window: Any, adapter: Any, state: Any, switch: Any) -> Any:
     """The one button that answers the F7 refusal, and its undo.
 
     Nothing here probes by writing. ``foreign_root()`` and ``taken_over()``
     both only look, and the button label is chosen from what they say.
     """
     button = Gtk.Button(valign=Gtk.Align.CENTER, css_classes=["flat"])
+    notice = _foreign_notice(state)
 
     def refresh() -> None:
         taken = adapter.taken_over()
         button.set_label(COPY["undo-take-over"] if taken else COPY["take-over"])
-        button.set_tooltip_text(COPY["taken-over"] if taken else _foreign_notice(adapter))
+        button.set_tooltip_text(COPY["taken-over"] if taken else notice)
         switch.set_sensitive(taken)
         if not taken:
             switch.set_active(False)
@@ -466,19 +488,21 @@ def _takeover_button(Adw: Any, Gtk: Any, window: Any, adapter: Any, switch: Any)
             _toast(window, message)
         refresh()
 
-    button.connect("clicked", clicked)
+    button.connect("clicked", _guarded(window, clicked))
     refresh()
     return button
 
 
-def _foreign_notice(adapter: Any) -> str:
+def _foreign_notice(state: Any) -> str:
     """The adapter's own refusal sentence, taken from its own notes.
 
     Matched by the fixed half of the constant rather than by position, so the
     page keeps saying what the adapter says even if the adapter grows a note.
+    Read out of the state the card was built from — asking the adapter again
+    would re-run a full scan to re-read a sentence already on screen.
     """
     prefix = FOREIGN_NOTICE.split("{owner}")[0]
-    for note in adapter.detect().notes:
+    for note in state.notes:
         if note.startswith(prefix):
             return note
     return prefix.strip()
@@ -491,6 +515,7 @@ def _apply_group(
     palette: Palette | None,
     include: dict[str, Any],
     status: dict[str, Any],
+    backend: Any,
 ) -> Any:
     group = Adw.PreferencesGroup()
     button = Adw.ButtonRow(title=COPY["apply"])
@@ -502,10 +527,32 @@ def _apply_group(
     else:
         button.connect(
             "activated",
-            lambda *_a: _apply(window, adapters, palette, include, status),
+            _guarded(
+                window, lambda *_a: _apply(window, adapters, palette, include, status, backend)
+            ),
         )
     group.add(button)
     return group
+
+
+def _guarded(window: Any, handler: Any) -> Any:
+    """A signal handler that cannot end in a traceback nobody sees.
+
+    PyGObject prints what escapes a signal handler and carries on, so a
+    handler that raised produced **nothing**: no message, no error row, and a
+    click that looked like it did not register (review-report H12). Everything
+    below this line reports its own failures; this is the layer for the ones
+    nobody predicted, and it says so and writes the details to the log.
+    """
+
+    def wrapped(*args: Any) -> None:
+        try:
+            handler(*args)
+        except Exception:  # noqa: BLE001 - a GTK signal is the end of the line
+            applog.logger(__name__).exception("terminal page: a handler failed")
+            _toast(window, COPY["crashed"])
+
+    return wrapped
 
 
 def _apply(
@@ -514,8 +561,14 @@ def _apply(
     palette: Palette,
     include: dict[str, Any],
     status: dict[str, Any],
+    backend: Any,
 ) -> None:
     """Hand the palette to the chosen programs and report each one separately.
+
+    The work — saving how everything is now, copying files, writing settings —
+    goes on the window's shared runner, which is where every other slow change
+    in the app happens. With no runner (a page built by a test) it runs inline
+    and the result is there when this returns.
 
     One program refusing does not stop the others and is never reported as
     success: :func:`gtheme.terminal.apply_all` answers per adapter, and every
@@ -524,10 +577,36 @@ def _apply(
     chosen = [a for a in adapters if include[a.id].get_active()]
     if not chosen:
         return
-    outcomes = apply_all(palette, chosen)
+
+    def work(narrate: Any = None) -> ApplyReport:
+        return apply_all(palette, chosen, backend=backend, narrate=narrate)
+
+    runner = _runner(window)
+    if runner is None:
+        _report(window, chosen, status, work())
+        return
+    runner.run(
+        work,
+        heading=COPY["working-heading"],
+        starting=COPY["working"],
+        on_done=lambda report: _report(window, chosen, status, report),
+        on_failed=lambda _error: _toast(window, COPY["crashed"]),
+    )
+
+
+def _runner(window: Any) -> Any | None:
+    """The window's runner, or None when this page is not in a window."""
+    from ..applyrunner import ApplyRunner
+
+    runner = getattr(window, "runner", None)
+    return runner if isinstance(runner, ApplyRunner) else None
+
+
+def _report(window: Any, chosen: list[Any], status: dict[str, Any], report: ApplyReport) -> None:
+    """Put each program's own answer on its own card, then say it once out loud."""
     failures = 0
     for adapter in chosen:
-        problem = outcomes.get(adapter.id)
+        problem = report.problems.get(adapter.id)
         row = status.get(adapter.id)
         if row is None:
             continue
@@ -541,8 +620,17 @@ def _apply(
             row.set_title(escape_markup(COPY["failed"].format(why=problem)))
             row.add_css_class("error")
         row.set_visible(True)
-    done = len(chosen) - failures
-    _toast(window, f"{done} of {len(chosen)} changed." if failures else COPY["done"].format(when=""))
+    if failures:
+        _toast(
+            window,
+            COPY["some-changed"].format(done=len(chosen) - failures, total=len(chosen)),
+        )
+    else:
+        _toast(window, COPY["done"].format(when=""))
+    for warning in report.warnings:
+        # What the saved moment could only save in part. Said after the change,
+        # never instead of it.
+        _toast(window, warning)
 
 
 def _toast(window: Any, text: str) -> None:

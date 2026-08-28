@@ -116,10 +116,16 @@ def test_going_back_to_a_moment_puts_the_value_back(window, backend, tmp_path):
     page._on_save()
     backend.set(ACCENT, "'purple'")
 
-    page.apply_point(page.points()[0])
+    point = page.points()[0]
+    page.apply_point(point)
 
     assert backend.get(ACCENT) == "'green'"
-    assert window.toasts[-1] == restore.COPY["done"]
+    # U8: the toast names the moment. This assertion used to read
+    # ``restore.COPY["done"]`` — the unnamed sentence — and is changed here
+    # deliberately, because the requirement was "the toast names the moment"
+    # and the old wording was what failed it, not what proved it.
+    assert window.toasts[-1] == restore.done_sentence(point)
+    assert point.label in window.toasts[-1]
 
 
 def test_the_confirmation_shows_what_would_change_before_it_changes_it(
@@ -165,11 +171,13 @@ def test_going_back_narrates_into_the_shared_progress_dialog(window, backend, tm
         original(*args)
 
     page._progress = watching
-    page.start_apply(page.points()[0])
+    point = page.points()[0]
+    page.start_apply(point)
 
     assert backend.get(ACCENT) == "'green'"
     assert any(said), "the engine narrated nothing at all"
-    assert window.toasts[-1] == restore.COPY["done"]
+    # U8, through the runner's own callback rather than the inline branch.
+    assert window.toasts[-1] == restore.done_sentence(point)
 
 
 def test_going_back_without_a_window_still_works(window, backend, tmp_path):
@@ -274,12 +282,23 @@ def test_undo_the_last_change_goes_through_the_shared_runner(window, backend, tm
     page = _page(window, backend, tmp_path)
     page._on_save()
     backend.set(ACCENT, "'purple'")
+    # Read before the undo runs: going back takes a restore point of its own,
+    # so the newest moment afterwards is not the one that was applied.
+    newest = page.points()[0]
 
     page._on_undo()
 
-    assert window.runner.headings == [restore.COPY["working-heading"]]
+    # Two headings, not one: "Save how it looks now" goes through the runner
+    # too now (review-report M10), and this test's save is what set the moment
+    # up. The undo is the second, and it is the one being pinned here.
+    assert window.runner.headings == [
+        restore.COPY["save-title"],
+        restore.COPY["working-heading"],
+    ]
     assert backend.get(ACCENT) == "'green'"
-    assert window.toasts[-1] == restore.COPY["done"]
+    # U8: "undo the last change" ends by saying which moment it landed on, the
+    # same way pressing "Go back to this" on that moment does.
+    assert window.toasts[-1] == restore.done_sentence(newest)
 
 
 def test_undo_with_nothing_saved_still_says_so_on_the_runner(window, backend, tmp_path):

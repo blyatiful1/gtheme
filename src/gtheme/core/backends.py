@@ -36,6 +36,7 @@ from .settings_backend import (
 
 __all__ = [
     "AutoBackend",
+    "can_write_settings",
     "get_backend",
     "has_session_bus",
     "is_missing",
@@ -100,6 +101,18 @@ class AutoBackend(SettingsBackend):
 
     def reset(self, key: str) -> None:
         self._pick(key).reset(key)
+
+    def can_write(self) -> bool:
+        """Is there a desktop session for these writes to land in?
+
+        Both legs of this router end at the real settings store, and the store
+        is reached over the session bus. With no session, every write fails the
+        same way — which is what the AS5 gate in
+        :class:`~gtheme.core.transaction.Transaction` skips the settings phase
+        over. Backends that write somewhere else answer for themselves; see
+        :func:`can_write_settings`.
+        """
+        return has_session_bus()
 
 
 def get_backend(*, schema_source: Any | None = None) -> SettingsBackend:
@@ -170,6 +183,36 @@ def has_session_bus() -> bool:
     if not runtime:
         return False
     return os.path.exists(os.path.join(runtime, "bus"))
+
+
+def can_write_settings(backend: SettingsBackend | None = None) -> bool:
+    """Can this backend write a setting at all right now? (The AS5 gate.)
+
+    Asks the backend, not the environment. That distinction is the whole fix:
+    the gate used to read ``DBUS_SESSION_BUS_ADDRESS`` directly, so an
+    environment variable decided whether the settings phase ran — including for
+    the in-memory backend the test suite installs precisely so that nothing
+    reaches a bus. A suite run therefore had a different verdict depending on
+    the shell it was launched from, and a packaged ``check()`` in a clean
+    chroot failed the gate outright (review-report M16).
+
+    A backend that needs something the machine may not have says so with a
+    ``can_write()`` method — :class:`AutoBackend` does, because both its legs
+    end at the real settings store. A backend without one keeps its values
+    somewhere it can always reach, which is exactly what makes it a test seam,
+    so the answer is yes.
+
+    Args:
+        backend: the backend to ask. Defaults to the process backend.
+    """
+    backend = backend if backend is not None else get_backend()
+    ask = getattr(backend, "can_write", None)
+    if not callable(ask):
+        return True
+    try:
+        return bool(ask())
+    except Exception:  # noqa: BLE001 - a backend that cannot answer cannot write
+        return False
 
 
 def is_missing(error: BackendError) -> bool:

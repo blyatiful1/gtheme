@@ -37,6 +37,8 @@ __all__ = [
     "format_string_list",
     "merge_string_lists",
     "parse_string_list",
+    "quote",
+    "unquote",
     "values_equal",
 ]
 
@@ -60,11 +62,73 @@ def canonical(text: str) -> str:
         return text.strip()
 
 
+def unquote(text: str) -> str:
+    """``"'Papirus-Dark'"`` becomes ``Papirus-Dark``. The one implementation.
+
+    A GVariant string arrives quoted, and everything that shows one to a person
+    — a picker's current entry, the Home card's summary of the desktop, the
+    profile name burn-my-windows keeps its settings under — has to take the
+    quoting off first. That was written out longhand in eight places
+    (review-report L19), one of them inside the *frozen* row library, where a
+    fix would have been invisible to the other seven.
+
+    Only a quoted *string* is unquoted, and only when the text really is one. A
+    bare number, a boolean, an array and an already-unquoted name all come back
+    untouched, which is what makes this safe to call on anything a backend
+    returned.
+
+    GLib does the unescaping when it is available, so this is the true inverse
+    of :func:`quote`. All eight hand-rolled copies took the two quote characters
+    off and stopped there, which is right for every theme name anybody has and
+    wrong for a name containing a backslash: ``quote`` writes ``'back\\\\slash'``
+    and the naive strip handed back ``back\\\\slash``, one backslash too many.
+    The pure-Python fallback keeps the old behaviour for the machine with no
+    PyGObject, where nothing can unescape anything anyway.
+    """
+    stripped = text.strip()
+    if not (len(stripped) >= 2 and stripped[0] == stripped[-1] and stripped[0] in "'\""):
+        return stripped
+    try:
+        from gi.repository import GLib
+
+        variant = GLib.Variant.parse(None, stripped, None, None)
+        if variant.get_type_string() == "s":
+            return variant.get_string()
+    except Exception:  # noqa: BLE001 - no PyGObject, or not a string after all
+        pass
+    return stripped[1:-1]
+
+
+def quote(text: str) -> str:
+    """The GVariant text for a plain string. The inverse of :func:`unquote`.
+
+    GLib does the escaping when it is available, so a theme name containing a
+    quote character is escaped exactly the way GLib itself would escape it —
+    and therefore exactly the way it will be read back. The pure-Python
+    fallback is the same one :func:`format_string_list` carries, and for the
+    same reason: this module has to keep working on a machine with no
+    PyGObject, which is the machine ``gtheme rescue`` runs on.
+    """
+    try:
+        from gi.repository import GLib
+
+        return GLib.Variant("s", text).print_(True)
+    except Exception:  # noqa: BLE001 - no PyGObject
+        return "'" + text.replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+
 def values_equal(current: str | None, wanted: str) -> bool:
     """Is the setting already at the wanted value?
 
     A key that has never been set has no current value, which is never equal to
     anything: writing it is a real change.
+
+    That sentence was true here and false one layer down: a raw ``dconf:``
+    location that had never been written came back from the backend as "no such
+    key", which the engine read as "not on this machine" and skipped — so this
+    function was never asked. ``BackendErrorKind.UNSET`` is what reunites the
+    two (review-report H7): an unset location now reaches here as ``None`` and
+    is written, exactly as this docstring always said.
     """
     if current is None:
         return False

@@ -5,9 +5,18 @@ body:
   - type: markdown
     attributes:
       value: |
-        Themes are contributed as pull requests (`gtheme publish <name>` prints
-        the exact steps) — this issue is for discussing one first. See
-        CONTRIBUTING.md for the submission checklist.
+        Themes are contributed as pull requests — this issue is for discussing
+        one first. There is no publish command; the steps are manual and short:
+
+        1. put your Look's folder, with its `theme.toml` and at least one
+           screenshot, in `themes/<name>/`
+        2. `./.venv/bin/python -m gtheme validate themes/<name>`
+        3. `./.venv/bin/python tools/build_index.py` and commit the updated
+           `themes/index.json`
+        4. open the pull request
+
+        CONTRIBUTING.md has the full submission checklist and
+        docs/preset-format.md has the format, field by field.
   - type: input
     id: name
     attributes:
@@ -26,6 +35,6 @@ body:
     attributes:
       label: Checklist
       options:
-        - label: "`gtheme validate <name>` passes"
+        - label: "`./.venv/bin/python -m gtheme validate themes/<name>` passes"
         - label: All art/assets are original or license-compatible, with attribution preserved
         - label: No hard-coded usernames, machine paths, or distro-only files

@@ -86,8 +86,7 @@ To have it bundled with gtheme, it also needs:
   publish time by `tools/build_index.py`, not by the format — an unpreviewable
   Look is exactly what this app exists to spare people.
 - **A `README.md` in the Look's folder** naming anything from your original
-  desktop that did *not* come across, and why. The four bundled Looks all have
-  one. This matters more than it sounds: a Look that quietly delivers two
+  desktop that did *not* come across, and why. Every bundled Look has one. This matters more than it sounds: a Look that quietly delivers two
   thirds of what its screenshot shows is how people stop trusting the whole
   collection.
 - **Regenerate the index** and commit the result:
@@ -105,8 +104,8 @@ gtheme fetch it from extensions.gnome.org), or contain anything executable.
 There is no field for the second one and there never will be.
 
 Wallpapers ship in the repository rather than being fetched at apply time —
-one-click Looks beat remote downloads. Keep them to what you need; the four
-bundled Looks are about 40 MB between them and that is the budget.
+one-click Looks beat remote downloads. Keep them to what you need; the six
+bundled Looks are about 43 MB between them and that is the budget.
 
 ## 2. Add a settings row
 

@@ -6,6 +6,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
+from terminal_write_helper import land
 
 from gtheme.terminal import alacritty as alacritty_module
 from gtheme.terminal.alacritty import AlacrittyAdapter, render_colors_toml
@@ -64,7 +65,7 @@ def test_colours_file_is_valid_toml_with_all_sixteen():
 def test_apply_leaves_a_config_that_still_parses_and_keeps_its_settings(
     alacritty: AlacrittyAdapter,
 ):
-    alacritty.apply(LOOK)
+    land(alacritty, LOOK)
     text = alacritty.config_path.read_text()
     data = tomllib.loads(text)
     assert "# My alacritty config. Do not lose my comments." in text
@@ -76,7 +77,7 @@ def test_apply_leaves_a_config_that_still_parses_and_keeps_its_settings(
 
 @pytest.mark.mutating
 def test_apply_adds_its_import_and_drops_the_previous_look(alacritty: AlacrittyAdapter):
-    alacritty.apply(LOOK)
+    land(alacritty, LOOK)
     imports = tomllib.loads(alacritty.config_path.read_text())["general"]["import"]
     assert "~/.config/alacritty/keys.toml" in imports
     assert "~/.config/alacritty/gtheme-nightbloom.toml" in imports
@@ -86,7 +87,7 @@ def test_apply_adds_its_import_and_drops_the_previous_look(alacritty: AlacrittyA
 @pytest.mark.mutating
 def test_apply_sets_opacity_and_asks_for_real_blur(alacritty: AlacrittyAdapter):
     """Alacritty's blur, unlike ghostty's, is a real request on this desktop."""
-    alacritty.apply(LOOK)
+    land(alacritty, LOOK)
     window = tomllib.loads(alacritty.config_path.read_text())["window"]
     assert window["opacity"] == pytest.approx(0.82)
     assert window["blur"] is True
@@ -94,7 +95,7 @@ def test_apply_sets_opacity_and_asks_for_real_blur(alacritty: AlacrittyAdapter):
 
 @pytest.mark.mutating
 def test_a_solid_look_does_not_ask_for_blur(alacritty: AlacrittyAdapter):
-    alacritty.apply(Palette(name="Solid", background="#000000", foreground="#ffffff"))
+    land(alacritty, Palette(name="Solid", background="#000000", foreground="#ffffff"))
     window = tomllib.loads(alacritty.config_path.read_text())["window"]
     assert window["opacity"] == pytest.approx(1.0)
     assert window["blur"] is False
@@ -102,7 +103,7 @@ def test_a_solid_look_does_not_ask_for_blur(alacritty: AlacrittyAdapter):
 
 @pytest.mark.mutating
 def test_current_round_trips(alacritty: AlacrittyAdapter):
-    alacritty.apply(LOOK)
+    land(alacritty, LOOK)
     read_back = alacritty.current()
     assert read_back is not None
     assert read_back.background == LOOK.background
@@ -112,8 +113,8 @@ def test_current_round_trips(alacritty: AlacrittyAdapter):
 
 @pytest.mark.mutating
 def test_applying_twice_does_not_grow_the_import_list(alacritty: AlacrittyAdapter):
-    alacritty.apply(LOOK)
-    alacritty.apply(LOOK)
+    land(alacritty, LOOK)
+    land(alacritty, LOOK)
     imports = tomllib.loads(alacritty.config_path.read_text())["general"]["import"]
     assert imports.count("~/.config/alacritty/gtheme-nightbloom.toml") == 1
 
@@ -131,7 +132,7 @@ def test_applying_twice_does_not_grow_the_import_list(alacritty: AlacrittyAdapte
 def _apply_to(directory: Path, config: str) -> dict:
     (directory / "alacritty.toml").write_text(config, encoding="utf-8")
     adapter = AlacrittyAdapter()
-    adapter.apply(LOOK)
+    land(adapter, LOOK)
     # tomllib is the assertion: a duplicate table raises here, not silently.
     return tomllib.loads(adapter.config_path.read_text())
 
@@ -199,14 +200,14 @@ def test_a_config_that_cannot_be_edited_safely_is_left_alone(
     )
     adapter = AlacrittyAdapter()
     with pytest.raises(ValueError, match="without breaking"):
-        adapter.apply(LOOK)
+        land(adapter, LOOK)
     assert adapter.config_path.read_text() == original
 
 
 @pytest.mark.mutating
 def test_a_missing_config_is_created_from_nothing(tmp_dest_root: Path):
     adapter = AlacrittyAdapter()
-    adapter.apply(LOOK)
+    land(adapter, LOOK)
     data = tomllib.loads(adapter.config_path.read_text())
     assert data["general"]["import"] == ["~/.config/alacritty/gtheme-nightbloom.toml"]
     assert data["window"]["opacity"] == pytest.approx(0.82)

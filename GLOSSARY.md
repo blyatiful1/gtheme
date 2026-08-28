@@ -82,16 +82,29 @@ gtheme knows about, plus a copy of every file it is about to change. Going back
 to one puts all of it back.
 
 gtheme takes one automatically before every change, and you can take one
-yourself whenever you like. The oldest are pruned when there are too many —
-except **Before gtheme**, the one from before this app ever touched your
-computer, which is kept forever.
+yourself whenever you like. The oldest are pruned when there are too many.
+
+**Before gtheme** is the one moment that is never pruned: how this computer
+looked before this app ever changed anything. gtheme saves it the first time
+you open the app, before you have touched a thing, and never writes over it. If
+you upgraded from the old command-line gtheme, it is read from version 1's own
+records instead, so it reaches back to before that ever ran. If gtheme had
+already changed something — `gtheme apply` in a terminal, before the window was
+ever opened — the row is left out rather than given to a desktop that was
+already themed.
+
+Every install also has the *first-touch record*, which needs no saved moment at
+all: the first time gtheme changes a setting or a file it writes down what was
+there and never writes over that note, so `gtheme rescue` can put it all back
+however many Looks you try afterwards.
 
 ### Terminal
 
-A window where you type commands instead of clicking. Nothing in gtheme
-requires one — except `gtheme rescue`, which exists precisely for the moment
-when the graphical part of your computer has stopped working and typing is all
-you have left.
+A window where you type commands instead of clicking. You need one twice:
+once to install gtheme, and again on the bad day, for `gtheme rescue` — which
+exists precisely for the moment when the graphical part of your computer has
+stopped working and typing is all you have left. Using the app itself needs no
+commands at all.
 
 [docs/start-here.md](docs/start-here.md#opening-a-terminal) shows how to open
 one.
@@ -109,8 +122,10 @@ Arch is a distro (above) for people who like assembling their own system;
 CachyOS, EndeavourOS and Manjaro are built on it. The **AUR** is its
 community-run collection of build recipes for software that is not in the
 official catalogue. A **PKGBUILD** is one such recipe: a short text file saying
-how to build and install one program. gtheme ships one, so on Arch you can
-install it as a proper package that `pacman -R` removes cleanly.
+how to build and install one program. gtheme ships two — `PKGBUILD`, which builds the
+released source archive, and `PKGBUILD-git`, which builds the copy you cloned —
+so on Arch you can install gtheme as a proper package that `pacman -R` removes
+cleanly.
 
 If none of those words apply to you, use
 [the easy way](README.md#the-easy-way-recommended) instead.

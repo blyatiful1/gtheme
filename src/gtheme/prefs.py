@@ -158,10 +158,6 @@ class Prefs:
             self.save()
         return existed
 
-    def as_dict(self) -> dict[str, Any]:
-        """A copy of everything stored."""
-        return dict(self._load())
-
     # -- one-shot banners --------------------------------------------------
     #
     # Every major page shows a dismissible explainer the first time it is

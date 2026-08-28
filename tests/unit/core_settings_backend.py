@@ -500,3 +500,144 @@ def test_a_scoped_backend_is_not_cached_and_handed_to_the_next_caller(schema_sou
     assert get_backend(schema_source=first).schema_source is first
     assert get_backend(schema_source=second).schema_source is second
     assert get_backend().schema_source is None
+
+
+# -- "unset" is not "missing" (review-report H7) ---------------------------
+#
+# A raw dconf path that nothing has ever written reads back empty, and the
+# backend used to call that NO_KEY — the same kind as "this add-on is not
+# installed". The engine's AS8 branch then skipped the write as unavailable,
+# which left the path unwritten, which produced the same empty read next time:
+# a key the app could never set, on any machine, for good. Eight of the shipped
+# Looks' dconf keys were in exactly that state on the development machine.
+
+NEVER_WRITTEN = "dconf:/org/gtheme/never/written/by/anything"
+
+
+def _canned_run(*results):
+    """A ``SubprocessBackend._run`` stand-in returning each result in turn."""
+    remaining = list(results)
+
+    def run(_self, _args):
+        return remaining.pop(0) if len(remaining) > 1 else remaining[0]
+
+    return run
+
+
+def test_a_dconf_location_that_was_never_written_is_unset_not_missing(monkeypatch):
+    """``dconf read`` exits 0 and prints nothing. That is a value answer."""
+    monkeypatch.setattr(SubprocessBackend, "_run", _canned_run((0, "", "")))
+
+    with pytest.raises(BackendError) as caught:
+        SubprocessBackend().get(NEVER_WRITTEN)
+
+    assert caught.value.kind is BackendErrorKind.UNSET
+    assert not is_missing(caught.value), (
+        "an empty location is somewhere a value can be put; calling it missing "
+        "is what made it permanently unwritable"
+    )
+
+
+def test_a_missing_dconf_key_is_still_told_apart_from_a_broken_read(monkeypatch):
+    """UNSET is a new answer, not a replacement for the failing ones."""
+    monkeypatch.setattr(
+        SubprocessBackend, "_run", _canned_run((1, "", "error: dconf-service unreachable"))
+    )
+    with pytest.raises(BackendError) as caught:
+        SubprocessBackend().get(NEVER_WRITTEN)
+    assert caught.value.kind is BackendErrorKind.OTHER
+
+
+def test_a_dconf_write_that_left_the_location_empty_did_not_stick(monkeypatch):
+    """The read-back after a write is the whole point of the write path.
+
+    A ``dconf write`` that exits zero and leaves the location empty is the
+    "accepted and then not persisted" failure v1 was bitten by — and it is only
+    visible now that an empty read is its own kind rather than "no such key",
+    which the read-back used to swallow as "readable if it was writable".
+    """
+    monkeypatch.setattr(SubprocessBackend, "_run", _canned_run((0, "", "")))
+
+    with pytest.raises(BackendError) as caught:
+        SubprocessBackend().set(NEVER_WRITTEN, "true")
+
+    assert caught.value.kind is BackendErrorKind.COMMIT_FAILED
+    assert "did not stick" in str(caught.value)
+
+
+@pytest.mark.skipif(shutil.which("dconf") is None, reason="dconf is not installed")
+@pytest.mark.skipif(not has_session_bus(), reason="dconf needs a session bus")
+def test_a_real_dconf_says_nothing_at_all_about_a_location_nobody_wrote():
+    """The behaviour the whole finding rests on, against the real command.
+
+    Read-only: it reads a path nothing has ever written and writes nothing.
+    """
+    with pytest.raises(BackendError) as caught:
+        SubprocessBackend().get(NEVER_WRITTEN)
+    assert caught.value.kind is BackendErrorKind.UNSET
+    assert not is_missing(caught.value)
+
+
+# -- a reset is a write, and is verified like one (review-report L2) -------
+
+
+class _StubbedGio(GioBackend):
+    """A GioBackend whose settings object is a stand-in.
+
+    ``GioBackend`` binds to the real settings store, so the only honest way to
+    exercise "the store accepted the reset and did not carry it out" at this
+    tier is to hand it a settings object that behaves that way. The happy path
+    is covered against a real ``Gio.Settings`` by the keyfile tests above.
+    """
+
+    def __init__(self, settings) -> None:
+        super().__init__()
+        self._stub = settings
+
+    def _resolve(self, key: str):
+        return self._stub, None, parse_key(key)
+
+
+class _FakeSettings:
+    def __init__(self, user_value_after_reset) -> None:
+        self.after = user_value_after_reset
+        self.reset_keys: list[str] = []
+        self.synced = 0
+
+    def reset(self, key: str) -> None:
+        self.reset_keys.append(key)
+
+    def sync(self) -> None:
+        self.synced += 1
+
+    def get_user_value(self, _key: str):
+        return self.after
+
+
+def test_a_reset_that_did_not_stick_is_reported_rather_than_assumed(monkeypatch):
+    """Two thirds of putting "Before gtheme" back is resets.
+
+    ``set`` reads back because dconf can accept a change and fail to commit it;
+    ``reset`` did not, although the contract lists COMMIT_FAILED for it. A
+    reset that silently did not happen is a restore that silently did not
+    restore.
+    """
+    settings = _FakeSettings(user_value_after_reset="'still the look's value'")
+    with pytest.raises(BackendError) as caught:
+        _StubbedGio(settings).reset(WORD)
+
+    assert caught.value.kind is BackendErrorKind.COMMIT_FAILED
+    assert settings.reset_keys == ["a-word"]
+    assert settings.synced == 1, "and it is read back after the sync, not before"
+
+
+def test_a_reset_that_stuck_is_not_reported_as_a_failure():
+    """No value of the user's own left behind means the reset landed.
+
+    Checked that way round rather than by comparing against the schema default:
+    a managed machine's system-wide dconf database supplies a different
+    default, and comparing would call a perfectly good reset a failure.
+    """
+    settings = _FakeSettings(user_value_after_reset=None)
+    _StubbedGio(settings).reset(WORD)
+    assert settings.reset_keys == ["a-word"]
