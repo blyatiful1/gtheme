@@ -4,8 +4,17 @@ DESIGN.md A3. gtheme restores a setting by writing back the exact string it read
 without knowing the key's type. That works only if the text a value prints as is
 also text that parses back to the same value, byte for byte, through the real
 store. Under a memory backend that is nearly guaranteed; the interesting
-question is whether it holds through dconf, and this is the only tier where a
-real dconf can be written to safely.
+question is whether it holds through dconf, and a real dconf can only be
+written to safely inside a private D-Bus session.
+
+**This file is the ``dconf`` tier, not the ``sandbox`` tier.** It needs a
+private bus and the dconf-service that bus activates — and nothing else. No
+GNOME Shell, no compositor, no seat. So it runs in a plain ``pytest``, in both
+CI jobs and in the packaged ``check()``, while the tests that really do need a
+headless shell keep the ``sandbox`` marker and stay local-only. Until that
+split, the two properties below were asserted only in a tier CI never ran: a
+``GioBackend`` that spelled values differently from ``SubprocessBackend`` would
+have gone unnoticed by every check anyone actually ran (review-report M20).
 
 Two things are checked, both against a throwaway schema compiled into the
 session's own ``XDG_DATA_DIRS`` (so the machine's installed schemas are
@@ -35,11 +44,17 @@ import sys
 from pathlib import Path
 
 import pytest
-from sandboxlib import DataMode, SandboxSession, SandboxUnavailable, require_tools
+from sandboxlib import (
+    BUS_ONLY_TOOLS,
+    DataMode,
+    SandboxSession,
+    SandboxUnavailable,
+    require_tools,
+)
 
-# Every test here writes settings — into the sandbox's own dconf, with the
+# Every test here writes settings — into this session's own dconf, with the
 # live canary asserting afterwards that nothing outside it moved.
-pytestmark = [pytest.mark.sandbox, pytest.mark.mutating]
+pytestmark = [pytest.mark.dconf, pytest.mark.mutating]
 
 PROBE = Path(__file__).parent / "probes" / "backend_probe.py"
 
@@ -102,23 +117,27 @@ GOLDENS: tuple[tuple[str, str, str], ...] = (
 
 @pytest.fixture(scope="module")
 def golden_session(tmp_path_factory: pytest.TempPathFactory):
-    """A sandbox whose ``XDG_DATA_DIRS`` carries the throwaway schema.
+    """A private bus whose ``XDG_DATA_DIRS`` carries the throwaway schema.
 
-    Its own session rather than the shared one: installing a schema has to
-    happen before the shell starts, and a test schema has no business being
-    visible to a session other tests take screenshots of.
+    Its own session rather than a shared one: a test schema has no business
+    being visible to a session other tests take screenshots of.
+
+    Bus-only, deliberately. ``dconf write`` reaches the dconf-service the bus
+    activates, and that service inherits this session's ``XDG_CONFIG_HOME`` —
+    which is the entire reason the write cannot land in the real store. A
+    GNOME Shell would add sixty seconds and a hard requirement on a machine
+    that has one, and would prove nothing extra about a settings round-trip.
     """
     try:
-        require_tools()
+        require_tools(BUS_ONLY_TOOLS)
     except SandboxUnavailable as exc:
         pytest.skip(str(exc))
     root = tmp_path_factory.mktemp("dconf-golden-")
     session = SandboxSession(root=root, mode=DataMode.PRIVATE)
-    session.prepare()
+    session.prepare(for_shell=False)
     session.install_schema(SCHEMA_XML)
     try:
-        session.start()
-        session.wait_for_startup_complete(settle=0.5)
+        session.start_bus_only()
         yield session
     finally:
         session.stop()

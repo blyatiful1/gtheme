@@ -16,9 +16,12 @@ What this file can prove, and what it cannot:
   same ``BackendErrorKind`` for a missing schema and for a missing key. That is
   the property callers branch on — the AS8 skip depends on it.
 * **Writes are not tested here.** A write through the Gio or subprocess backend
-  goes to the machine's own settings store. The write-parity leg runs inside
-  the sandbox tier against a private dconf (DESIGN.md step 10, Agent F), which
-  is the only place it can run honestly.
+  goes to the machine's own settings store. The write-parity leg lives in
+  ``tests/sandbox/test_dconf_roundtrip.py`` and runs against a private dconf
+  inside a private bus (DESIGN.md step 10, Agent F), which is the only place it
+  can run honestly. That file is marked ``dconf``, not ``sandbox``: it needs no
+  shell, so it runs in a plain ``pytest`` and in CI alongside this one — which
+  it did not before review-report M20.
 """
 
 from __future__ import annotations

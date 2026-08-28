@@ -40,7 +40,6 @@ classifiers = [
 #
 # The pure-Python half below is the only thing pip is asked to provide.
 dependencies = [
-    "jinja2>=3.1",
     "pydantic>=2.0",
 ]
 
@@ -115,9 +114,17 @@ python_files = ["test_*.py", "*_test.py", "core_*.py", "system_*.py"]
 # The sandbox tier boots a real headless GNOME Shell and is LOCAL ONLY; it is
 # never part of a plain `pytest` run and never runs in CI. `verify.sh --full`
 # opts into it explicitly.
+#
+# The `dconf` tier is NOT excluded, on purpose. It needs a private
+# dbus-run-session and the dconf-service that bus activates — no shell, no
+# compositor, no seat — so it runs everywhere a plain `pytest` does, including
+# CI and the packaged check(). Before that split (review-report M20) the only
+# assertions that the two settings backends *write* alike lived in a tier
+# nobody ever ran.
 addopts = '-m "not sandbox"'
 markers = [
     "gtk: needs GTK4/libadwaita and a usable display (offscreen is fine)",
+    "dconf: needs a private dbus-run-session + dconf-service, no shell (runs in CI)",
     "sandbox: needs a private dbus-run-session + headless gnome-shell (LOCAL ONLY, never CI)",
     "mutating: writes real settings/files — SKIPPED unless an isolation seam is active",
 ]

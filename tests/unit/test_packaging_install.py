@@ -130,8 +130,28 @@ def _pkgbuild_array(name: str) -> list[str]:
 
 def test_pkgbuild_declares_the_system_pieces_the_app_needs() -> None:
     depends = _pkgbuild_array("depends")
-    for needed in ("gtk4", "libadwaita", "python-gobject", "python-jinja2", "python-pydantic"):
+    for needed in ("gtk4", "libadwaita", "python-gobject", "python-pydantic"):
         assert needed in depends, f"PKGBUILD is missing the dependency {needed}"
+
+
+def test_the_package_does_not_pull_in_anything_the_app_never_imports() -> None:
+    """review-report L10. jinja2 was a hard dependency of the wheel and of the
+    package, and is imported nowhere: an offline install fetched a library the
+    app never loads. Both lists are checked here so it cannot come back by
+    habit — if a templating engine is ever genuinely needed, this test is the
+    place that says so out loud.
+    """
+    assert "python-jinja2" not in _pkgbuild_array("depends")
+    project = (REPO / "pyproject.toml").read_text()
+    dependencies = re.search(r"^dependencies = \[(.*?)\]", project, re.S | re.M)
+    assert dependencies, "pyproject.toml has no dependencies array"
+    assert "jinja2" not in dependencies.group(1)
+    sources = [
+        path
+        for path in (REPO / "src").rglob("*.py")
+        if "jinja" in path.read_text(encoding="utf-8")
+    ]
+    assert sources == [], f"something imports jinja2 after all: {sources}"
 
 
 def test_pkgbuild_builds_the_wheel_the_way_arch_expects() -> None:

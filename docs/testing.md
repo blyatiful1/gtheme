@@ -3,7 +3,7 @@
 ## The canonical check
 
 ```sh
-./verify.sh          # lint + the two tiers that run anywhere
+./verify.sh          # lint + the three tiers that run anywhere
 ./verify.sh --full   # the above, plus the sandbox tier and the honesty gates
 ```
 
@@ -22,18 +22,29 @@ uv venv --system-site-packages .venv && uv pip install -e '.[dev]'
 from your distribution's packages; the pip wheels either do not exist or shadow
 the system typelibs and break.
 
-## Three tiers
+## Four tiers
 
 | Tier | Size | Needs | When it runs |
 |---|---|---|---|
-| **unit + regression** | 1157 tests | nothing but Python and GLib | always — plain `pytest`, and both CI jobs |
-| **gtk** (`-m gtk`) | 381 tests | GTK 4 and libadwaita 1.9, offscreen is fine | plain `pytest` locally; in CI only inside an Arch container |
-| **sandbox** (`-m sandbox`) | 69 tests | a private D-Bus session and a real headless GNOME Shell | `./verify.sh --full` only. **Never in CI.** |
+| **unit + regression** | ~1500 tests | nothing but Python and GLib | always — plain `pytest`, and both CI jobs |
+| **dconf** (`-m dconf`) | 42 tests | a private D-Bus session and the dconf-service it activates — no shell | always — plain `pytest`, and both CI jobs |
+| **gtk** (`-m gtk`) | ~410 tests | GTK 4 and libadwaita 1.9, offscreen is fine | plain `pytest` locally; in CI only inside an Arch container |
+| **sandbox** (`-m sandbox`) | 28 tests | a private D-Bus session **and a real headless GNOME Shell** | `./verify.sh --full` only. **Never in CI.** |
 
-`addopts = -m "not sandbox"` in `pyproject.toml` is what keeps a plain
-`pytest` at 1538 tests instead of trying to boot a desktop.
+`addopts = -m "not sandbox"` in `pyproject.toml` is what a plain `pytest` obeys:
+it deselects those 28 tests rather than trying to boot a desktop, and selects
+everything else.
 
-There is a fourth marker, `mutating`, which is not a tier. `tests/conftest.py`
+Every tier except `sandbox` is run under `dbus-run-session`, by `verify.sh`, by
+both CI jobs and by the Arch package's `check()`. That is not decoration: the
+settings phase decides whether to run from `DBUS_SESSION_BUS_ADDRESS`, so
+without a bus those tests error out (a clean `makepkg` chroot has none), and
+with the *live* bus they are one mistake away from the real desktop. A private
+bus makes the verdict the same everywhere. The `sandbox` tier is deliberately
+**not** wrapped: each session there starts a bus of its own, and the canary
+around every test has to read the real desktop to say it did not move.
+
+There is one more marker, `mutating`, which is not a tier. `tests/conftest.py`
 **skips** any test carrying it unless an isolation seam is active, so a test
 that would write real settings cannot run by accident.
 
@@ -69,7 +80,26 @@ compositor and no Xvfb.
 This tier is why the CI split exists. Ubuntu runners ship libadwaita 1.5 and
 gtheme targets 1.9, so no Adw code may run there at all.
 
-### Tier 3 — sandbox
+### Tier 3 — dconf
+
+`tests/sandbox/test_dconf_roundtrip.py`, and nothing else. It writes GVariant
+text through a **real dconf** and reads it back: `@as []`, maybe types, Pango's
+`@wght=460` suffix, an `a{sv}` dictionary — the shapes a type-blind restore
+mangles. Then it makes `GioBackend` and `SubprocessBackend` write the same
+table and compares them byte for byte, because a value captured under one
+backend and restored under the other has to be the same value.
+
+It lives in `tests/sandbox/` and borrows that directory's harness and canary,
+but it is not the sandbox tier: `SandboxSession.start_bus_only()` gives it a
+private bus and the dconf-service that bus activates, and that is the whole
+requirement. No shell, no compositor, no seat, seven seconds.
+
+That distinction is the point. Until it was drawn (review-report M20), the only
+assertions that the two backends *write* alike sat behind the `sandbox` marker,
+so every check anyone actually ran — plain `pytest`, both CI jobs, the packaged
+`check()` — proved they agreed on reads and nothing more.
+
+### Tier 4 — sandbox
 
 This is the one that makes the difference between "the tests pass" and "the app
 works".
@@ -138,11 +168,12 @@ third option.
   — proven by experiment, not assumed, and pinned as a permanent regression so
   that a future GNOME which changes it makes the suite fail rather than leaving
   the app quietly pessimistic.
-- **Real dconf round-trips.** `@as []`, maybe types and Pango's `@wght=460`
-  survive a write and a read against a real settings store, and the two real
-  backends are asserted to agree with each other.
 - **That the app actually starts**, maps a window, lists fifteen pages, and can
   be photographed.
+
+Real dconf round-trips used to be on that list. They are not any more, and that
+is an improvement: they need a bus, not a shell, so they moved to the `dconf`
+tier and now run everywhere.
 
 ## The two honesty gates
 
@@ -187,9 +218,11 @@ directory, because it is the kind of thing people forget.
 
 **CI never runs the sandbox tier.** It has no GNOME Shell to boot, no seat, and
 nothing that would make the isolation guarantee meaningful. So CI cannot tell
-you that the app starts, that the pages render, that a settings round-trip
-survives a real dconf, that the extension runtime-load verdict still holds, or
-that the screenshots in the README are of anything.
+you that the app starts, that the pages render, that the extension runtime-load
+verdict still holds, or that the screenshots in the README are of anything.
+
+It *can* tell you that a settings round-trip survives a real dconf, and does:
+the `dconf` tier needs a private bus and no shell, so both jobs run it.
 
 **CI's unit job runs on an older desktop stack than users have.** Ubuntu
 runners ship libadwaita 1.5 against gtheme's 1.9 target, so no widget code runs
@@ -211,6 +244,7 @@ on a real GNOME machine as the check that decides whether something ships.
 ```sh
 .venv/bin/python -m pytest tests/regression -q            # the defect-tag suite
 .venv/bin/python -m pytest -q -m gtk                      # widgets only
+.venv/bin/python -m pytest -q -m dconf                    # the real-dconf tier
 .venv/bin/python -m pytest -q -k jargon                   # by name
 .venv/bin/python -m pytest -q -m sandbox tests/sandbox/test_isolation.py
 ```
