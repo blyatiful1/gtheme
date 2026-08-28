@@ -84,13 +84,16 @@ to one puts all of it back.
 gtheme takes one automatically before every change, and you can take one
 yourself whenever you like. The oldest are pruned when there are too many.
 
-**Before gtheme** is a row you will see only if you upgraded from the old
-command-line gtheme: it is read from version 1's own records, and it is kept
-forever rather than pruned. A fresh install has no such row, because nothing
-was recording this computer before gtheme arrived. What every install has
-instead is the *first-touch record*: the first time gtheme changes a setting or
-a file it writes down what was there and never writes over that note, so
-`gtheme rescue` can put it all back however many Looks you try afterwards.
+**Before gtheme** is the one moment that is never pruned: how this computer
+looked before this app ever changed anything. gtheme saves it the first time
+you open the app, before you have touched a thing, and never writes over it. If
+you upgraded from the old command-line gtheme, it is read from version 1's own
+records instead, so it reaches back to before that ever ran.
+
+Every install also has the *first-touch record*, which needs no saved moment at
+all: the first time gtheme changes a setting or a file it writes down what was
+there and never writes over that note, so `gtheme rescue` can put it all back
+however many Looks you try afterwards.
 
 ### Terminal
 

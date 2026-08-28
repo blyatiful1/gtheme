@@ -20,9 +20,8 @@ Three ways, from easiest to most stubborn. Any one of them is enough.
 
 1. **In the app** — press **Ctrl+Z**, or click **Undo last change** at the top
    of the window. Or open **Undo & Restore Points** in the list on the left and
-   pick the moment you want back. (Upgraded from the old command-line gtheme?
-   *Before gtheme* — how your desktop looked before version 1 ever ran — is in
-   that list too, read from version 1's own records.)
+   pick the moment you want back, including *Before gtheme* — how your desktop
+   looked before this app ever changed anything.
 2. **The app won't open, but the desktop works** — open a terminal window
    (hold **Ctrl**, **Alt** and press **T**; if that does nothing,
    [docs/start-here.md](docs/start-here.md) shows another way) and type:
@@ -336,8 +335,10 @@ and **Updates**.
 
 If you use a terminal, gtheme can give it, its prompt and its little status
 tools the same colours as your Look. One card per program that is *actually
-installed* — a list of eight with seven greyed out is a list of things you
-cannot do.
+installed* — a list of ten with nine greyed out is a list of things you
+cannot do. GNOME Terminal, the one Ubuntu ships, takes the Look's colours in
+full; Console, the one GNOME ships, chooses its own colours to go with light
+or dark mode, so it gets the see-through background and its card says so.
 
 Each card says honestly when you will see the change: some terminals update
 while you watch, some within a second, some only when you open a new window.
@@ -403,20 +404,18 @@ like, and going back to one puts the background, the colours, the text and the
 add-ons back the way they were. They are dated in words — "My desktop, 25
 August" — never in a timestamp.
 
-If you are coming from the old command-line gtheme, one more row sits at the
-bottom on its own: **Before gtheme**, how this computer looked before version 1
-ever ran. It is read from version 1's own records, and it is never deleted and
-never pruned.
+At the bottom, on its own, sits **Before gtheme**: how this computer looked
+before this app ever changed anything. It is saved the first time you open
+gtheme, before you have touched a single thing, and it is never deleted and
+never pruned. If you are coming from the old command-line gtheme, that row is
+read from version 1's own records instead, so it reaches back to before *that*
+ever ran.
 
-A fresh install has no such row, and it would be dishonest to draw one:
-nothing was watching this computer before gtheme arrived, so there is no
-recording of that moment to offer. What a fresh install has instead is the
-first-touch record described under [Will this break my
+Underneath it there is a second, independent way back that needs no saved
+moment at all: the first-touch record described under [Will this break my
 desktop?](#will-this-break-my-desktop) — the first time gtheme changes any
 setting or file it writes down what was there, and `gtheme rescue` puts all of
-it back, whether or not you ever saved a moment. Taking your own moment on the
-introduction's last card, before you change anything, is how you get a named
-row to come back to.
+it back, however many Looks you try afterwards.
 
 ## Questions people ask
 

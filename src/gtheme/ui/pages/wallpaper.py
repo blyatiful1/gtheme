@@ -28,13 +28,27 @@ it is:
   screensaver mirrors the light background picture and has nothing that
   corresponds to a dark version; the honest thing is one sentence saying so,
   not a control that would either do nothing or lie about what it changed.
+* **A picture you choose yourself joins the catalogue.** It used to be copied
+  in under a name like ``custom-9f2c1a7b3e05.png`` and never appear in the grid
+  again: set once, then invisible for ever, unfindable even by the person who
+  chose it (persona-report §3.2). Choosing one now also writes a catalogue
+  entry naming it — the same ``gnome-background-properties`` mechanism every
+  other picture in the grid arrives through, so it comes back on the next
+  launch, and shows up in GNOME's own picker too. The name comes from the file
+  the reader picked, not from the copy's collision-proof one.
+* **Slideshows can be chosen, not only received.** Three of the four bundled
+  Looks set a slideshow, and the picker offered picture formats only, so the
+  one kind of background gtheme itself uses most was the one kind you could not
+  pick.
 """
 
 from __future__ import annotations
 
+import re
 import uuid
 from pathlib import Path
 from typing import Any
+from xml.etree import ElementTree
 
 import gi
 
@@ -42,7 +56,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 gi.require_version("Gio", "2.0")
 
-from gi.repository import Adw, Gdk, Gio, GLib, Gtk  # noqa: E402
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk, Pango  # noqa: E402
 
 from ...core.atomic import atomic_write_bytes  # noqa: E402
 from ...core.backends import get_backend  # noqa: E402
@@ -68,13 +82,43 @@ from ...ui.widgets.recording import (  # noqa: E402
 )
 from ...ui.widgets.rows import key_for, quote, set_plain_text, unquote  # noqa: E402
 from ..search import ADVANCED_TITLE  # noqa: E402
+from ..widgets import a11y  # noqa: E402
 from ._style_common import get_probe  # noqa: E402
 
-__all__ = ["TILE_HEIGHT", "TILE_WIDTH", "GridTile", "build"]
+__all__ = [
+    "CUSTOM_CATALOGUE",
+    "TILE_HEIGHT",
+    "TILE_WIDTH",
+    "GridTile",
+    "build",
+    "catalogue_entry_xml",
+    "custom_catalogue_path",
+    "readable_name",
+    "record_in_catalogue",
+    "tile_name",
+]
 
 #: Where a custom picture is copied to, relative to the destination root
 #: (``$HOME``, or ``GTHEME_DEST_ROOT`` under test) — see ``core.paths.dest_root``.
 CUSTOM_DEST = "~/.local/share/backgrounds/gtheme/"
+
+#: Where the entries naming those copies are written. This is the ordinary
+#: desktop-wide catalogue directory rather than somewhere private to gtheme, and
+#: on purpose: a picture somebody chose is theirs, so it belongs where every
+#: picker on the machine — this one, and GNOME's own — will find it again.
+CUSTOM_CATALOGUE = "~/.local/share/gnome-background-properties/gtheme.xml"
+
+#: What a picture with nothing readable in its file name is called.
+UNNAMED_PICTURE = "Your own picture"
+
+#: What the caption under a slideshow tile adds, for a reader who cannot see
+#: the badge in the corner of it.
+SLIDESHOW_SUFFIX = "changes during the day"
+
+#: Catalogue files carry a DOCTYPE line pointing at a DTD that is installed
+#: nowhere; the scanner strips it before parsing and so does the reader here,
+#: for the same reason — an XML parser told to fetch it would try.
+_DOCTYPE = re.compile(r"<!DOCTYPE[^>]*>")
 
 #: What a slideshow tile says, verbatim from the brief.
 _SLIDESHOW_LABEL = "Changes during the day"
@@ -135,6 +179,103 @@ def custom_filename(source: Path) -> str:
     if not (1 < len(suffix) <= 6 and suffix[1:].isalnum()):
         suffix = ""
     return f"custom-{uuid.uuid4().hex[:12]}{suffix}"
+
+
+def readable_name(source: Path) -> str:
+    """What to call a picture somebody chose, from the name they chose it by.
+
+    ``holiday_beach-2024.JPG`` is "Holiday beach 2024". The copy on disk keeps
+    its collision-proof ``custom-<random>.jpg`` name — two people's
+    ``photo.jpg`` must not become one file — but nobody should ever have to
+    read that (persona-report §3.2).
+    """
+    words = " ".join(source.stem.replace("_", " ").replace("-", " ").split())
+    if not words:
+        return UNNAMED_PICTURE
+    trimmed = words[:48].strip()
+    return trimmed[0].upper() + trimmed[1:]
+
+
+def tile_name(name: str, *, is_slideshow: bool) -> str:
+    """What one tile is called out loud, badge and all.
+
+    The slideshow badge is a picture of a sentence: it says "Changes during the
+    day" in the corner of the thumbnail, where a screen reader cannot reach it.
+    So the name a screen reader announces carries the same fact in words.
+    """
+    return f"{name} — {SLIDESHOW_SUFFIX}" if is_slideshow else name
+
+
+def custom_catalogue_path() -> Path:
+    """Where gtheme writes catalogue entries for pictures somebody chose."""
+    return confine_dest(CUSTOM_CATALOGUE)
+
+
+def catalogue_entry_xml(name: str, filename: Path) -> ElementTree.Element:
+    """One ``<wallpaper>`` element, in the shape the scanner reads back.
+
+    Built with :mod:`xml.etree` rather than by pasting strings together: a file
+    name is somebody else's text and can hold ``&`` or ``<`` — and this file is
+    read by every wallpaper picker on the machine, not only by gtheme.
+    """
+    element = ElementTree.Element("wallpaper", {"deleted": "false"})
+    ElementTree.SubElement(element, "name").text = name
+    ElementTree.SubElement(element, "filename").text = str(filename)
+    ElementTree.SubElement(element, "options").text = "zoom"
+    ElementTree.SubElement(element, "shade_type").text = "solid"
+    ElementTree.SubElement(element, "pcolor").text = "#000000"
+    ElementTree.SubElement(element, "scolor").text = "#000000"
+    return element
+
+
+def _existing_catalogue(path: Path) -> ElementTree.Element:
+    """The catalogue as it stands, or an empty one.
+
+    A file that will not parse is replaced rather than repaired. It is gtheme's
+    own file, the alternative is refusing to remember the picture somebody just
+    chose, and the pictures it named are still on disk to be chosen again.
+    """
+    try:
+        raw = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ElementTree.Element("wallpapers")
+    try:
+        root = ElementTree.fromstring(_DOCTYPE.sub("", raw, count=1))
+    except ElementTree.ParseError:
+        return ElementTree.Element("wallpapers")
+    return root if root.tag == "wallpapers" else ElementTree.Element("wallpapers")
+
+
+def _unused_name(root: ElementTree.Element, wanted: str) -> str:
+    """``Holiday``, or ``Holiday (2)`` when a Holiday is already listed."""
+    taken = {(el.text or "").strip() for el in root.iterfind("wallpaper/name")}
+    if wanted not in taken:
+        return wanted
+    for number in range(2, 1000):
+        candidate = f"{wanted} ({number})"
+        if candidate not in taken:
+            return candidate
+    return wanted
+
+
+def record_in_catalogue(name: str, filename: Path) -> str:
+    """Add a picture to the catalogue under a readable name. Returns the name.
+
+    Raises:
+        OSError: the catalogue could not be written.
+        ConfinementError: the catalogue is not where it is supposed to be.
+    """
+    path = custom_catalogue_path()
+    root = _existing_catalogue(path)
+    unique = _unused_name(root, name)
+    root.append(catalogue_entry_xml(unique, filename))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_bytes(
+        path,
+        b'<?xml version="1.0" encoding="UTF-8"?>\n'
+        + ElementTree.tostring(root, encoding="utf-8"),
+    )
+    return unique
 
 
 def _search_text(row: Row) -> str:
@@ -230,7 +371,19 @@ class GridTile(Gtk.Widget):
 
 
 def _make_tile(name: str, value: Path, thumb_source: Path, *, is_slideshow: bool) -> Gtk.FlowBoxChild:
-    picture = Gtk.Picture(content_fit=Gtk.ContentFit.COVER)
+    """One picture in a grid: the thumbnail, its name under it, and both said.
+
+    Three things carry the name, because three different people need it. The
+    caption is visible, so nobody has to hover to find out which picture this
+    is — the Icons page has always done that and this grid did not
+    (persona-report §2.10). The picture itself gets ``alternative-text``, which
+    is what a screen reader falls back to. And the tile gets an accessible name,
+    because the tooltip it used to rely on is a *description*: read after the
+    name, and often not at all, so a tile whose only text was a tooltip was
+    announced as nothing.
+    """
+    spoken = tile_name(name, is_slideshow=is_slideshow)
+    picture = Gtk.Picture(content_fit=Gtk.ContentFit.COVER, alternative_text=spoken)
     frame = Gtk.AspectFrame(ratio=16 / 9, obey_child=False, child=Gtk.GraphicsOffload(child=picture))
     frame.set_size_request(TILE_WIDTH, TILE_HEIGHT)
     overlay = Gtk.Overlay(child=frame)
@@ -244,7 +397,21 @@ def _make_tile(name: str, value: Path, thumb_source: Path, *, is_slideshow: bool
             margin_bottom=6,
         )
         overlay.add_overlay(badge)
-    child = Gtk.FlowBoxChild(child=GridTile(overlay), tooltip_text=name)
+    caption = Gtk.Label(
+        label=name,
+        css_classes=["caption"],
+        ellipsize=Pango.EllipsizeMode.END,
+        max_width_chars=18,
+        margin_top=4,
+    )
+    # The caption repeats what the tile is already called out loud; announcing
+    # it a second time after the name is noise.
+    a11y.hide_from_screen_readers(caption)
+    content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0, halign=Gtk.Align.CENTER)
+    content.append(GridTile(overlay))
+    content.append(caption)
+    child = Gtk.FlowBoxChild(child=content, tooltip_text=name)
+    a11y.name(child, spoken)
     child.wallpaper_value = value.as_uri()  # type: ignore[attr-defined]
     _load_tile_image(picture, thumb_source)
     return child
@@ -274,15 +441,25 @@ def _build_picture_group(
 
     tiles: list[Gtk.FlowBoxChild] = []
     seen_values: set[str] = set()
-    for entry in catalogue:
+
+    def add_tile(entry: WallpaperEntry) -> Gtk.FlowBoxChild | None:
         value, thumb_source, is_slideshow = tile_source(entry, dark=dark)
         uri = value.as_uri()
         if uri in seen_values:
-            continue  # the same picture offered by more than one catalogue file
+            return None  # the same picture offered by more than one catalogue file
         seen_values.add(uri)
         tile = _make_tile(entry.name, value, thumb_source, is_slideshow=is_slideshow)
         tiles.append(tile)
         flow.append(tile)
+        return tile
+
+    for entry in catalogue:
+        add_tile(entry)
+
+    # The same callable the "choose a picture" row hands to the installer,
+    # published on the grid so a test can drive the real one rather than a
+    # stand-in that only looks like it.
+    flow.gtheme_add_tile = add_tile  # type: ignore[attr-defined]
 
     def refresh() -> None:
         try:
@@ -318,7 +495,14 @@ def _build_picture_group(
         title="Choose a picture from your computer…",
         start_icon_name="folder-pictures-symbolic",
     )
-    custom_row.connect("activated", lambda *_a: _choose_custom_file(window, backend, row, refresh))
+    # ``add_tile`` puts the chosen picture in the grid straight away and
+    # ``refresh`` then selects it, so the tile appears under the reader's
+    # cursor instead of only after the next launch. Rebuilding the page would
+    # do the same and would throw away their scroll position.
+    custom_row.connect(
+        "activated",
+        lambda *_a: _choose_custom_file(window, backend, row, refresh, on_added=add_tile),
+    )
     group.add(custom_row)
 
     refresh()
@@ -326,14 +510,38 @@ def _build_picture_group(
     return group
 
 
-def _choose_custom_file(window: Any, backend: SettingsBackend, row: Row, on_done: Any) -> None:
-    dialog = Gtk.FileDialog(title="Choose a picture")
-    picture_filter = Gtk.FileFilter(name="Pictures")
-    picture_filter.add_pixbuf_formats()
+def custom_file_filters() -> Gio.ListStore:
+    """What the "choose a picture" dialog will let somebody pick.
+
+    Pictures, and slideshows. The second one was missing and mattered more than
+    it sounds: a slideshow is a small file listing pictures and the times of day
+    to show them, three of the four Looks gtheme ships set one, and the picker
+    offered ``add_pixbuf_formats()`` only — so the kind of background this app
+    hands out was the one kind it would not accept back (persona-report §3.2).
+    """
+    pictures_and_slideshows = Gtk.FileFilter(name="Pictures and slideshows")
+    pictures_and_slideshows.add_pixbuf_formats()
+    pictures_and_slideshows.add_suffix("xml")
+    slideshows = Gtk.FileFilter(name="Slideshows")
+    slideshows.add_suffix("xml")
     filters = Gio.ListStore.new(Gtk.FileFilter)
-    filters.append(picture_filter)
+    filters.append(pictures_and_slideshows)
+    filters.append(slideshows)
+    return filters
+
+
+def _choose_custom_file(
+    window: Any,
+    backend: SettingsBackend,
+    row: Row,
+    on_done: Any,
+    *,
+    on_added: Any = None,
+) -> None:
+    dialog = Gtk.FileDialog(title="Choose a picture")
+    filters = custom_file_filters()
     dialog.set_filters(filters)
-    dialog.set_default_filter(picture_filter)
+    dialog.set_default_filter(filters.get_item(0))
 
     def on_response(dlg: Gtk.FileDialog, result: Gio.AsyncResult) -> None:
         try:
@@ -342,20 +550,55 @@ def _choose_custom_file(window: Any, backend: SettingsBackend, row: Row, on_done
             return  # cancelled, or the platform's own dialog already explained itself
         path = gfile.get_path() if gfile is not None else None
         if path:
-            _install_custom_wallpaper(window, backend, row, Path(path), on_done)
+            _install_custom_wallpaper(
+                window, backend, row, Path(path), on_done, on_added=on_added
+            )
 
     dialog.open(window, None, on_response)
 
 
+def _first_frame(slideshow: Path) -> Path | None:
+    """The first still picture a slideshow shows, or None if it has none."""
+    _start, events = parse_slideshow(slideshow)
+    first = next((event for event in events if isinstance(event, SlideshowEvent)), None)
+    return first.file if first is not None else None
+
+
+def _readable_picture(candidate: Path) -> bool:
+    """Whether this really is a picture something can draw."""
+    try:
+        Gdk.Texture.new_from_filename(str(candidate))
+    except GLib.Error:
+        return False
+    return True
+
+
 def _install_custom_wallpaper(
-    window: Any, backend: SettingsBackend, row: Row, source: Path, on_done: Any
+    window: Any,
+    backend: SettingsBackend,
+    row: Row,
+    source: Path,
+    on_done: Any,
+    *,
+    on_added: Any = None,
 ) -> None:
-    """Copy ``source`` in, prove it is a real picture, then write the setting.
+    """Copy ``source`` in, prove it works, name it, then write the setting.
 
     GSettings will happily store a path to nothing, or to a file that is not
     a picture at all — nothing about writing the key fails. So the order here
     is deliberate: copy, decode, *then* write, and undo the copy the moment
     any step short of the last one goes wrong.
+
+    A slideshow is proved a different way, because it is not a picture: it is
+    read, and the first still frame it names has to be a picture that is really
+    there. A slideshow whose pictures have been moved away would otherwise be
+    accepted and leave somebody with a blank desktop and nothing to read.
+
+    Args:
+        on_added: given the catalogue entry for the picture, so the grid it was
+            chosen from can show it immediately. The entry is written to the
+            catalogue either way, so it is in the grid on the next launch even
+            when nobody is listening here.
     """
     try:
         data = source.read_bytes()
@@ -380,9 +623,17 @@ def _install_custom_wallpaper(
         window.toast("That picture couldn't be saved.")
         return
 
-    try:
-        Gdk.Texture.new_from_filename(str(dest))
-    except GLib.Error:
+    is_slideshow = dest.suffix.lower() == ".xml"
+    if is_slideshow:
+        frame = _first_frame(dest)
+        if frame is None or not frame.is_file() or not _readable_picture(frame):
+            dest.unlink(missing_ok=True)
+            window.toast(
+                "That file lists pictures to show through the day, but gtheme "
+                "could not find the pictures themselves."
+            )
+            return
+    elif not _readable_picture(dest):
         dest.unlink(missing_ok=True)
         window.toast("That file doesn't look like a picture gtheme can use.")
         return
@@ -395,8 +646,34 @@ def _install_custom_wallpaper(
         window.toast(NOT_CHANGED.format(why=reason_for(exc)))
         return
 
+    # Naming it comes last, and its failure is not the reader's problem: the
+    # picture is already on their desktop. All a failure here costs is the tile,
+    # so it is said in the same sentence rather than as an alarm.
+    named: str | None = None
+    try:
+        named = record_in_catalogue(readable_name(source), dest)
+    except (OSError, ConfinementError):
+        named = None
+
+    if named is not None and on_added is not None:
+        on_added(
+            WallpaperEntry(
+                name=named,
+                filename=dest,
+                filename_dark=None,
+                options="zoom",
+                shade_type="solid",
+                primary_color=None,
+                secondary_color=None,
+                source_xml=custom_catalogue_path(),
+            )
+        )
     on_done()
-    window.toast("Background picture updated.")
+    window.toast(
+        f"Background picture updated. It is in the list above now, as “{named}”."
+        if named is not None
+        else "Background picture updated, but gtheme could not add it to the list above."
+    )
 
 
 # --------------------------------------------------------------------------

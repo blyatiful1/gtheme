@@ -61,6 +61,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+from ..core import color
+
 __all__ = [
     "Component",
     "ExtensionInstallEntry",
@@ -70,8 +72,10 @@ __all__ = [
     "Meta",
     "Preset",
     "SettingEntry",
+    "TEXT_COLOURS",
     "format_validation_errors",
     "load_preset_dir",
+    "palette_contrast_warnings",
 ]
 
 #: The file a Look is defined in. Fixed name; the folder name is the Look's id.
@@ -266,6 +270,108 @@ def load_preset_dir(directory: str | Path) -> Preset:
     except tomllib.TOMLDecodeError as exc:
         raise ValueError(f"{path} is not valid TOML: {exc}") from exc
     return Preset.model_validate(raw)
+
+
+#: Palette names that are drawn *on* the background: text, and the marks people
+#: read as text. Everything else in a palette — the background itself, the
+#: raised surfaces, the selection, the palette's own paper and ink — is a
+#: backdrop, and measuring a backdrop against the backdrop says nothing.
+#:
+#: ``ansi_`` is stripped before the lookup, so ``bright_yellow`` and
+#: ``ansi_bright_yellow`` are the same name; both spellings are in use across
+#: the bundled Looks.
+#:
+#: ``bright_black`` is in this list and plain ``black``/``white``/
+#: ``bright_white`` are not, which is a judgement rather than an oversight.
+#: Terminals use the bright black as *dimmed text* — comments, timestamps, the
+#: parts of a prompt you are not meant to stare at — so it is read; black and
+#: white are the palette's ink and paper, and on a light Look the whites are the
+#: backdrop rather than anything anybody reads.
+TEXT_COLOURS: frozenset[str] = frozenset(
+    {
+        "fg",
+        "fg_bright",
+        "fg_dim",
+        "comment",
+        "cursor",
+        "accent",
+        "accent_bright",
+        "warn",
+        "error",
+        "info",
+        "red",
+        "green",
+        "yellow",
+        "blue",
+        "magenta",
+        "cyan",
+        "bright_black",
+        "bright_red",
+        "bright_green",
+        "bright_yellow",
+        "bright_blue",
+        "bright_magenta",
+        "bright_cyan",
+    }
+)
+
+#: Which palette name is the background everything else sits on.
+_BACKGROUND_NAMES: tuple[str, ...] = ("bg", "background")
+
+
+def palette_contrast_warnings(
+    palette: dict[str, str], *, minimum: float = color.READABLE_CONTRAST
+) -> list[str]:
+    """Palette colours that cannot be read on the palette's own background.
+
+    A warning, never an error, and that is the point (persona-report §2.10).
+    Nothing in the format is invalid — a Look is allowed to be moody, and no
+    check should be able to stop somebody publishing the palette they meant. But
+    nobody was measuring at all: there was no contrast function anywhere in the
+    tree, and the app's own NETRUNNER ships a dimmed-text colour that sits at
+    2.5 to 1 on its background, which is unreadable and was nobody's decision.
+
+    Silent about what it cannot know rather than guessing: a palette with no
+    ``bg`` (or ``background``) has not said which colour is the backdrop, so
+    there is no pair to measure and nothing is claimed.
+
+    Args:
+        palette: the Look's ``[palette]`` block.
+        minimum: the ratio below which a pair is called out.
+
+    Returns:
+        One line per pair, in the order the palette lists them, each naming both
+        colours and the ratio.
+    """
+    background = next(
+        (palette[name] for name in _BACKGROUND_NAMES if isinstance(palette.get(name), str)),
+        None,
+    )
+    if background is None:
+        return []
+    try:
+        color.parse_hex(background)
+    except ValueError:
+        return []
+
+    lines: list[str] = []
+    for name, value in palette.items():
+        if name in _BACKGROUND_NAMES or not isinstance(value, str):
+            continue
+        if name.removeprefix("ansi_") not in TEXT_COLOURS:
+            continue
+        try:
+            ratio = color.contrast_ratio(background, value)
+        except ValueError:
+            continue  # not a colour at all; the format check has that covered
+        if ratio >= minimum:
+            continue
+        lines.append(
+            f"palette.{name} ({value}) is hard to read on the background "
+            f"({background}): {ratio:.2f} to 1, where {minimum:g} to 1 is the floor "
+            "for dimmed text and outlines"
+        )
+    return lines
 
 
 def format_validation_errors(exc: Exception) -> list[str]:

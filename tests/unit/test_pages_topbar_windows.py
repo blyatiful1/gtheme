@@ -157,17 +157,31 @@ def test_the_link_row_reads_no_setting_and_has_no_reset_button():
 # -- shortcuts and media keys are folded, not a wall of 175 rows ------------
 
 
-def test_shortcuts_and_mediakeys_are_each_one_collapsed_expander(
+def test_shortcuts_and_mediakeys_are_folded_into_named_collapsed_sections(
     window: FakeWindow, backend: MemoryBackend
 ):
+    """Rewritten deliberately, and the old expectation was the defect.
+
+    This used to assert that each of the two domains rendered as *one*
+    collapsed expander carrying the domain's title. That is exactly the shape
+    persona-report §3.2 called out: opening one gave back 123 corpus-ordered
+    rows with no headings and no way to narrow them. The domain title now
+    belongs to the group, and the collapsed rows underneath are named sections
+    — so what this test guards is unchanged in spirit (nothing is a wall of
+    rows, nothing starts open) and changed in structure on purpose.
+    """
     with backends.use_backend(backend):
         widget = windows.build(window)
+
+    groups = _find_all(widget, Adw.PreferencesGroup)
+    group_titles = {group.get_title() for group in groups}
+    assert "Keyboard Shortcuts" in group_titles
+    assert "Sound &amp; Media Keys" in group_titles or "Sound & Media Keys" in group_titles
+
     expanders = _find_all(widget, Adw.ExpanderRow)
     titles = {row.get_title() for row in expanders}
-    assert "Keyboard Shortcuts" in titles
-    assert "Sound &amp; Media Keys" in titles or "Sound & Media Keys" in titles
-    shortcuts_expander = next(row for row in expanders if row.get_title() == "Keyboard Shortcuts")
-    assert not shortcuts_expander.get_expanded()
+    assert {"The window you are using", "Desktops and screens", "Sound"} <= titles
+    assert not any(row.get_expanded() for row in expanders), "nothing opens itself"
 
 
 def _find_all(widget: Gtk.Widget, kind: type) -> list:

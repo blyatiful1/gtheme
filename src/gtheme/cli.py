@@ -90,10 +90,14 @@ def _cmd_rescue(_args: argparse.Namespace) -> int:
 
 
 def _cmd_validate(args: argparse.Namespace) -> int:
-    from .preset.model import format_validation_errors, load_preset_dir
+    from .preset.model import (
+        format_validation_errors,
+        load_preset_dir,
+        palette_contrast_warnings,
+    )
 
     try:
-        load_preset_dir(args.directory)
+        preset = load_preset_dir(args.directory)
     except FileNotFoundError as exc:
         print(f"gtheme: {exc}", file=sys.stderr)
         return 1
@@ -101,6 +105,22 @@ def _cmd_validate(args: argparse.Namespace) -> int:
         for line in format_validation_errors(exc):
             print(line, file=sys.stderr)
         return 1
+    # Warnings, not errors, and the exit code stays 0 on purpose: none of this
+    # makes a Look invalid, and a check that can block publishing a palette
+    # somebody chose would be switched off rather than acted on. It is said out
+    # loud because until now nothing measured contrast anywhere in gtheme, and
+    # one of the app's own bundled Looks ships a dimmed-text colour nobody can
+    # read (persona-report §2.10).
+    warnings = palette_contrast_warnings(preset.palette)
+    for line in warnings:
+        print(f"warning: {line}", file=sys.stderr)
+    if warnings:
+        count = len(warnings)
+        print(
+            f"{args.directory}: valid, with {count} colour"
+            f"{'s' if count != 1 else ''} worth another look."
+        )
+        return 0
     print(f"{args.directory}: looks fine.")
     return 0
 

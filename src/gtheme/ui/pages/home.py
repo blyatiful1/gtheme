@@ -38,10 +38,12 @@ from ...core.backends import get_backend, has_session_bus  # noqa: E402
 from ...core.gvariant import unquote as unquote_variant  # noqa: E402
 from ...core.settings_backend import BackendError, SettingsBackend  # noqa: E402
 from ..applyrunner import ApplyRunner  # noqa: E402
+from ..widgets import a11y  # noqa: E402
 from ..widgets.actions import action_row  # noqa: E402
 from ..widgets.explainer import first_visit_banner  # noqa: E402
 from . import colors as colors_page  # noqa: E402
 from . import restore as restore_page  # noqa: E402
+from .wallpaper import readable_name  # noqa: E402
 
 __all__ = [
     "ACCENT_COLOURS",
@@ -126,6 +128,11 @@ COPY: dict[str, str] = {
     "link-restore": "Go back to how it was",
     "link-restore-subtitle": "Every moment gtheme has saved for you.",
     "undo-button": "Undo last change",
+    # What the card's picture is called for somebody who cannot see it. The
+    # card is the app's opening statement — "this is how your desktop looks
+    # right now" — and the picture in it carried no text of any kind.
+    "picture-alt": "Your background picture: {name}",
+    "picture-none": "No background picture is set",
 }
 
 
@@ -278,9 +285,16 @@ def dot_pixels(colour: str, size: int = DOT_SIZE) -> bytes:
 
 
 def _accent_dot(accent: str | None) -> Gtk.Widget:
-    """A filled circle in the highlight colour. The colour *is* the label."""
+    """A filled circle in the highlight colour.
+
+    The colour is the label — for anybody who can see it. The row it sits in
+    already reads "Highlight colour: Blue", so for anybody who cannot, the dot
+    is a picture of a word that has already been said, and it stays out of the
+    way rather than being announced as an unnamed image (persona-report §2.10).
+    """
     colour = colors_page.accent_hex(accent)
     image = Gtk.Image(valign=Gtk.Align.CENTER, pixel_size=DOT_SIZE)
+    a11y.hide_from_screen_readers(image)
     try:
         from gi.repository import GLib
 
@@ -322,10 +336,17 @@ class HomePage(Adw.Bin):
 
         self._page = Adw.PreferencesPage()
         self.set_child(self._page)
+        # The card's picture is the first thing the app shows anybody, and it
+        # was the largest unnamed image in the tree: a bare Gtk.Picture with no
+        # alternative text at all (persona-report §2.10). The text is set again
+        # in :meth:`_load_picture` once the picture's name is known; this is
+        # what it says while there is nothing to show, and if the desktop has no
+        # background picture at all it is the whole truth.
         self._picture = Gtk.Picture(
             height_request=180,
             content_fit=Gtk.ContentFit.COVER,
             css_classes=["card"],
+            alternative_text=COPY["picture-none"],
         )
         self._rows: dict[str, Adw.ActionRow] = {}
         self._build()
@@ -443,7 +464,11 @@ class HomePage(Adw.Bin):
         path = current_wallpaper(self.backend)
         if path is None:
             self._picture.set_paintable(None)
+            self._picture.set_alternative_text(COPY["picture-none"])
             return
+        self._picture.set_alternative_text(
+            COPY["picture-alt"].format(name=readable_name(path))
+        )
         if not self._want_thumbnails:
             self._picture.set_filename(str(path))
             return
