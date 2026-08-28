@@ -31,6 +31,7 @@ import shutil
 from typing import Any
 
 from ...core.backends import get_backend
+from ...core.gvariant import quote, unquote
 from ...core.settings_backend import BackendError
 from ...panels.descriptor import Choice, Row, WidgetKind
 from ...panels.schema_probe import SchemaProbe
@@ -49,6 +50,9 @@ __all__ = [
 ]
 
 PAGE_ID = "terminal"
+
+#: The one-shot explainer key in ``prefs.json``.
+BANNER_ID = "first-visit-terminal"
 
 #: The setting that says which app opens when something needs a command window.
 TERMINAL_APP_ROW = "org.gnome.desktop.default-applications.terminal:exec"
@@ -239,20 +243,14 @@ def installed_terminal_apps() -> list[tuple[str, str]]:
     return [(command, name) for command, name in KNOWN_TERMINAL_APPS if shutil.which(command)]
 
 
-def _quoted(value: str) -> str:
-    return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
-
-
 def _current_text(backend: Any, row: Row) -> str | None:
     from ..widgets.rows import key_for
 
     try:
-        raw = backend.get(key_for(row)).strip()
+        raw = backend.get(key_for(row))
     except BackendError:
         return None
-    if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in "'\"":
-        return raw[1:-1]
-    return raw or None
+    return unquote(raw) or None
 
 
 def terminal_app_row(row: Row, backend: Any, *, found: list[tuple[str, str]] | None = None) -> Row:
@@ -261,7 +259,7 @@ def terminal_app_row(row: Row, backend: Any, *, found: list[tuple[str, str]] | N
     current = _current_text(backend, row)
     if current and current not in {command for command, _ in apps}:
         apps.append((current, current))
-    choices = [Choice(value=_quoted(command), label=name) for command, name in apps]
+    choices = [Choice(value=quote(command), label=name) for command, name in apps]
     if not choices:
         return row
     return row.model_copy(update={"kind": WidgetKind.CHOICE, "choices": choices})
@@ -320,27 +318,9 @@ def build(window: Any, *, backend: Any = None, probe: SchemaProbe | None = None)
 
     probe_built_rows(page, scanner, built, backend=settings)
 
-    if prefs is not None and prefs.should_show_banner("first-visit-terminal"):
-        return _banner_box(Adw, Gtk, page, prefs)
-    return page
+    from ..widgets.explainer import with_first_visit_banner
 
-
-def _banner_box(Adw: Any, Gtk: Any, page: Any, prefs: Any) -> Any:
-    from ..search import BANNER_DISMISS
-
-    banner = Adw.Banner(
-        title=escape_markup(COPY["banner"]), button_label=BANNER_DISMISS, revealed=True
-    )
-
-    def dismiss(*_args: Any) -> None:
-        banner.set_revealed(False)
-        prefs.mark_banner_seen("first-visit-terminal")
-
-    banner.connect("button-clicked", dismiss)
-    box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, vexpand=True)
-    box.append(banner)
-    box.append(page)
-    return box
+    return with_first_visit_banner(page, prefs, BANNER_ID, COPY["banner"])
 
 
 def _colours_group(Adw: Any, Gtk: Any, look: Any, palette: Palette | None) -> Any:

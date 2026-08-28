@@ -31,12 +31,18 @@ from ...panels.descriptor import DomainDescriptor, Row, WidgetKind  # noqa: E402
 from ...panels.loader import load_domains  # noqa: E402
 from ...panels.widgets import build_row, set_link_handler  # noqa: E402
 from ...ui.widgets.rows import set_plain_text  # noqa: E402
+from ..search import ADVANCED_SUBTITLE, ADVANCED_TITLE  # noqa: E402
+from ..widgets.explainer import with_first_visit_banner  # noqa: E402
 from ._style_common import get_probe  # noqa: E402
 
 __all__ = ["build"]
 
 PAGE_ID = "windows"
 BANNER_ID = "first-visit-windows"
+
+#: What the first-visit explainer says. Named rather than inlined so the
+#: plain-language lint can read it without parsing the page.
+BANNER_TEXT = "Window buttons, desktop switching and every keyboard shortcut live here."
 
 #: The three files this page draws from, in the order they render.
 _DOMAIN_IDS = ("windows", "shortcuts", "mediakeys")
@@ -105,10 +111,12 @@ def _open_group(window, page: Adw.PreferencesPage, domain: DomainDescriptor, *, 
     for row in basic:
         _add_row(window, group, row, backend=backend, probe=probe, into_expander=False)
     if advanced:
-        expander = Adw.ExpanderRow(
-            title="Advanced",
-            subtitle=f"{len(advanced)} more controls most people never need to touch",
-        )
+        # The same words as every other page's collapsed tier. This page used
+        # to say "Advanced" over its own sentence — a third wording for the
+        # identical affordance, met by somebody who had already learned "More
+        # options" on six other pages (review-report M29).
+        expander = Adw.ExpanderRow()
+        set_plain_text(expander, title=ADVANCED_TITLE, subtitle=ADVANCED_SUBTITLE)
         for row in advanced:
             _add_row(window, expander, row, backend=backend, probe=probe, into_expander=True)
         group.add(expander)
@@ -165,22 +173,6 @@ def build(window) -> Gtk.Widget:
         if domain_id in domains:
             _collapsed_group(window, page, domains[domain_id], backend=backend, probe=probe)
 
-    if window.prefs.should_show_banner(BANNER_ID):
-        banner = Adw.Banner(
-            title="Window buttons, desktop switching and every keyboard shortcut live here.",
-            revealed=True,
-        )
-        banner.set_button_label("Got it")
-
-        def _dismiss(*_args: object) -> None:
-            window.prefs.mark_banner_seen(BANNER_ID)
-            banner.set_revealed(False)
-
-        banner.connect("button-clicked", _dismiss)
-        wrapper = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        wrapper.append(banner)
-        page.set_vexpand(True)
-        wrapper.append(page)
-        return wrapper
-
-    return page
+    return with_first_visit_banner(
+        page, getattr(window, "prefs", None), BANNER_ID, BANNER_TEXT
+    )

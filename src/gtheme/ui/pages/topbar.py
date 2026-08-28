@@ -29,12 +29,17 @@ from ...panels.descriptor import DomainDescriptor, Row, WidgetKind  # noqa: E402
 from ...panels.loader import load_domains  # noqa: E402
 from ...panels.widgets import build_row, set_link_handler  # noqa: E402
 from ...ui.widgets.rows import set_plain_text  # noqa: E402
+from ..widgets.explainer import with_first_visit_banner  # noqa: E402
 from ._style_common import get_probe  # noqa: E402
 
 __all__ = ["build"]
 
 PAGE_ID = "topbar"
 BANNER_ID = "first-visit-topbar"
+
+#: What the first-visit explainer says. Named rather than inlined so the
+#: plain-language lint can read it without parsing the page.
+BANNER_TEXT = "The clock, the date, the app view and the top bar's own style live here."
 
 _DOMAIN_IDS = ("topbar", "topbarstyle")
 
@@ -129,22 +134,6 @@ def build(window) -> Gtk.Widget:
     if "topbarstyle" in domains:
         _style_group(window, page, domains["topbarstyle"], backend=backend, probe=probe)
 
-    if window.prefs.should_show_banner(BANNER_ID):
-        intro = Adw.Banner(
-            title="The clock, the date, the app view and the top bar's own style live here.",
-            revealed=True,
-        )
-        intro.set_button_label("Got it")
-
-        def _dismiss(*_args: object) -> None:
-            window.prefs.mark_banner_seen(BANNER_ID)
-            intro.set_revealed(False)
-
-        intro.connect("button-clicked", _dismiss)
-        wrapper = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        wrapper.append(intro)
-        page.set_vexpand(True)
-        wrapper.append(page)
-        return wrapper
-
-    return page
+    return with_first_visit_banner(
+        page, getattr(window, "prefs", None), BANNER_ID, BANNER_TEXT
+    )

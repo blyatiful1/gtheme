@@ -66,7 +66,8 @@ from ...ui.widgets.recording import (  # noqa: E402
     reason_for,
     recording,
 )
-from ...ui.widgets.rows import key_for  # noqa: E402
+from ...ui.widgets.rows import key_for, quote, set_plain_text, unquote  # noqa: E402
+from ..search import ADVANCED_TITLE  # noqa: E402
 from ._style_common import get_probe  # noqa: E402
 
 __all__ = ["TILE_HEIGHT", "TILE_WIDTH", "GridTile", "build"]
@@ -101,13 +102,10 @@ _STYLE_KEYS = ("picture-options", "primary-color", "secondary-color", "color-sha
 
 
 def _unquote(variant_text: str | None) -> str | None:
-    """Strip GVariant string quoting. ``"'x'"`` -> ``x``, ``None`` -> ``None``."""
+    """:func:`~gtheme.core.gvariant.unquote`, passing None straight through."""
     if variant_text is None:
         return None
-    text = variant_text.strip()
-    if len(text) >= 2 and text[0] == text[-1] and text[0] in "'\"":
-        return text[1:-1]
-    return text
+    return unquote(variant_text)
 
 
 def tile_source(entry: WallpaperEntry, *, dark: bool) -> tuple[Path, Path, bool]:
@@ -303,7 +301,7 @@ def _build_picture_group(
             return
         try:
             recording(backend, component=row.id).set(
-                key_for(row), GLib.Variant("s", value).print_(True)
+                key_for(row), quote(value)
             )
         except (BackendError, WriteRefused) as exc:
             # Back to whichever picture is really on the desktop, and a sentence
@@ -391,7 +389,7 @@ def _install_custom_wallpaper(
 
     try:
         recording(backend, component=row.id).set(
-            key_for(row), GLib.Variant("s", dest.as_uri()).print_(True)
+            key_for(row), quote(dest.as_uri())
         )
     except (BackendError, WriteRefused) as exc:
         window.toast(NOT_CHANGED.format(why=reason_for(exc)))
@@ -427,8 +425,13 @@ def _build_style_group(
             continue
         group.add(_add_data_row(window, backend, probe, row))
     if advanced:
-        expander = Adw.ExpanderRow(
-            title="More options",
+        # The tier is called the same thing on every page (review-report M29);
+        # what is *inside* it is this page's own sentence, because here it is
+        # one specific thing rather than "settings most people never change".
+        expander = Adw.ExpanderRow()
+        set_plain_text(
+            expander,
+            title=ADVANCED_TITLE,
             subtitle="A second colour, for a fade instead of one flat colour.",
         )
         for row in advanced:

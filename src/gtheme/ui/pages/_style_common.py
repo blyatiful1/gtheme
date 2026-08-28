@@ -46,7 +46,17 @@ from ...panels.loader import load_corpus, load_dispositions  # noqa: E402
 from ...panels.loader import surfaced_ids as loader_surfaced_ids  # noqa: E402
 from ...panels.schema_probe import Availability, SchemaProbe, probe_rows_idle  # noqa: E402
 from ...panels.widgets import build_row  # noqa: E402
-from ..widgets.rows import RowBuildError, attach_reset, key_for, write_value  # noqa: E402
+from ..search import ADVANCED_SUBTITLE, ADVANCED_TITLE  # noqa: E402
+from ..widgets.explainer import first_visit_banner  # noqa: E402
+from ..widgets.rows import (  # noqa: E402
+    RowBuildError,
+    attach_reset,
+    key_for,
+    quote,
+    set_plain_text,
+    unquote,
+    write_value,
+)
 
 __all__ = [
     "ADVANCED_SUBTITLE",
@@ -56,6 +66,7 @@ __all__ = [
     "corpus_rows",
     "coverage_dispositions",
     "get_probe",
+    "quote",
     "search_text",
     "surfaced_ids",
     "unquote",
@@ -63,23 +74,14 @@ __all__ = [
 ]
 
 
-#: The expander every page hides its rarely-wanted rows behind. One wording, so
-#: a person who found it on one page recognises it on the next.
-ADVANCED_TITLE = "More options"
-ADVANCED_SUBTITLE = "Settings most people never need to change."
-
-
-def unquote(variant_text: str) -> str:
-    """Strip GVariant string quoting for display. ``"'x'"`` -> ``x``."""
-    text = variant_text.strip()
-    if len(text) >= 2 and text[0] == text[-1] and text[0] in "'\"":
-        return text[1:-1]
-    return text
-
-
-def quote(text: str) -> str:
-    """The GVariant text for a plain string."""
-    return GLib.Variant("s", text).print_(True)
+# The expander every page hides its rarely-wanted rows behind, and the GVariant
+# quoting pair, are both re-exports rather than definitions. Two page scaffolds
+# grew up in parallel — ``search.settings_page`` for the System section and
+# ``PageShell`` for the three style pages — and each had its own copy of this
+# wording, each documented as "one wording so the tier means the same thing
+# everywhere" (review-report M29). The wording now lives in :mod:`gtheme.ui
+# .search`, the lower of the two modules and the one the plain-language lint
+# already reads, and this scaffold uses that one.
 
 
 def value_or_none(backend: SettingsBackend, key: str) -> str | None:
@@ -278,7 +280,6 @@ class PageShell:
         #: idle probe disagrees with the quick check made at build time.
         self._probe_targets: list[tuple[Row, Adw.PreferencesRow]] = []
         self._source_id: int | None = None
-        self._built: list[str] = []
 
         # Announce this page to the window, if the window keeps a list. That is
         # how live mirroring re-runs the notices above when a value moves
@@ -293,26 +294,26 @@ class PageShell:
     # -- the first-visit explainer ----------------------------------------
 
     def _build_banner(self, banner_id: str, text: str) -> Adw.Banner | None:
-        prefs = _prefs(self.window)
-        if prefs is not None and not prefs.should_show_banner(banner_id):
-            return None
-        banner = Adw.Banner(title=text, button_label="Got it", revealed=True)
-
-        def dismissed(*_args: Any) -> None:
-            banner.set_revealed(False)
-            if prefs is not None:
-                prefs.mark_banner_seen(banner_id)
-
-        banner.connect("button-clicked", dismissed)
-        return banner
+        return first_visit_banner(_prefs(self.window), banner_id, text)
 
     # -- groups and rows ---------------------------------------------------
 
     def group(self, title: str, description: str | None = None) -> Adw.PreferencesGroup:
-        """Add a group to the page and return it."""
-        group = Adw.PreferencesGroup(title=title)
+        """Add a group to the page and return it.
+
+        The heading goes on as **text**. ``Adw.PreferencesGroup`` is one of the
+        two widgets in the toolkit that parse Pango markup with no
+        ``use-markup`` to turn off (I checked the property is genuinely absent),
+        so an unescaped ``&`` renders the heading as nothing at all — and nine
+        of the titles this app ships contain one, as does every description
+        taken from a descriptor's own warning (review-report M29).
+        :func:`~gtheme.ui.widgets.rows.set_plain_text` knows which of the two
+        paths this widget needs.
+        """
+        group = Adw.PreferencesGroup()
+        set_plain_text(group, title=title)
         if description:
-            group.set_description(description)
+            set_plain_text(group, description=description)
         self.page.add(group)
         return group
 
@@ -322,7 +323,8 @@ class PageShell:
         Advanced settings are real and are never hidden outright — they are one
         click away, behind a row that says what is inside it.
         """
-        expander = Adw.ExpanderRow(title=ADVANCED_TITLE, subtitle=ADVANCED_SUBTITLE)
+        expander = Adw.ExpanderRow()
+        set_plain_text(expander, title=ADVANCED_TITLE, subtitle=ADVANCED_SUBTITLE)
         group.add(expander)
         return expander
 
@@ -379,7 +381,6 @@ class PageShell:
         probe: bool = False,
     ) -> None:
         """Record a built row so search, deep links and mirroring find it."""
-        self._built.append(row.id)
         index = _row_index(self.window)
         if index is not None:
             index.register(
@@ -413,11 +414,6 @@ class PageShell:
             if isinstance(widget, kind):
                 widget.connect(signal, lambda *_a: self.run_notices())
                 return
-
-    @property
-    def built_ids(self) -> list[str]:
-        """Every descriptor id this page put on screen, in build order."""
-        return list(self._built)
 
     def refresh(self, descriptor_id: str) -> None:
         """Re-read one row that something else just changed underneath it."""

@@ -117,6 +117,14 @@ deep-links and external-change mirroring possible. `search.py`, `jargon.py`,
 `onboarding.py`, `preview.py`, `applyrunner.py`, `widgets/rows.py`, and
 `pages/`.
 
+`widgets/` is where anything more than one page draws lives, so that there is
+one of it rather than nine: `rows.py` (the frozen descriptor-to-widget
+library, which also owns `key_for`, `set_plain_text` and the GVariant
+`quote`/`unquote` pair), `recording.py` (every write, recorded and honest),
+`explainer.py` (the one-shot first-visit banner) and `actions.py` (a sentence
+with a button that does it). A page that finds itself writing one of these
+again is the drift `review-report` P7 is about.
+
 ## The safety model
 
 Seven properties. Each one is a mechanism, not an intention, and each one is

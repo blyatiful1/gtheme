@@ -22,7 +22,7 @@ here.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
@@ -35,8 +35,12 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gtk  # noqa: E402
 
 from ...core.backends import get_backend, has_session_bus  # noqa: E402
+from ...core.gvariant import unquote as unquote_variant  # noqa: E402
 from ...core.settings_backend import BackendError, SettingsBackend  # noqa: E402
 from ..applyrunner import ApplyRunner  # noqa: E402
+from ..widgets.actions import action_row  # noqa: E402
+from ..widgets.explainer import first_visit_banner  # noqa: E402
+from . import colors as colors_page  # noqa: E402
 from . import restore as restore_page  # noqa: E402
 
 __all__ = [
@@ -69,34 +73,14 @@ KEYS: dict[str, str] = {
     "text": "gsettings:org.gnome.desktop.interface font-name",
 }
 
-#: The nine highlight colours GNOME offers, and nothing else — the setting is a
-#: fixed list with no custom value, and saying so is more honest than offering a
-#: colour picker that silently rounds to the nearest of these.
-ACCENT_NAMES: dict[str, str] = {
-    "blue": "Blue",
-    "teal": "Teal",
-    "green": "Green",
-    "yellow": "Yellow",
-    "orange": "Orange",
-    "red": "Red",
-    "pink": "Pink",
-    "purple": "Purple",
-    "slate": "Grey",
-}
-
-#: What each of them looks like, so the dot on the card is the colour itself
-#: rather than the name of a colour.
-ACCENT_COLOURS: dict[str, str] = {
-    "blue": "#3584e4",
-    "teal": "#2190a4",
-    "green": "#3a944a",
-    "yellow": "#c88800",
-    "orange": "#ed5b00",
-    "red": "#e62d42",
-    "pink": "#d56199",
-    "purple": "#9141ac",
-    "slate": "#6f8396",
-}
+#: The highlight colours GNOME offers, named and painted. Both are *views* of
+#: the one table on the Colours & Style page — the page that actually offers
+#: them — because this card is a mirror and a mirror that has its own idea of
+#: what the desktop supports is not a mirror (review-report L15). A colour this
+#: version has never heard of still gets a readable name and an honest grey dot
+#: rather than falling off the end of a dictionary.
+ACCENT_NAMES: dict[str, str] = colors_page.ACCENT_LABELS
+ACCENT_COLOURS: dict[str, str] = colors_page.ACCENT_HEXES
 
 _LIGHT_OR_DARK: dict[str, str] = {
     "prefer-dark": "Dark",
@@ -150,14 +134,6 @@ COPY: dict[str, str] = {
 # --------------------------------------------------------------------------
 
 
-def _unquote_variant(text: str) -> str:
-    """``"'Papirus-Dark'"`` -> ``Papirus-Dark``. Values arrive as stored text."""
-    stripped = text.strip()
-    if len(stripped) >= 2 and stripped[0] == stripped[-1] and stripped[0] in "'\"":
-        return stripped[1:-1]
-    return stripped
-
-
 def read(backend: SettingsBackend, name: str) -> str | None:
     """One summarised value, or None when it cannot be read.
 
@@ -169,7 +145,7 @@ def read(backend: SettingsBackend, name: str) -> str | None:
     if key is None:
         return None
     try:
-        return _unquote_variant(backend.get(key))
+        return unquote_variant(backend.get(key))
     except BackendError:
         return None
 
@@ -183,7 +159,7 @@ def describe_light_or_dark(value: str | None) -> str:
 def describe_accent(value: str | None) -> str:
     if value is None:
         return COPY["unreadable"]
-    return ACCENT_NAMES.get(value, value.capitalize())
+    return colors_page.accent_label(value) or COPY["unknown"]
 
 
 def summarise_setting(value: str | None) -> str:
@@ -303,7 +279,7 @@ def dot_pixels(colour: str, size: int = DOT_SIZE) -> bytes:
 
 def _accent_dot(accent: str | None) -> Gtk.Widget:
     """A filled circle in the highlight colour. The colour *is* the label."""
-    colour = ACCENT_COLOURS.get(accent or "", "#77767b")
+    colour = colors_page.accent_hex(accent)
     image = Gtk.Image(valign=Gtk.Align.CENTER, pixel_size=DOT_SIZE)
     try:
         from gi.repository import GLib
@@ -357,7 +333,9 @@ class HomePage(Adw.Bin):
     # -- construction ------------------------------------------------------
 
     def _build(self) -> None:
-        banner = self._banner()
+        banner = first_visit_banner(
+            getattr(self.window, "prefs", None), BANNER_ID, COPY["banner"]
+        )
         if banner is not None:
             group = Adw.PreferencesGroup()
             group.add(banner)
@@ -386,7 +364,7 @@ class HomePage(Adw.Bin):
             title=COPY["safety-title"], description=COPY["safety-description"]
         )
         safety.add(
-            self._action_row(
+            action_row(
                 restore_page.COPY["save-title"],
                 restore_page.COPY["save-subtitle"],
                 restore_page.COPY["save-button"],
@@ -395,7 +373,7 @@ class HomePage(Adw.Bin):
             )
         )
         safety.add(
-            self._action_row(
+            action_row(
                 restore_page.COPY["undo-title"],
                 restore_page.COPY["undo-subtitle"],
                 restore_page.COPY["undo-button"],
@@ -416,37 +394,6 @@ class HomePage(Adw.Bin):
         self._page.add(explore)
 
         self.refresh()
-
-    def _banner(self) -> Adw.Banner | None:
-        prefs = getattr(self.window, "prefs", None)
-        if prefs is None or not prefs.should_show_banner(BANNER_ID):
-            return None
-        banner = Adw.Banner(title=COPY["banner"], button_label="Got it", revealed=True)
-
-        def dismiss(*_args: Any) -> None:
-            banner.set_revealed(False)
-            prefs.mark_banner_seen(BANNER_ID)
-
-        banner.connect("button-clicked", dismiss)
-        return banner
-
-    def _action_row(
-        self,
-        title: str,
-        subtitle: str,
-        button_label: str,
-        callback: Callable[[], Any],
-        *,
-        suggested: bool = False,
-    ) -> Adw.ActionRow:
-        row = Adw.ActionRow(title=title, subtitle=subtitle)
-        button = Gtk.Button(label=button_label, valign=Gtk.Align.CENTER)
-        if suggested:
-            button.add_css_class("suggested-action")
-        button.connect("clicked", lambda *_a: callback())
-        row.add_suffix(button)
-        row.set_activatable_widget(button)
-        return row
 
     def _link_row(self, page_id: str, title: str, subtitle: str) -> Adw.ActionRow:
         row = Adw.ActionRow(title=title, subtitle=subtitle, activatable=True)

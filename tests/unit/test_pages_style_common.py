@@ -20,6 +20,12 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gtk  # noqa: E402
 
 from gtheme.core.backends import use_backend  # noqa: E402
+from gtheme.core.settings_backend import (  # noqa: E402
+    BackendError,
+    BackendErrorKind,
+    MemoryBackend,
+)
+from gtheme.core.transaction import SettingWrite  # noqa: E402
 from gtheme.panels.descriptor import Row, WidgetKind  # noqa: E402
 from gtheme.prefs import Prefs  # noqa: E402
 from gtheme.ui import registry  # noqa: E402
@@ -276,3 +282,177 @@ def test_apply_ops_with_nothing_to_do_changes_nothing_and_says_nothing(tmp_path)
     window = make_window(tmp_path)
     assert common.apply_ops(window, [], done="never shown") is True
     assert window.said == []
+
+
+# --------------------------------------------------------------------------
+# apply_ops, driven for real
+# --------------------------------------------------------------------------
+#
+# review-report M17: the only test this function had passed ``[]`` and returned
+# at the ``if not ops`` guard, before the transaction, before the toast, and
+# before the failure branch — so the two controls that go through it (the dark
+# mode switch and the window-heading lettering) were covered by nothing at all.
+# These four drive the real ``Transaction``: one change that lands, and the two
+# halves of the sentence a change that did not land is allowed to say.
+
+APPLY_SCHEMA_XML = """<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="io.github.blyatiful1.GthemeApplyOps"
+          path="/io/github/blyatiful1/gtheme-apply-ops/">
+    <key name="first" type="s"><default>'one'</default></key>
+    <key name="second" type="s"><default>'two'</default></key>
+  </schema>
+</schemalist>
+"""
+
+APPLY_ID = "io.github.blyatiful1.GthemeApplyOps"
+FIRST = f"gsettings:{APPLY_ID} first"
+SECOND = f"gsettings:{APPLY_ID} second"
+
+#: The half-sentence the failure branch adds when the desktop is NOT known to
+#: be as it was. Written out here rather than imported so that changing the
+#: wording in the page has to be a deliberate edit in both places.
+MAYBE_CHANGED = "Some of it may have been changed anyway."
+
+
+class RefusesEveryWrite(MemoryBackend):
+    """A locked-down store: reads fine, refuses every write, from op one."""
+
+    def set(self, key: str, value: str) -> None:
+        raise BackendError(BackendErrorKind.COMMIT_FAILED, f"refused {key}", key=key)
+
+
+class RefusesAfterTheFirstWrite(MemoryBackend):
+    """Lets one write through, then refuses — the rollback included.
+
+    This is the shape of the failure the second half of the sentence exists
+    for: op one landed, op two did not, and putting op one back was refused as
+    well, so the desktop is genuinely half-changed and nobody may say it is not.
+    """
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.writes = 0
+
+    def seed(self, key: str, value: str) -> None:
+        """Put a starting value in without spending the one allowed write."""
+        super().set(key, value)
+
+    def set(self, key: str, value: str) -> None:
+        self.writes += 1
+        if self.writes == 1:
+            super().set(key, value)
+            return
+        raise BackendError(BackendErrorKind.COMMIT_FAILED, f"refused {key}", key=key)
+
+
+@pytest.mark.mutating
+def test_a_compound_change_really_moves_the_settings_and_says_it_did(
+    tmp_path, tmp_dest_root, state_dir, schema_source_factory
+):
+    """The success path, end to end: two keys, one transaction, both moved."""
+    backend = MemoryBackend(schema_source=schema_source_factory(APPLY_SCHEMA_XML))
+    backend.set(FIRST, "'one'")
+    backend.set(SECOND, "'two'")
+    window = make_window(tmp_path)
+
+    with use_backend(backend):
+        done = common.apply_ops(
+            window,
+            [
+                SettingWrite(key=FIRST, value="'moved'", component="colours"),
+                SettingWrite(key=SECOND, value="'also moved'", component="colours"),
+            ],
+            done="Changed.",
+        )
+
+    assert done is True
+    assert backend.get(FIRST) == "'moved'"
+    assert backend.get(SECOND) == "'also moved'"
+    assert window.said == ["Changed."]
+
+
+@pytest.mark.mutating
+def test_a_refused_change_is_reported_and_nothing_is_left_behind(
+    tmp_path, tmp_dest_root, state_dir, schema_source_factory
+):
+    """Refused at op one: the desktop really is untouched, so nothing hedges."""
+    backend = RefusesEveryWrite(schema_source=schema_source_factory(APPLY_SCHEMA_XML))
+    window = make_window(tmp_path)
+
+    with use_backend(backend):
+        done = common.apply_ops(
+            window,
+            [SettingWrite(key=FIRST, value="'moved'", component="colours")],
+            done="never shown",
+        )
+
+    assert done is False, "the page must know the change did not happen"
+    assert window.said, "and the person must be told"
+    said = window.said[-1]
+    assert "could not be made" in said
+    assert MAYBE_CHANGED not in said, (
+        "the desktop was never written to; hedging here teaches a person to "
+        "distrust the one sentence that means something"
+    )
+
+
+@pytest.mark.mutating
+def test_a_half_applied_change_admits_the_desktop_may_have_moved(
+    tmp_path, tmp_dest_root, state_dir, schema_source_factory
+):
+    """The other half of M17: ``rolled_back`` False must reach the sentence."""
+    backend = RefusesAfterTheFirstWrite(
+        schema_source=schema_source_factory(APPLY_SCHEMA_XML)
+    )
+    backend.seed(FIRST, "'one'")
+    backend.seed(SECOND, "'two'")
+    window = make_window(tmp_path)
+
+    with use_backend(backend):
+        done = common.apply_ops(
+            window,
+            [
+                SettingWrite(key=FIRST, value="'moved'", component="colours"),
+                SettingWrite(key=SECOND, value="'also moved'", component="colours"),
+            ],
+            done="never shown",
+        )
+
+    assert done is False
+    said = window.said[-1]
+    assert "could not be made" in said
+    assert MAYBE_CHANGED in said, (
+        "op one landed and could not be put back — saying nothing about that "
+        "is the failure this clause exists to prevent"
+    )
+    assert backend.get(FIRST) == "'moved'", "the premise of the test: it is still there"
+
+
+def test_a_change_that_cannot_even_start_says_the_desktop_is_untouched(tmp_path):
+    """``OSError`` out of the lock file, from before the guarded section.
+
+    Kept next to its siblings because it is the same branch seen from the third
+    side: a failure that is not a ``TransactionError`` at all.
+    """
+    window = make_window(tmp_path)
+
+    class _NoRoom:
+        def __init__(self, ops) -> None:
+            self.ops = ops
+
+        def apply(self, *_args: Any, **_kwargs: Any) -> None:
+            raise PermissionError(13, "Permission denied")
+
+    original = common.Transaction
+    common.Transaction = _NoRoom
+    try:
+        done = common.apply_ops(
+            window, [SettingWrite(key=FIRST, value="'moved'")], done="never shown"
+        )
+    finally:
+        common.Transaction = original
+
+    assert done is False
+    assert "exactly as it was" in window.said[-1]
+    assert MAYBE_CHANGED not in window.said[-1]

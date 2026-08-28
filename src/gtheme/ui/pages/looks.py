@@ -74,6 +74,7 @@ from ...preset.model import Component  # noqa: E402
 from ..applyrunner import ApplyRunner  # noqa: E402
 from ..preview import ASPECT_RATIO, build_preview  # noqa: E402
 from ..search import escape_markup  # noqa: E402
+from ..widgets.explainer import first_visit_banner  # noqa: E402
 from ..widgets.rows import key_for  # noqa: E402
 
 __all__ = [
@@ -107,7 +108,6 @@ COPY: dict[str, str] = {
         "Before anything changes, gtheme saves how your desktop looks right now, so one "
         "click puts it back."
     ),
-    "first-visit-dismiss": "Got it",
     "installed-title": "Your Looks",
     "browse-title": "Get more",
     "safety": "Looks only change settings. They can't run programs on your computer.",
@@ -1024,12 +1024,13 @@ class LooksPage(Gtk.Box):
         self._own_runner: ApplyRunner | None = None
         self.connect("destroy", self._on_destroy)
 
-        self._banner = Adw.Banner(
-            title=COPY["first-visit"],
-            button_label=COPY["first-visit-dismiss"],
-            revealed=self._prefs.should_show_banner(BANNER_ID),
+        # ``keep_hidden`` because this page keeps the banner as a member and
+        # this class is built once per window: the widget exists whether or not
+        # it is revealed. Everywhere else a dismissed explainer is not built at
+        # all (review-report M28).
+        self._banner = first_visit_banner(
+            self._prefs, BANNER_ID, COPY["first-visit"], keep_hidden=True
         )
-        self._banner.connect("button-clicked", self._on_banner_dismissed)
         self.append(self._banner)
 
         self._stack = Adw.ViewStack(vexpand=True)
@@ -1746,10 +1747,6 @@ class LooksPage(Gtk.Box):
         look_registry.fetch_look_async(entry, done, replace=replace)
 
     # -- small helpers -----------------------------------------------------
-
-    def _on_banner_dismissed(self, banner: Adw.Banner) -> None:
-        banner.set_revealed(False)
-        self._prefs.mark_banner_seen(BANNER_ID)
 
     def _toast(self, text: str, *, undo_point: str | None = None) -> None:
         # ``Adw.Toast:title`` renders Pango markup. A Look is named by whoever

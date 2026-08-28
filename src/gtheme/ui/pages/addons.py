@@ -80,7 +80,8 @@ from ...panels.schema_probe import SchemaProbe, probe_rows_idle  # noqa: E402
 from ...panels.widgets import build_row, set_link_handler  # noqa: E402
 from ...prefs import Prefs  # noqa: E402
 from ..jargon import translate  # noqa: E402
-from ..widgets.rows import UnsupportedRowKind, warn_banner  # noqa: E402
+from ..widgets.explainer import first_visit_banner  # noqa: E402
+from ..widgets.rows import UnsupportedRowKind, unquote, warn_banner  # noqa: E402
 
 __all__ = [
     "CATEGORY_ORDER",
@@ -99,6 +100,15 @@ __all__ = [
 ]
 
 
+#: The two one-shot explainers this page can show. Both are listed in
+#: :data:`gtheme.prefs.KNOWN_BANNERS`, and both are built by the one shared
+#: :func:`~gtheme.ui.widgets.explainer.first_visit_banner` — the dismiss button
+#: says what it says on every other page rather than out of this page's own
+#: copy table (review-report M28).
+BANNER_ID = "first-visit-addons"
+AUTHOR_SETTINGS_BANNER_ID = "addon-settings-are-the-authors"
+
+
 #: Every sentence this page says, in one place so the wording can be read as a
 #: whole and linted as a whole. Sentences that already exist in
 #: :mod:`gtheme.ego.install` or :mod:`gtheme.ego.updates` are used from there
@@ -113,7 +123,6 @@ COPY: dict[str, str] = {
         "These are add-ons — small extras that add features to your desktop. "
         "You can turn any of them off again."
     ),
-    "dismiss": "Got it",
     # -- no desktop to talk to
     "no-desktop-title": "Add-ons are not reachable right now",
     "no-desktop-body": (
@@ -340,10 +349,7 @@ def _clean_summary(text: str) -> str:
 
 def _humanise(value: str) -> str:
     """``"'top-left'"`` -> ``"Top left"``. For options nobody wrote labels for."""
-    text = value.strip()
-    if len(text) >= 2 and text[0] == text[-1] and text[0] in "'\"":
-        text = text[1:-1]
-    text = text.replace("-", " ").replace("_", " ").strip()
+    text = unquote(value).replace("-", " ").replace("_", " ").strip()
     return text[:1].upper() + text[1:] if text else value
 
 
@@ -605,17 +611,8 @@ class AddonsPage(Adw.Bin):
     def _build_ui(self) -> None:
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
 
-        banner_id = "first-visit-addons"
-        if self.prefs.should_show_banner(banner_id):
-            banner = Adw.Banner(
-                title=COPY["first-visit"], button_label=COPY["dismiss"], revealed=True
-            )
-
-            def _dismiss(_banner: Adw.Banner) -> None:
-                banner.set_revealed(False)
-                self.prefs.mark_banner_seen(banner_id)
-
-            banner.connect("button-clicked", _dismiss)
+        banner = first_visit_banner(self.prefs, BANNER_ID, COPY["first-visit"])
+        if banner is not None:
             outer.append(banner)
 
         self.stack = Adw.ViewStack(vexpand=True)
@@ -977,19 +974,10 @@ class AddonsPage(Adw.Bin):
             rows, skipped = (
                 auto_rows(self.probe, schema_id) if schema_id else ([], 0)
             )
-            banner_id = "addon-settings-are-the-authors"
-            if self.prefs.should_show_banner(banner_id):
-                banner = Adw.Banner(
-                    title=COPY["author-settings"],
-                    button_label=COPY["dismiss"],
-                    revealed=True,
-                )
-
-                def _dismiss(_banner: Adw.Banner) -> None:
-                    banner.set_revealed(False)
-                    self.prefs.mark_banner_seen(banner_id)
-
-                banner.connect("button-clicked", _dismiss)
+            banner = first_visit_banner(
+                self.prefs, AUTHOR_SETTINGS_BANNER_ID, COPY["author-settings"]
+            )
+            if banner is not None:
                 content.append(banner)
 
         seen_warnings: list[str] = []

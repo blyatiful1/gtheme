@@ -373,7 +373,10 @@ def test_the_first_visit_explainer_shows_once_and_stays_dismissed(config_dir, th
     page = looks.build(window)
     assert page._banner.get_revealed()
 
-    page._on_banner_dismissed(page._banner)
+    # The button, not the handler behind it: the dismissal is wired by the one
+    # shared explainer widget now, so pressing it is the only thing that proves
+    # this page's banner is wired at all (review-report M28).
+    page._banner.emit("button-clicked")
     assert not page._banner.get_revealed()
     assert prefs.banner_seen(looks.BANNER_ID)
 

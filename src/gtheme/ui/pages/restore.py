@@ -45,6 +45,8 @@ from ...core.restorepoints import RestorePoint  # noqa: E402
 from ...core.settings_backend import SettingsBackend  # noqa: E402
 from ...panels.loader import load_corpus  # noqa: E402
 from ..applyrunner import ApplyRunner  # noqa: E402
+from ..widgets.actions import action_row  # noqa: E402
+from ..widgets.explainer import first_visit_banner  # noqa: E402
 from ..widgets.rows import key_for  # noqa: E402
 
 __all__ = [
@@ -430,7 +432,9 @@ class RestorePage(Adw.Bin):
     # -- construction ------------------------------------------------------
 
     def _build(self) -> None:
-        banner = self._banner()
+        banner = first_visit_banner(
+            getattr(self.window, "prefs", None), BANNER_ID, COPY["banner"]
+        )
         if banner is not None:
             group = Adw.PreferencesGroup()
             group.add(banner)
@@ -438,7 +442,7 @@ class RestorePage(Adw.Bin):
 
         actions = Adw.PreferencesGroup()
         actions.add(
-            self._button_row(
+            action_row(
                 COPY["save-title"],
                 COPY["save-subtitle"],
                 COPY["save-button"],
@@ -447,7 +451,7 @@ class RestorePage(Adw.Bin):
             )
         )
         actions.add(
-            self._button_row(
+            action_row(
                 COPY["undo-title"],
                 COPY["undo-subtitle"],
                 COPY["undo-button"],
@@ -459,37 +463,6 @@ class RestorePage(Adw.Bin):
         self._list_group = Adw.PreferencesGroup(title=COPY["list-title"])
         self._page.add(self._list_group)
         self.refresh()
-
-    def _banner(self) -> Adw.Banner | None:
-        prefs = getattr(self.window, "prefs", None)
-        if prefs is None or not prefs.should_show_banner(BANNER_ID):
-            return None
-        banner = Adw.Banner(title=COPY["banner"], button_label="Got it", revealed=True)
-
-        def dismiss(*_args: Any) -> None:
-            banner.set_revealed(False)
-            prefs.mark_banner_seen(BANNER_ID)
-
-        banner.connect("button-clicked", dismiss)
-        return banner
-
-    def _button_row(
-        self,
-        title: str,
-        subtitle: str,
-        button_label: str,
-        callback: Callable[[], None],
-        *,
-        suggested: bool = False,
-    ) -> Adw.ActionRow:
-        row = Adw.ActionRow(title=title, subtitle=subtitle)
-        button = Gtk.Button(label=button_label, valign=Gtk.Align.CENTER)
-        if suggested:
-            button.add_css_class("suggested-action")
-        button.connect("clicked", lambda *_a: callback())
-        row.add_suffix(button)
-        row.set_activatable_widget(button)
-        return row
 
     # -- the list ----------------------------------------------------------
 

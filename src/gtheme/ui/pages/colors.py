@@ -56,10 +56,15 @@ from ._style_common import (  # noqa: E402
 
 __all__ = [
     "ACCENTS",
+    "ACCENT_HEXES",
+    "ACCENT_LABELS",
     "COLOR_SCHEME_KEY",
     "COPY",
     "GTK_THEME_KEY",
+    "UNKNOWN_ACCENT_HEX",
     "USER_THEME_UUID",
+    "accent_hex",
+    "accent_label",
     "build",
     "dark_mode_ops",
     "is_dark",
@@ -117,6 +122,14 @@ USER_THEME_UUID = "user-theme@gnome-shell-extensions.gcampax.github.com"
 #: The nine highlight colours, in GNOME's own order, with the exact colour
 #: libadwaita paints for each (research/gnome-domains.md §1.1). The label is
 #: what a person calls the colour; "slate" is not a colour anybody names.
+#:
+#: **The one table.** The Home card used to keep its own two dictionaries of the
+#: same nine (review-report L15), and the day GNOME adds a tenth accent the two
+#: would disagree: this page would offer the new colour and the card whose only
+#: job is reading the desktop back to you would fall off the end of its
+#: dictionary. Both the dot grid here and the card's summary derive from this
+#: tuple now, and :func:`accent_label` / :func:`accent_hex` answer for a slug
+#: that is not in it at all.
 ACCENTS: tuple[tuple[str, str, str], ...] = (
     ("blue", "Blue", "#3584e4"),
     ("teal", "Teal", "#2190a4"),
@@ -128,6 +141,35 @@ ACCENTS: tuple[tuple[str, str, str], ...] = (
     ("purple", "Purple", "#9141ac"),
     ("slate", "Grey", "#6f8396"),
 )
+
+#: ``{slug: label}`` and ``{slug: colour}``, derived. Never written out again.
+ACCENT_LABELS: dict[str, str] = {slug: label for slug, label, _hex in ACCENTS}
+ACCENT_HEXES: dict[str, str] = {slug: hex_value for slug, _label, hex_value in ACCENTS}
+
+#: What an accent this version of gtheme has never heard of is painted. Grey
+#: rather than a guess: showing the wrong colour would be worse than showing no
+#: colour, on a card whose whole promise is that it is telling you the truth.
+UNKNOWN_ACCENT_HEX = "#77767b"
+
+
+def accent_label(slug: str | None) -> str | None:
+    """A readable name for a highlight colour, known to this version or not.
+
+    A slug GNOME adds after this release still reads as a colour — ``"sepia"``
+    becomes "Sepia", ``"deep-orange"`` becomes "Deep orange" — rather than as
+    the enum member it is.
+    """
+    if not slug:
+        return None
+    known = ACCENT_LABELS.get(slug)
+    if known is not None:
+        return known
+    return slug.replace("-", " ").replace("_", " ").capitalize()
+
+
+def accent_hex(slug: str | None) -> str:
+    """The colour to paint for a highlight slug, grey when it is unknown."""
+    return ACCENT_HEXES.get(slug or "", UNKNOWN_ACCENT_HEX)
 
 _ACCENT_CSS = "\n".join(
     f".gtheme-accent-{name} {{ background: {hex_value}; }}" for name, _label, hex_value in ACCENTS

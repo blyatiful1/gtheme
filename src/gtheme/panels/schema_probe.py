@@ -232,15 +232,14 @@ def settings_file_for(schema_id: str, backend: Any) -> Path | None:
     if store is None:
         return None
     from ..core.confine import expand_dest
+    from ..core.gvariant import unquote
     from ..core.settings_backend import BackendError
 
     try:
         raw = backend.get(store.active_key)
     except BackendError:
         return None
-    name = raw.strip()
-    if len(name) >= 2 and name[0] == name[-1] and name[0] in "'\"":
-        name = name[1:-1]
+    name = unquote(raw)
     if not name:
         return None
     try:
@@ -409,10 +408,6 @@ class SchemaProbe:
         schema = source.lookup(schema_id, True) if source is not None else None
         self._schemas[schema_id] = schema
         return schema
-
-    def source_for_row(self, row: Row) -> Any | None:
-        """The source to hand a backend so it can address this row."""
-        return self.source_for(row.schema_id)
 
     # -- the verdict -------------------------------------------------------
 

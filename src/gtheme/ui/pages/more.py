@@ -65,6 +65,10 @@ __all__ = [
 
 PAGE_ID = "more"
 
+#: The one-shot explainer key in ``prefs.json``. Listed in
+#: :data:`gtheme.prefs.KNOWN_BANNERS`, like every other one.
+BANNER_ID = "first-visit-more"
+
 COPY: dict[str, str] = {
     "banner": (
         "This page holds everything that did not fit anywhere else. Most of it is "
@@ -551,27 +555,15 @@ def build(window: Any, *, backend: Any = None, probe: SchemaProbe | None = None)
     probe_built_rows(page, scanner, built, backend=settings)
 
     header = _filter_bar(Gtk, Adw, filterable, groups, nested)
+    from ..widgets.explainer import first_visit_banner
+
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, vexpand=True)
-    if prefs is not None and prefs.should_show_banner("first-visit-more"):
-        box.append(_banner(Adw, prefs))
+    banner = first_visit_banner(prefs, BANNER_ID, COPY["banner"])
+    if banner is not None:
+        box.append(banner)
     box.append(header)
     box.append(page)
     return box
-
-
-def _banner(Adw: Any, prefs: Any) -> Any:
-    from ..search import BANNER_DISMISS
-
-    banner = Adw.Banner(
-        title=escape_markup(COPY["banner"]), button_label=BANNER_DISMISS, revealed=True
-    )
-
-    def dismiss(*_args: Any) -> None:
-        banner.set_revealed(False)
-        prefs.mark_banner_seen("first-visit-more")
-
-    banner.connect("button-clicked", dismiss)
-    return banner
 
 
 def _floor_widget(

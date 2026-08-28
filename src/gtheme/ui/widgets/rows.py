@@ -34,7 +34,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, GLib, Gtk  # noqa: E402
 
-from ...core.gvariant import bare_number, values_equal  # noqa: E402
+from ...core.gvariant import bare_number, quote, unquote, values_equal  # noqa: E402
 from ...core.settings_backend import BackendError, BackendErrorKind, SettingsBackend  # noqa: E402
 from ...panels.descriptor import Row, WidgetKind  # noqa: E402
 from .recording import (  # noqa: E402
@@ -55,13 +55,23 @@ __all__ = [
     "build_row",
     "clear_refusal",
     "key_for",
+    "quote",
     "register_kind",
     "report_refusal",
     "reset_value",
     "set_plain_text",
+    "unquote",
     "warn_banner",
     "write_value",
 ]
+
+# GVariant string quoting is one pair of functions, in :mod:`gtheme.core
+# .gvariant` where the rest of the wire format lives, and re-exported here
+# because this is where the UI half imports its row helpers from — the same
+# arrangement ``key_for`` and ``set_plain_text`` already have. Nothing below
+# this line reimplements either of them, and neither does any page
+# (review-report L19: it was written out longhand eight times, once inside this
+# frozen library, where a fix would have missed the other seven).
 
 
 #: What the per-row put-back button says when gtheme knows what the setting held
@@ -460,7 +470,7 @@ def _build_choice(backend: SettingsBackend, row: Row) -> tuple[Adw.PreferencesRo
                 return
             if foreign["value"] != current:
                 drop_foreign()
-                labels.append(_unquote(current) + FOREIGN_CHOICE_SUFFIX)
+                labels.append(unquote(current) + FOREIGN_CHOICE_SUFFIX)
                 foreign["value"] = current
             widget.set_selected(len(values))
         finally:
@@ -488,7 +498,7 @@ def _build_text(backend: SettingsBackend, row: Row) -> tuple[Adw.PreferencesRow,
         guard["busy"] = True
         try:
             raw = backend.get(key_for(row))
-            widget.set_text(_unquote(raw))
+            widget.set_text(unquote(raw))
         finally:
             guard["busy"] = False
 
@@ -517,20 +527,12 @@ def _build_color(backend: SettingsBackend, row: Row) -> tuple[Adw.PreferencesRow
 
     def refresh() -> None:
         try:
-            label.set_text(_unquote(backend.get(key_for(row))))
+            label.set_text(unquote(backend.get(key_for(row))))
         except BackendError:
             label.set_text("")
 
     refresh()
     return widget, refresh
-
-
-def _unquote(variant_text: str) -> str:
-    """Strip GVariant string quoting for display. ``"'x'"`` -> ``x``."""
-    text = variant_text.strip()
-    if len(text) >= 2 and text[0] == text[-1] and text[0] in "'\"":
-        return text[1:-1]
-    return text
 
 
 RowBuilder = Callable[..., tuple[Adw.PreferencesRow, Callable[[], None]]]

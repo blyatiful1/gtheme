@@ -285,14 +285,20 @@ def test_every_string_this_page_writes_itself_is_plain_language():
     """Descriptor copy is linted in ``domains_jargon_test.py`` already; this
     covers the handful of sentences these two page modules author directly."""
     hand_written = [
-        ("windows.py banner", "Window buttons, desktop switching and every keyboard shortcut live here."),
-        ("windows.py advanced subtitle", "more controls most people never need to touch"),
+        # The two explainers are read off the modules rather than copied here:
+        # a copy would go stale silently, and both are now named constants
+        # because the shared explainer widget takes the sentence as an argument
+        # (review-report M28).
+        ("windows.py banner", windows.BANNER_TEXT),
+        ("topbar.py banner", topbar.BANNER_TEXT),
+        # The collapsed tier's own wording is no longer this page's: it says
+        # what every other page says, and search.ADVANCED_* is linted where it
+        # is defined (review-report M29).
         ("windows.py link title", "Want finer control over how fast things move?"),
         (
             "windows.py link subtitle",
             "The Impatience add-on lets you set an exact speed instead of just on or off.",
         ),
-        ("topbar.py banner", "The clock, the date, the app view and the top bar's own style live here."),
         ("topbar.py fix-button", "To use this, gtheme needs to turn on one add-on."),
         ("topbar.py built-in label", "The one your desktop comes with"),
     ]
