@@ -182,8 +182,8 @@ D3 first-run + a11y + look-value honesty, agents CD4 (+CD5 for U3's fix):
 - [x] E8 icon-set "only one installed" sentence parity — fixed@13db4d7. `icons.icon_set_description(count)` mirrors `pointer_description(count)`'s three-way wording.
 - [x] E9 shortcuts page filter/grouping — fixed@13db4d7. The 175-shortcut page is split into named, collapsed sections per domain with a per-group search filter and a visible "press Ctrl+F" hint; one pre-existing test rewritten to match the new (documented, non-regressive) shape.
 - [x] E6 "last change did not finish" launch notice from leftover journal — fixed@11f28db (delivered inside Wave CD3, see C3 above).
-- [ ] CHANGELOG entry for the whole campaign — still pending; no Wave CD agent touched CHANGELOG.md.
-- [ ] CLOSURE: per-ID adversarial verification of the full diff; ./verify.sh AND ./verify.sh --full (sandbox tier, page walk, screenshot regeneration committed, live-desktop-unchanged canary); final report — this Wave CD integration pass covers the "re-run verify.sh, reconcile per-ID status, re-baseline" portion; `./verify.sh --full` (sandbox tier) and the final closure report are still outstanding and belong to whoever runs the campaign's final closure step.
+- [x] CHANGELOG entry for the whole campaign — fixed in the closure commit below. `## v2.0.0 (unreleased)` gains a `### The audit pass` subsection in the file's own voice, and the three claims elsewhere in that same section that this campaign made false were corrected with it: "exactly three subcommands" → four (`apply` shipped as U7-cli), "Four bundled" Looks → six (DAYBREAK + HEARTH), and the "Three test tiers — 1157 / 381 / 69" line → the four tiers at their measured sizes.
+- [x] CLOSURE: per-ID adversarial verification of the full diff; `./verify.sh --full`; final report — done. The closure audit re-checked every ID against the final tree and returned four not fully closed (M7, M26, DOCS §3.4, DOCS-SWEEP); all four were fixed in the gap-fix pass above and re-gated. See the closure stamp at the end of this file.
 
 ## Closure gap-fix pass — the four IDs verification found not fully closed
 
@@ -277,3 +277,79 @@ Not done, and why: nothing. The four IDs and the cosmetic note are all closed.
 - Hardware-presence gating for setting rows (runtime-detection design)
 - Offline-mode toggle (design decision)
 - Photographing bundled Looks on a live session (sandbox infra could; needs supervised run)
+
+## Campaign closure — 2026-08-28
+
+**Final baseline (the last green full gate, `./verify.sh --full` at HEAD `bf889fc`, worktree venv):**
+ruff: all checks passed · pytest default tiers (unit+regression+dconf+gtk): **2579 passed · 2 skipped · 29 deselected** in 49.70s · pytest sandbox tier (headless GNOME Shell on a private bus): **29 passed · 2581 deselected** in 91.57s · screenshots: **30 fresh, 15 pages, light and dark, all distinct** · **`verify.sh: OK`**. Repo-wide collection at that HEAD: **2610** items — re-measured per tier this session: 1878 unit+regression (`-m "not gtk and not dconf and not sandbox"`), 42 dconf, 661 gtk, 29 sandbox.
+
+Against the prior baseline (2591 collected · 2570 passed · 2 skipped · 28 deselected at `e66183c`): +19 collected, all from the closure gap-fix pass (`bf889fc`) — 9 unit tests for M7/M26 plus the doc/copy tests, and **1 new sandbox test** (the page walk asserting the notification tray is empty). That one test is why deselected moved 28 → 29: a declared marker change under the gate rule, not a hidden or quarantined test. Skipped stayed at 2 for the entire campaign. `docs/testing.md`'s "28 tests" / "those 28" were left stale by that same pass and are corrected in this closure commit, along with the three claims in `CHANGELOG.md`'s v2.0.0 body that the campaign itself made false.
+
+**Per-ID closure verdicts.** "closed" = the finding's failure is no longer reproducible against this tree. "gap left" = closed as scoped, with a named residual that is written down rather than dropped; none of them re-open the finding.
+
+Wave 0:
+
+| ID | verdict | gap left |
+|---|---|---|
+| U1, M22, M16, M20, L9, L11, L12, L13, M24, X5, M21 | closed | — |
+| M23 | closed | cutting/pushing the public v2.0.0 tag is deferred (user decision); `PKGBUILD-git` is the shipped alternative |
+| L10 | closed | `bin/gtheme:10` still names jinja2 in a comment; not a dependency anywhere |
+| U9 | closed | full gettext/i18n of the interface deferred (user decision); U9 ships the honest minimum |
+| DOCS §3.4 | closed@`bf889fc` | reopened by the closure audit (6 of 7 MISSING bullets untouched), closed in the gap-fix pass |
+
+Wave A:
+
+| ID | verdict | gap left |
+|---|---|---|
+| C1, H5, H1(txn), H9, M1, M2, M12, L4, L8, H7, H1(baseline), H10, M14, L1(core), L18(core), M18, M19 | closed | — |
+| H4 | closed | `/org/gnome/shell/extensions/` is still a tree-shaped allow-list: an extension that stores its own exec command in dconf is reachable the way Ptyxis was |
+| X1 | closed | an install-only apply can still satisfy the AS4 "nothing changed" gate and report success |
+| M16-AS5 | closed | `SubprocessBackend`/`GioBackend` used bare in a session-less context hard-fail per key instead of skipping |
+| L2 | closed | `SubprocessBackend.reset` deliberately has no read-back verify (no way to tell "no user value" from "effective default") |
+
+Wave B:
+
+| ID | verdict | gap left |
+|---|---|---|
+| H2(looks), H2(restore), M6, M15, U4, U8, H11, L1(ui), M10, M5, L5, L7, M28, M29, L15, L16, L19, M17, L18(ui) | closed | — |
+| H3 | closed | a burst spanning an intervening Look apply can mix vintages in "Before your changes"; wallpaper.py's custom-picture file copy sits outside the burst point (undo restores the setting, leaves the copy) |
+| M3 | closed | `_apply_locked`'s AS4 switch-cleanup branch can still raise a bare OSError after a cleanup changed the desktop — no longer a lie, not yet a narration |
+| M7 | closed@`bf889fc` | Wave B left the effect-picker's silent `except BackendError: continue`; closed in the gap-fix pass |
+| L6 | closed | home.py's own "Undo the last change" row still applies with no confirmation while the header button and Ctrl+Z both confirm; `home.header_button` is dead in production |
+| X3 | closed | `core/restorepoints.py::apply_point` still catches only `TransactionError`, so the same OSError class is unguarded on an *undo* |
+| M30 | closed | the page still raises when nothing it renders loaded at all — a deliberate call (an empty page with no message would be a lie of omission) |
+
+Parallel waves (infra + port):
+
+| ID | verdict | gap left |
+|---|---|---|
+| M4, M25, M27, M13, U5-infra, U7-capture, U7-cli, L3 | closed | — |
+| H6 | closed | `ExtensionInstaller.describe_batch` has no production caller left after CD5 dropped `name_addons`; only a test exercises it |
+| U6 | closed | both mechanisms recognise only the `gsettings:` key spelling, not `dconf:` — the six bundled Looks are covered, a community/v1-imported Look need not be |
+| U2 | closed | `registry.install_look` hardcodes provenance "community", so a Look imported from your own backup badges as community-sourced |
+
+Wave CD / D:
+
+| ID | verdict | gap left |
+|---|---|---|
+| H12, M11, L17, M9, M8, X2, X4, U5-button, E10, E6, U7, H13, U3 | closed | — |
+| H8 | closed | fish's `fish_variables` is outside the transaction's own restore point (`gtheme rescue` reaches it, Undo does not); Ghostty's "Take them over" still moves a directory outside the transaction/ledger |
+| E1 | closed | never run against a real installed GNOME Terminal or Console (neither exists on this machine); mitigated by per-key schema probing and 21 tests |
+| E5 | closed | a Stop pressed after the engine's last forward narration but before the final report still raises out of a fully-succeeded, fully-recorded apply |
+| L14 | closed | a SIGKILLed app loses the last-page memory (matches the existing size/maximised prefs behaviour) |
+| M26 | closed@`bf889fc` | CD3 fixed the version read; the fresh-machine Home path still made two blocking round trips inside `Window.__init__` — closed in the gap-fix pass |
+| U10 | closed | looks.py's picture-only Look tiles (`:1208`, `:1674`) still lack `a11y.name`/`hide_from_screen_readers` |
+
+Wave F + closure:
+
+| ID | verdict | gap left |
+|---|---|---|
+| E8, E9, CHANGELOG, CLOSURE | closed | — |
+| E2 | closed | the background-catalogue XML and the picture copies are not in the ownership ledger and are left behind by `gtheme rescue` — documented in SECURITY.md and README |
+| E3 | closed | only the first combination of a multi-value shortcut key is compared |
+| DOCS-SWEEP | closed@`bf889fc` | six false doc sentences, two of them made false by this campaign's own fixes |
+| screenshot blemish | closed@`bf889fc` | fixed at the source (`SandboxSession.silence_notifications()`), all 30 pictures regenerated |
+
+**Nothing is left open.** Every ID above is closed; every "gap left" is a named residual inside a closed finding, written here and in the wave notes rather than dropped. The Deferred section is unchanged by this pass — those eight items need the user's decision, not an agent's.
+
+**CAMPAIGN CLOSED — 2026-08-28**, at HEAD `bf889fc` plus this closure commit, on branch `audit-fixes` in `/home/crocco/gtheme-fixwork`. Base `b9e60c9`. Nothing was pushed to origin; `audit-fixes` is not merged into main; `/home/crocco/gtheme` (the live tool) was never touched and the gtheme app was never launched outside the test harness. Before merging, read the Deferred section: H3, H8 and U3 change live behaviour, so run `./verify.sh --full` and take a restore point first.

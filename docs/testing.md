@@ -29,10 +29,10 @@ the system typelibs and break.
 | **unit + regression** | ~1,880 tests | nothing but Python and GLib | always — plain `pytest`, and both CI jobs |
 | **dconf** (`-m dconf`) | 42 tests | a private D-Bus session and the dconf-service it activates — no shell | always — plain `pytest`, and both CI jobs |
 | **gtk** (`-m gtk`) | ~660 tests | GTK 4 and libadwaita 1.9, offscreen is fine | plain `pytest` locally; in CI only inside an Arch container |
-| **sandbox** (`-m sandbox`) | 28 tests | a private D-Bus session **and a real headless GNOME Shell** | `./verify.sh --full` only. **Never in CI.** |
+| **sandbox** (`-m sandbox`) | 29 tests | a private D-Bus session **and a real headless GNOME Shell** | `./verify.sh --full` only. **Never in CI.** |
 
 `addopts = -m "not sandbox"` in `pyproject.toml` is what a plain `pytest` obeys:
-it deselects those 28 tests rather than trying to boot a desktop, and selects
+it deselects those 29 tests rather than trying to boot a desktop, and selects
 everything else.
 
 Every tier except `sandbox` is run under `dbus-run-session`, by `verify.sh`, by
