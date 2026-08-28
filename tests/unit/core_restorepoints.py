@@ -529,6 +529,88 @@ def test_an_imported_v1_baseline_removes_only_what_v1_said_was_absent(tmp_path, 
     )
 
 
+def test_a_file_whose_copy_failed_is_left_out_of_the_moment_not_recorded_as_absent(
+    points, backend, tmp_path, monkeypatch
+):
+    """review-report H10, in ``capture()`` rather than in the importer.
+
+    The importer was fixed and its sibling was not. A file that demonstrably
+    *exists* but whose copy failed — a full disk, a file that became unreadable
+    between the check and the read — was recorded as ``None``, which does not
+    mean "not covered", it means *absence*, and ``to_transaction`` compiles
+    absence to ``FileRemove``. Both the automatic moment taken before every
+    apply and a hand-saved one go through this loop, so one transient copy
+    failure left a permanently wrong moment: pressing Undo afterwards deleted a
+    file the moment was taken to protect, and reported success.
+    """
+    import errno
+    import shutil
+
+    precious = tmp_path / "precious.conf"
+    precious.write_text("years of tuning", encoding="utf-8")
+
+    def full_disk(src, dst, *args, **kwargs):
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    monkeypatch.setattr(shutil, "copy2", full_disk)
+    point = capture([], [str(precious)], label="Before", backend=backend, root=points)
+
+    assert str(precious) not in point.files, "a file that was there is not absence"
+    assert point.files_to_remove == []
+    assert _file_ops(point) == {}, "a failed copy must not compile to a deletion"
+    assert any("precious.conf" in warning for warning in point.warnings), (
+        "still said out loud — the gap is real, it is just not a deletion"
+    )
+    assert precious.read_text(encoding="utf-8") == "years of tuning"
+
+
+def test_a_shortcut_that_could_not_be_read_is_left_out_of_the_moment(
+    points, backend, tmp_path, monkeypatch
+):
+    """The same rule for the link half of the loop.
+
+    ``~/.config/ghostty`` pointing into somebody's dotfiles repository is the
+    shipped example. If ``readlink`` fails, what the moment knows is "there was
+    a shortcut here and we could not read where it pointed" — which is not
+    "there was nothing here", and only one of those two deletes the link.
+    """
+    import errno
+    import os
+
+    link = tmp_path / "ghostty"
+    target = tmp_path / "dotfiles-ghostty"
+    target.mkdir()
+    link.symlink_to(target)
+
+    def denied(path, *args, **kwargs):
+        raise OSError(errno.EACCES, "Permission denied")
+
+    monkeypatch.setattr(os, "readlink", denied)
+    point = capture([], [str(link)], label="Before", backend=backend, root=points)
+
+    assert str(link) not in point.files
+    assert point.files_to_remove == []
+    assert _file_ops(point) == {}
+    assert any("ghostty" in warning for warning in point.warnings)
+    assert link.is_symlink(), "and the link is still the user's own"
+
+
+def test_a_file_that_really_was_absent_still_restores_as_a_removal(points, backend, tmp_path):
+    """The other side of H10, so the fix cannot be "never remove anything".
+
+    Absence is two thirds of a pristine moment and it has to keep compiling to
+    a deletion; the distinction the fix draws is between "it was not here" and
+    "we could not read it", not between "delete" and "do nothing".
+    """
+    from gtheme.core.transaction import FileRemove
+
+    missing = tmp_path / "installed-by-a-look.conf"
+    point = capture([], [str(missing)], label="Before", backend=backend, root=points)
+
+    assert point.files[str(missing)] is None
+    assert isinstance(_file_ops(point)[str(missing)], FileRemove)
+
+
 def test_the_v1_store_is_never_written_to(tmp_path, points):
     """Read-only, forever. It is the only copy there is."""
     v1 = _v1_store(

@@ -308,12 +308,26 @@ Nothing is dropped silently.
   `~/.local/bin`, `~/bin`, `~/.local/share/gnome-shell/extensions`, the shell
   start-up files (`.bashrc`, `.zshrc`, `.profile`, `config.fish`, fish's
   `conf.d`), and anything ending `.desktop` or `.service` anywhere.
+
+  The list is applied to the destination *as written* and to the destination
+  with every symbolic link followed, and the worse of the two answers wins.
+  `~/.bashrc` is refused on a machine where it is a link into a dotfiles
+  repository, and `~/somewhere-innocent/x` is refused when that folder turns
+  out to be a link to `~/.local/bin`.
 - Change a setting that decides what the desktop *runs*: a custom shortcut's
   `command` or `binding`, `org.gnome.desktop.default-applications.*.exec`,
   `org.gnome.desktop.session session-name`, a `keyfile:` key (which would name
   the file to write into), or a `dconf:` location outside the add-on trees —
   `/org/gnome/shell/extensions/`, `/org/gnome/Ptyxis/` and
   `/io/github/jeffshee/hanabi-extension/`.
+
+  Three keys *inside* the Ptyxis tree are refused too, by name:
+  `custom-command`, `use-custom-command` and `login-shell` under
+  `/org/gnome/Ptyxis/Profiles/<uuid>/` (and the same keys addressed as
+  `gsettings-path:org.gnome.Ptyxis.Profile:…`). That tree is open for the
+  terminal's colours; a profile's *command* is not a colour, and setting it
+  would run a program of the Look's choosing in every terminal window opened
+  afterwards.
 
   A Look asking for any of these does not apply at all — not "minus that
   entry". Each one is named in the preview before anything happens.

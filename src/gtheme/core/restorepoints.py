@@ -351,9 +351,17 @@ def capture(
             that needs several moments in a known order can say so instead of
             sleeping through real seconds.
 
-    A key that cannot be read is recorded as having no value, with a warning
-    naming it. That is honest and restorable: "there was nothing here" is a
-    state, and restoring it means unsetting the key again.
+    A key or file that genuinely is not there is recorded as absent, which is
+    honest and restorable: "there was nothing here" is a state, and restoring
+    it means unsetting the key or deleting the file again.
+
+    A key or file that is there but could not be *read* is a different answer
+    and gets a different one: it is left out of the moment altogether, with a
+    warning naming it. Absence compiles to a removal
+    (:meth:`RestorePoint.to_transaction`), so recording "could not save this"
+    as "this was not here" would make restoring the moment delete the very
+    file the copy failed to protect (review-report H10). A destination left out
+    is one the restore does not touch.
 
     A ``manual`` moment covers more than it is asked for: every setting key the
     ownership ledger claims is added to ``keys``. See :func:`_claimed_settings`
@@ -412,8 +420,19 @@ def capture(
                 try:
                     target = os.readlink(source)
                 except OSError as exc:
-                    point.files[dest] = None
-                    point.warnings.append(f"could not read the shortcut at {dest}: {exc}")
+                    # "We cannot record this" must never compile to "delete
+                    # it". Recording None here said *the destination was not
+                    # there* about a shortcut that demonstrably was, and
+                    # ``to_transaction`` turns None into a FileRemove — so a
+                    # momentary read failure while saving produced a moment
+                    # that, restored, deleted the user's own link
+                    # (review-report H10). Leaving the destination out is the
+                    # only honest answer, and it is the same one
+                    # ``import_v1_baseline`` gives.
+                    point.warnings.append(
+                        f"could not read the shortcut at {dest}: {exc}; it is not covered "
+                        "by this saved moment and will be left exactly as it is"
+                    )
                     continue
                 point.files[dest] = {"link": target}
                 continue
@@ -429,8 +448,16 @@ def capture(
             try:
                 shutil.copy2(source, files_dir / blob)
             except OSError as exc:
-                point.files[dest] = None
-                point.warnings.append(f"could not save a copy of {dest}: {exc}")
+                # Same rule as the unreadable shortcut above, and the same one
+                # the v1 importer follows: a copy that failed (a full disk, a
+                # file that became unreadable) means this destination is *not
+                # covered*, which is not the same thing as "it was not there"
+                # — and only one of those two is a deletion when the moment is
+                # restored (review-report H10).
+                point.warnings.append(
+                    f"could not save a copy of {dest}: {exc}; it is not covered by this "
+                    "saved moment and will be left exactly as it is"
+                )
                 continue
             point.files[dest] = blob
 
