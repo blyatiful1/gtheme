@@ -4,7 +4,8 @@ Branch `audit-fixes`, worktree `/home/crocco/gtheme-fixwork`, base `b9e60c9`.
 Specs: `.audit/review-report.md` (C/H/M/L IDs) and `.audit/persona-report.md` (§2.1–§2.10 = U1–U10). X-IDs below are §3 items promoted by the plan-critic.
 Rule: every ID ends `fixed@<sha>` or `deferred: <reason>`. Agents commit their OWN files (flock `/tmp/gtheme-commit.lock`, `git commit -- <owned files>`, IDs in message). FIXLOG statuses updated + committed by each wave's integrator.
 
-**Verify baseline (update whenever the harness legitimately changes it):** 1960 collected · 1958 passed · 2 skipped · 28 deselected · ruff clean · `verify.sh: OK` (worktree venv, 2026-08-28, measured at HEAD b2dbf81 after Wave 0 close). Prior baseline 1967/1895/2/70; delta is Wave 0's own (M20 moved 42 dconf tests out of the `sandbox` marker into the default run; +21 new collected items — 20 from tests/unit/test_docs_commands.py, 1 from the L10 dependency guard). Full repo with no marker filter: 1988 items total.
+**Verify baseline (update whenever the harness legitimately changes it):** 2390 collected · 2360 passed · 2 skipped · 28 deselected · ruff clean · `verify.sh: OK` (measured by the orchestrator at merge commit b09ea6e after Waves 0+A+B+infra+port all landed on audit-fixes). Historic: Wave 0 close 1960/1958/2/28 at b2dbf81; pre-campaign 1967/1895/2/70.
+Earlier note kept for history: (worktree venv, 2026-08-28, measured at HEAD b2dbf81 after Wave 0 close). Prior baseline 1967/1895/2/70; delta is Wave 0's own (M20 moved 42 dconf tests out of the `sandbox` marker into the default run; +21 new collected items — 20 from tests/unit/test_docs_commands.py, 1 from the L10 dependency guard). Full repo with no marker filter: 1988 items total.
 Gate rule: `./verify.sh` green AND collected ≥ baseline AND deselected/skipped changes only when a harness change (M16/M20) declares them — then re-baseline here.
 
 **Resume protocol (if a session died):** read this file + `git -C /home/crocco/gtheme-fixwork log --oneline` + `git status`. If the tree is DIRTY: diff it against the pending IDs, run `./verify.sh`, commit what is sound before continuing — do not redo work already on disk. Continue at the first wave with pending IDs. Never push to origin; never touch `/home/crocco/gtheme` (live tool); never launch the gtheme app (tests only — conftest's live-state canary fails the suite if live state changes).
@@ -115,7 +116,25 @@ B4 serial consolidator (cross-file):
 - `docs/architecture.md:62` ("transaction.py is the only path by which anything changes") still literally false for page edits — one-line doc fix, unowned this wave.
 - wallpaper.py's custom-picture file copy sits outside the H3 burst point (undo restores the setting, leaves the copied file) — out of H3's stated scope, flagged not fixed.
 
-## Wave C — terminal, ego, window infra/perf
+## Parallel waves (user-requested), branched from 5024dc7, merged at 05ed1b5 + b09ea6e — CLOSED 2026-08-28
+Merged tree verified by the orchestrator: 2360 passed / 2 skipped / 28 deselected, verify.sh: OK at b09ea6e. One merge conflict (cli.py docstring, apply-paragraph vs applog-paragraph) resolved keeping both.
+**infra branch** (commits 906b923, ad46328, ace2f3e, a0d0043; own gate green 2103/2/28; review caught + fixed an M25 search-order regression and H6's brief_for reopening the M4 stall class):
+- [x] M4 missing gnome-extensions binary fast-fail — fixed@ad46328 (+a0d0043)
+- [x] M25 data_dir sys.prefix + XDG_DATA_HOME — fixed@ace2f3e (+a0d0043 ordering fix)
+- [x] M27 corpus/dispositions memoised with reload() — fixed@ace2f3e
+- [x] M13 blur-my-shell × intellibar hazard entry — fixed@ace2f3e
+- [x] U5-infra rotating log + excepthook (applog) — partial@906b923: About "Copy details" button = Wave CD
+- [x] H6 add-on naming — partial@ad46328: AddonBrief/describe_batch data layer + 3 doc overclaims corrected; Look-preview dialog rendering = Wave CD
+- [x] U6 conflict table entries (ubuntu-dock, tiling-assistant) — partial@ace2f3e: Look-path consult = Wave CD
+**port branch** (commits dccddf3, fba562e, 5cc1898, 70a371d, 6856845; own gate green 2161/2/28, index fresh with 6 Looks; review caught + fixed: bundled file contents leaking home paths, path traversal via ledger-claimed rel paths, duplicate jargon save-notes, tests reading the real desktop):
+- [x] U7-capture whole-desktop capture + omissions list — fixed@5cc1898 (+6856845); omissions dialog rendering = Wave CD
+- [x] U7-cli gtheme apply <name|path> [--dry-run] — fixed@fba562e
+- [x] L3 share scan genericises dest_root() — fixed@5cc1898
+- [x] U2 core (honest provenance, browse filter, screenshot fetch seam) — partial@dccddf3: Looks-page grid = Wave CD
+- [x] U2 content (light DAYBREAK + warm HEARTH Looks, index regenerated) — fixed@70a371d
+**M21 dependency closed:** Wave B's H3 makes per-page edits write the ownership ledger, so the Wave 0 uninstall guard now sees page-only-changed desktops — M21 is complete as of the merge (verify covers both halves).
+
+## Wave CD (replaces Waves C+D after the parallel split) — terminal, looks/window UI halves, product features
 C1 terminal/ package + ui/pages/terminal.py:
 - [ ] H8 adapters return ops; Terminal page applies via one Transaction (snapshot/ledger/lock) — pending
 - [ ] H12 per-adapter Exception isolation in apply_all; page handler wrapped — pending
