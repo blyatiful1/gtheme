@@ -26,7 +26,7 @@ body:
     id: version
     attributes:
       label: gtheme version + install method
-      description: "`gtheme --version`, and how you installed it (install.sh / pipx / PKGBUILD)"
+      description: "`gtheme --version`, and how you installed it (install.sh / makepkg / from a checkout)"
     validations:
       required: true
   - type: textarea
@@ -44,5 +44,5 @@ body:
   - type: dropdown
     id: restore
     attributes:
-      label: Did `gtheme restore` recover your desktop?
+      label: Did `gtheme rescue` recover your desktop?
       options: ["yes", "no", "didn't try"]

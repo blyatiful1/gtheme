@@ -20,8 +20,9 @@ Three ways, from easiest to most stubborn. Any one of them is enough.
 
 1. **In the app** — press **Ctrl+Z**, or click **Undo last change** at the top
    of the window. Or open **Undo & Restore Points** in the list on the left and
-   pick the moment you want back, including *Before gtheme* — how your desktop
-   looked before this app ever ran.
+   pick the moment you want back. (Upgraded from the old command-line gtheme?
+   *Before gtheme* — how your desktop looked before version 1 ever ran — is in
+   that list too, read from version 1's own records.)
 2. **The app won't open, but the desktop works** — open a terminal window
    (hold **Ctrl**, **Alt** and press **T**; if that does nothing,
    [docs/start-here.md](docs/start-here.md) shows another way) and type:
@@ -58,8 +59,12 @@ one puts them in a single window, explains every switch in a sentence, and
 saves how your desktop looked before it changes anything.
 
 If you have used Windows or a Mac and this is your first Linux computer: you
-are the person this was written for. Nothing here needs the command line, and
-nothing here can be broken so badly that the **Undo** button cannot fix it.
+are the person this was written for. Installing it takes a terminal window
+once — that is the one command-line step, and
+[docs/start-here.md](docs/start-here.md) walks you through opening one. After
+that, using gtheme needs no commands at all, except on the bad day above when
+the app itself will not open. And nothing here can be broken so badly that the
+**Undo** button cannot fix it.
 
 ## Contents
 
@@ -81,6 +86,7 @@ nothing here can be broken so badly that the **Undo** button cannot fix it.
 | **libadwaita 1.9 or newer** | One of the building blocks GNOME itself is made of. GNOME 49 and 50 both include it; there is nothing separate to install. On an older GNOME the window will not open, and gtheme tells you that instead of misbehaving. |
 | **Python 3.11 or newer** | Already on every desktop Linux system in use today. |
 | **About 60 MB of disk space** | Three quarters of that is the pictures the four built-in Looks use. |
+| **English** | gtheme is English only today — every word in the app, every explanation and every search word. It has no translation machinery in it yet: no language files, nothing for a translator to fill in. That is a plain statement of what it is, not a hint that other languages are coming next month. If you would like it in yours, [say so in an issue](https://github.com/blyatiful1/gtheme/issues) — translations are welcome, and knowing somebody is waiting is what decides when the groundwork gets built. |
 
 gtheme does **not** need an internet connection to change anything on your
 computer. It only goes online if you ask it to look for new add-ons or new
@@ -142,17 +148,24 @@ To remove it later, see [Can I remove it?](#can-i-remove-it) below.
 
 ### The Arch way
 
-The folder contains a `PKGBUILD`, so on Arch and its relatives:
+On Arch and its relatives, build a real package from the checkout:
 
 ```sh
 git clone https://github.com/blyatiful1/gtheme
 cd gtheme
-makepkg -si
+makepkg -si -p PKGBUILD-git
 ```
 
-That builds a normal package and installs it with `pacman`, which means
-`pacman -R gtheme` removes it completely later. Dependencies are declared in
-the `PKGBUILD`; `makepkg -s` pulls them in.
+`PKGBUILD-git` builds the copy you just cloned — no download of a release
+archive, so it works today. That gives you a normal package, called
+`gtheme-git`, installed with `pacman`, which means `sudo pacman -R gtheme-git`
+removes it completely later. Dependencies are declared in the recipe and
+`makepkg -s` pulls them in.
+
+There is a plain `PKGBUILD` beside it that builds from a released source
+archive instead. It is the one an AUR package would use, and it is waiting on
+the first version 2 release tag — until that tag exists it cannot download
+anything, so use `PKGBUILD-git`.
 
 ## The first time you open it
 
@@ -301,7 +314,10 @@ and **Updates**.
   get an honest generic panel labelled "these settings come from the add-on
   author".
 - Add-ons that fight each other (two docks, two clipboard managers) are offered
-  as either/or, with an offer to switch the other one off.
+  as either/or on this page, with an offer to switch the other one off. That
+  check runs on the switches here; applying a whole Look does not run it yet,
+  so a Look that brings a dock can leave you with the one your distro
+  preinstalled as well.
 - Combinations known to break things carry a warning that says what will
   happen to you, not what will happen internally.
 - Installing goes through GNOME's own confirmation box — gtheme never installs
@@ -318,9 +334,12 @@ cannot do.
 
 Each card says honestly when you will see the change: some terminals update
 while you watch, some within a second, some only when you open a new window.
-And if a program's settings are being managed by some other tool, gtheme
-refuses to write, says so, and offers to take over — a deliberate act, and an
-undoable one.
+
+One card goes further. Ghostty keeps its settings in a folder that dotfile
+setups often own outright, so gtheme checks: if that folder belongs to another
+tool, it refuses to write, names the tool, and offers to take over — a
+deliberate act, and an undoable one. The other cards do not make that check
+yet, and neither does applying a whole Look.
 
 ### System
 
@@ -377,8 +396,20 @@ like, and going back to one puts the background, the colours, the text and the
 add-ons back the way they were. They are dated in words — "My desktop, 25
 August" — never in a timestamp.
 
-At the bottom, on its own, sits **Before gtheme**: how this computer looked
-before this app ever ran. That one is never deleted and never pruned.
+If you are coming from the old command-line gtheme, one more row sits at the
+bottom on its own: **Before gtheme**, how this computer looked before version 1
+ever ran. It is read from version 1's own records, and it is never deleted and
+never pruned.
+
+A fresh install has no such row, and it would be dishonest to draw one:
+nothing was watching this computer before gtheme arrived, so there is no
+recording of that moment to offer. What a fresh install has instead is the
+first-touch record described under [Will this break my
+desktop?](#will-this-break-my-desktop) — the first time gtheme changes any
+setting or file it writes down what was there, and `gtheme rescue` puts all of
+it back, whether or not you ever saved a moment. Taking your own moment on the
+introduction's last card, before you change anything, is how you get a named
+row to come back to.
 
 ## Questions people ask
 
@@ -395,9 +426,9 @@ Not permanently, and it is designed so that it cannot.
   whole thing is rolled back. gtheme never leaves you with a half-changed
   desktop.
 - **The first record is never overwritten.** The first time gtheme touches
-  anything it writes down what was there and never writes over that, however
-  many Looks you try afterwards. "Before gtheme" still means before gtheme, a
-  year later.
+  anything it writes down what was there and never writes over that note,
+  however many Looks you try afterwards — so `gtheme rescue` a year later still
+  puts back what was on this computer before gtheme first changed it.
 - **Looks cannot run programs.** See [SECURITY.md](SECURITY.md).
 
 The honest limits: a badly-behaved *add-on* — third-party code, published by
@@ -409,23 +440,53 @@ desktop's help.
 
 ### Can I remove it?
 
-Yes, and it leaves nothing behind.
+Yes. Do it in this order — the first step is the one that matters.
 
-Before you uninstall, open **Undo & Restore Points** and go back to **Before
-gtheme**. That returns every setting and file gtheme ever touched to its
-original state. (You can also do it from a terminal with `gtheme rescue`.)
+**1. Put your desktop back first.** Open **Undo & Restore Points** and go back
+to the moment you want, or run `gtheme rescue` in a terminal. `gtheme rescue`
+is the complete route on any install: it returns every setting and file gtheme
+ever touched to how it was when gtheme first touched it, and switches off every
+add-on gtheme switched on. Do this *before* removing anything, because removing
+the app takes away the only thing that can read those records.
 
-Then:
+**2. Then remove it.**
 
-- **Installed the easy way** — everything gtheme put on your computer is the
-  folder you unpacked, plus two entries it added outside it: `~/.local/bin/gtheme`
-  (what makes the `gtheme` command work) and a `Gtheme` entry under
-  `~/.local/share/applications` (what makes it appear in your app list). Delete
-  the folder and those two, and it is gone.
-- **Installed with `makepkg -si`** — `sudo pacman -R gtheme`.
+- **Installed the easy way** — run the installer again with one extra word,
+  from the same folder:
 
-gtheme's own saved moments live in `~/.local/state/gtheme/v2` and are yours to
-delete once you no longer want them.
+  ```sh
+  ./install.sh --uninstall
+  ```
+
+  It takes back exactly what it put outside that folder, which is five things:
+  the `gtheme` command (`~/.local/bin/gtheme`), the app-list entry
+  (`~/.local/share/applications/io.github.blyatiful1.Gtheme.desktop`), the
+  app-store listing (`~/.local/share/metainfo/io.github.blyatiful1.Gtheme.metainfo.xml`)
+  and two icons (`~/.local/share/icons/hicolor/scalable/apps/io.github.blyatiful1.Gtheme.svg`
+  and `~/.local/share/icons/hicolor/symbolic/apps/io.github.blyatiful1.Gtheme-symbolic.svg`).
+  It refuses to run while gtheme still has a Look on your desktop, rather than
+  stranding you — that is what step 1 is for. Then delete the folder you
+  unpacked, and the program is gone.
+
+  (Deleting the folder by hand instead leaves those five behind, and the
+  app-store listing is enough to keep gtheme showing in your software app.)
+- **Installed with `makepkg`** — `sudo pacman -R gtheme-git` (or `gtheme`, if
+  you built the release recipe rather than `PKGBUILD-git`).
+
+**3. Your own things, if you want them gone.** Neither route deletes these,
+deliberately:
+
+| | |
+|---|---|
+| `~/.local/state/gtheme/` | your saved moments and the record of what your desktop was before gtheme changed it |
+| `~/.local/share/gtheme/` | Looks you saved or downloaded |
+| `~/.local/share/backgrounds/gtheme/` | copies of background pictures you added yourself |
+| `~/.config/gtheme/` | the app's own preferences |
+| `~/.cache/gtheme/` | cached answers from extensions.gnome.org; safe to delete at any time |
+| `~/.local/state/gtheme.v1-backup/` | only if you ever ran the old command-line gtheme. It is the one surviving record of this computer from before *that* ever ran, and nothing can rebuild it — keep it unless you are certain |
+
+The full list of everywhere gtheme writes, and why, is in
+[SECURITY.md](SECURITY.md#where-gtheme-keeps-things).
 
 ### Why does an add-on need me to log out?
 
@@ -492,6 +553,10 @@ tag. See [CHANGELOG.md](CHANGELOG.md) for what changed and why.
   [CONTRIBUTING.md](CONTRIBUTING.md). Most contributions are data files, not
   code.
 - **Writing a Look?** [docs/preset-format.md](docs/preset-format.md).
+- **Want gtheme in your language?** It is English only today and has no
+  translation machinery yet, so there is nothing to fill in — but an issue
+  saying which language you want is the thing that decides when that groundwork
+  gets built.
 - **Want to know how it works inside?**
   [docs/architecture.md](docs/architecture.md) and
   [docs/testing.md](docs/testing.md).

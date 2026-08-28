@@ -32,6 +32,15 @@ own app installer — the one with the shopping-bag icon, usually called
 **Software** — rather than downloading something from a website. That is the
 opposite habit from Windows, and it is the safer one.
 
+**gtheme is an exception, and it is worth knowing why.** It is not in any
+distro's catalogue yet, so installing it means downloading it from its own
+project page and running its installer from a terminal, once. What makes that
+safe is that you can read what you downloaded before you run it — the
+[install steps](../README.md#install) are written around exactly that, and
+gtheme deliberately offers no "paste this line and it downloads and runs
+something" shortcut. On Arch and its relatives there is a package recipe
+instead, which is closer to the normal habit.
+
 To find out which distro you have: open **Settings**, then **System**, then
 **About**.
 

@@ -15,9 +15,13 @@ running a command, and there is no code anywhere in gtheme that could run one:
   recognise, so a Look with a `[[hooks]]` section — the section version 1 of
   this project had, which really did run scripts — fails to load rather than
   being ignored;
-- the layer that applies changes understands exactly four kinds of operation:
-  write a file, write a setting, switch an add-on on, install an add-on. There
-  is no fifth;
+- a Look compiles to exactly four kinds of operation: write a file, write a
+  setting, switch an add-on on, install an add-on. There is no fifth a Look can
+  reach. The layer underneath knows three more — delete a file, put a symbolic
+  link back, clear a setting — and those exist so that *undoing* can restore an
+  absence: they are produced only by a restore point or by the undo path, never
+  by anything a Look says. Seven in total, the set is closed, and **not one of
+  the seven runs anything**;
 - version 1 Looks are converted, not accepted. The converter drops each script
   and prints a warning naming what that script used to do. Nothing survives the
   conversion silently.
@@ -92,11 +96,35 @@ you send it anywhere.
 
 ## Where gtheme keeps things
 
+Everything gtheme writes for itself is in one of these. There is nothing
+outside your home folder.
+
 | | |
 |---|---|
-| `~/.local/state/gtheme/v2/` | the record of what your desktop looked like, the list of what gtheme currently owns, and your saved moments |
-| `~/.local/state/gtheme.v1-backup/` | a copy of version 1's records, **read-only, always**. It holds the only surviving record of this desktop before gtheme ever ran, and nothing in version 2 writes to it |
+| `~/.local/state/gtheme/v2/` | the record of what your desktop looked like, the list of what gtheme currently owns, which Look is applied, your saved moments, and the lock file that stops two copies changing things at once |
+| `~/.local/state/gtheme.v1-backup/` | a copy of version 1's records, **read-only, always**. It holds the only surviving record of this desktop before gtheme version 1 ever ran, and nothing in version 2 writes to it |
 | `~/.config/gtheme/prefs.json` | the app's own preferences (window size, which one-off notices you have dismissed) |
+| `~/.local/share/gtheme/v2/themes/` | Looks you saved or downloaded. The four that ship with gtheme are not here — they are inside the installed program |
+| `~/.local/share/backgrounds/gtheme/` | copies of background pictures you added yourself, so that moving the original later cannot break your desktop |
+| `~/.cache/gtheme/ego/` | the last few answers from extensions.gnome.org, so the Add-ons page does not re-ask for the same list. Deleting it costs nothing |
+| `~/.local/share/gnome-shell/extension-updates/` | GNOME's own folder for an add-on update waiting to be moved into place at your next login. gtheme writes an update there rather than over a running add-on |
+
+Two more places belong to somebody else and gtheme only reads them:
+`~/.local/share/gnome-shell/extensions/` and `/usr/share/gnome-shell/extensions/`,
+where the add-ons on this computer live. Add-ons are installed there by GNOME's
+own installer, never by gtheme directly.
+
+Files a Look writes are a separate matter: those go where the Look says, which
+may be anywhere below your home folder (`~/.config/alacritty/alacritty.toml`,
+for instance) and never anywhere else — that is the boundary above. Every one
+of them is written down in the ownership ledger first, which is what makes
+`gtheme rescue` able to find them again.
+
+If you have moved your home folders with the `XDG_*` variables, the paths above
+follow them.
+
+The launcher and app-list entry the installer adds are listed in the README,
+under [Can I remove it?](README.md#can-i-remove-it).
 
 gtheme runs entirely as you. It never asks for administrator rights, and
 nothing it does needs them.
